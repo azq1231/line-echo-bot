@@ -1,16 +1,40 @@
 from flask import Flask, request, jsonify
 import os
 import requests
+import json
 
 app = Flask(__name__)
 
-LINE_CHANNEL_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")  # 在 Replit 設定環境變數
+LINE_CHANNEL_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
 
+def load_users():
+    try:
+        with open('users.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('allowed_users', [])
+    except FileNotFoundError:
+        return []
+
+def save_user(user_id):
+    users = load_users()
+    if user_id not in users:
+        users.append(user_id)
+        with open('users.json', 'w', encoding='utf-8') as f:
+            json.dump({'allowed_users': users}, f, ensure_ascii=False, indent=2)
 
 @app.route("/")
 def home():
     return "LINE Bot is running!"
 
+@app.route("/add_user/<user_id>")
+def add_user(user_id):
+    save_user(user_id)
+    return jsonify({"status": "success", "message": f"已新增使用者：{user_id}"})
+
+@app.route("/list_users")
+def list_users():
+    users = load_users()
+    return jsonify({"allowed_users": users, "count": len(users)})
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -22,10 +46,11 @@ def webhook():
             user_id = event["source"]["userId"]
             user_message = event["message"]["text"]
 
-            reply_message(user_id, f"你說了：{user_message}")
+            allowed_users = load_users()
+            if user_id in allowed_users:
+                reply_message(user_id, f"你說了：{user_message}")
 
     return jsonify({"status": "ok"})
-
 
 def reply_message(user_id, text):
     url = "https://api.line.me/v2/bot/message/push"
@@ -33,9 +58,13 @@ def reply_message(user_id, text):
         "Content-Type": "application/json",
         "Authorization": f"Bearer {LINE_CHANNEL_TOKEN}"
     }
-    data = {"to": user_id, "messages": [{"type": "text", "text": text}]}
-    requests.post(url, headers=headers, json=data)
-
+    data = {
+        "to": user_id,
+        "messages": [{"type": "text", "text": text}]
+    }
+    response = requests.post(url, headers=headers, json=data)
+    if response.status_code != 200:
+        print(f"Error sending message: {response.status_code}, {response.text}")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
