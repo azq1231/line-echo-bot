@@ -92,7 +92,15 @@ def webhook():
     events = body.get("events", [])
 
     for event in events:
-        if event["type"] == "message" and event["message"]["type"] == "text":
+        # 處理用戶加好友事件
+        if event["type"] == "follow":
+            user_id = event["source"]["userId"]
+            print(f"用戶加入好友 - 用戶ID: {user_id}")
+            user_name = get_line_profile(user_id)
+            save_user_with_name(user_id, user_name)
+        
+        # 處理訊息事件
+        elif event["type"] == "message" and event["message"]["type"] == "text":
             user_id = event["source"]["userId"]
             user_message = event["message"]["text"]
             
