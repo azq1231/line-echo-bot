@@ -128,7 +128,7 @@ def generate_time_slots(weekday):
     return slots
 
 def get_available_slots(date, weekday):
-    """获取某日期的可用时段"""
+    """获取某日期的可用时段（过滤掉已过去的时间）"""
     all_slots = generate_time_slots(weekday)
     
     # 检查是否休诊
@@ -139,9 +139,23 @@ def get_available_slots(date, weekday):
     appointments = db.get_appointments_by_date_range(date, date)
     booked_times = [apt['time'] for apt in appointments if apt['status'] == 'confirmed']
     
-    # 返回可用时段
-    available = [slot for slot in all_slots if slot not in booked_times]
-    return available
+    # 过滤掉已过去的时段
+    now = datetime.now(TAIPEI_TZ)
+    date_obj = datetime.strptime(date, '%Y-%m-%d').replace(tzinfo=TAIPEI_TZ)
+    
+    filtered_slots = []
+    for slot in all_slots:
+        if slot not in booked_times:
+            # 如果是今天，检查时间是否已过
+            if date == now.strftime('%Y-%m-%d'):
+                slot_time = datetime.strptime(f"{date} {slot}", '%Y-%m-%d %H:%M').replace(tzinfo=TAIPEI_TZ)
+                if slot_time > now:
+                    filtered_slots.append(slot)
+            else:
+                # 未来的日期，保留所有未预约的时段
+                filtered_slots.append(slot)
+    
+    return filtered_slots
 
 # ============ WEB 路由 ============
 
