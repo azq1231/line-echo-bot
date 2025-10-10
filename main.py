@@ -339,6 +339,32 @@ def remove_closed_day():
     else:
         return jsonify({"status": "error", "message": "未找到休診記錄"}), 404
 
+# ============ 系统配置 API ============
+
+@app.route("/get_config")
+def get_config_api():
+    configs = db.get_all_configs()
+    return jsonify({"configs": configs})
+
+@app.route("/set_config", methods=["POST"])
+def set_config_api():
+    data = request.get_json()
+    key = data.get('key')
+    value = data.get('value')
+    description = data.get('description', '')
+    
+    if not key or not value:
+        return jsonify({"status": "error", "message": "缺少必要参数"}), 400
+    
+    # 验证 booking_window_weeks 只能是 2 或 4
+    if key == 'booking_window_weeks' and value not in ['2', '4']:
+        return jsonify({"status": "error", "message": "预约窗口只能设置为2周或4周"}), 400
+    
+    if db.set_config(key, value, description):
+        return jsonify({"status": "success", "message": "配置已更新"})
+    else:
+        return jsonify({"status": "error", "message": "更新失败"}), 500
+
 # ============ LINE Webhook ============
 
 @app.route("/webhook", methods=["POST"])
@@ -402,8 +428,14 @@ def webhook():
 
 def handle_booking_start(user_id, week_offset=0):
     """开始预约流程：显示日期选择"""
+    # 获取配置的最大预约周数
+    max_weeks = int(db.get_config('booking_window_weeks') or '2')
+    
+    # 限制 week_offset 在有效范围内
+    week_offset = max(0, min(week_offset, max_weeks - 1))
+    
     week_dates = get_week_dates(week_offset)
-    date_card = flex.generate_date_selection_card(week_dates, week_offset)
+    date_card = flex.generate_date_selection_card(week_dates, week_offset, max_weeks)
     send_line_message(user_id, [date_card])
 
 def handle_postback(user_id, data):

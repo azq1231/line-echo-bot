@@ -5,7 +5,49 @@ LINE Flex Message 模板
 from datetime import datetime, timedelta
 from typing import List, Dict
 
-def generate_date_selection_card(week_dates: List[Dict], current_week_offset: int = 0) -> Dict:
+def _build_navigation_buttons(current_week_offset: int, max_weeks: int) -> List[Dict]:
+    """构建周次导航按钮"""
+    buttons = []
+    
+    # 上一週按钮（只在不是第0週时显示）
+    if current_week_offset > 0:
+        buttons.append({
+            "type": "button",
+            "style": "link",
+            "action": {
+                "type": "postback",
+                "label": "⬅️ 上一週",
+                "data": f"action=change_week&offset={current_week_offset-1}"
+            },
+            "flex": 1
+        })
+    
+    # 下一週按钮（根据最大周数限制）
+    if current_week_offset < max_weeks - 1:
+        buttons.append({
+            "type": "button",
+            "style": "link",
+            "action": {
+                "type": "postback",
+                "label": "下一週 ➡️",
+                "data": f"action=change_week&offset={current_week_offset+1}"
+            },
+            "flex": 1
+        })
+    
+    # 如果没有按钮，添加一个占位
+    if not buttons:
+        buttons.append({
+            "type": "text",
+            "text": "僅可預約本週",
+            "size": "sm",
+            "color": "#999999",
+            "align": "center"
+        })
+    
+    return buttons
+
+def generate_date_selection_card(week_dates: List[Dict], current_week_offset: int = 0, max_weeks: int = 2) -> Dict:
     """
     生成日期选择 Flex Message 卡片
     
@@ -94,28 +136,7 @@ def generate_date_selection_card(week_dates: List[Dict], current_week_offset: in
         "footer": {
             "type": "box",
             "layout": "horizontal",
-            "contents": [
-                {
-                    "type": "button",
-                    "style": "link",
-                    "action": {
-                        "type": "postback",
-                        "label": "⬅️ 上一週",
-                        "data": f"action=change_week&offset={current_week_offset-1}"
-                    },
-                    "flex": 1
-                },
-                {
-                    "type": "button",
-                    "style": "link",
-                    "action": {
-                        "type": "postback",
-                        "label": "下一週 ➡️",
-                        "data": f"action=change_week&offset={current_week_offset+1}"
-                    },
-                    "flex": 1
-                }
-            ],
+            "contents": _build_navigation_buttons(current_week_offset, max_weeks),
             "spacing": "sm"
         }
     }

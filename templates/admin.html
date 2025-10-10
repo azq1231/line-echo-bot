@@ -283,6 +283,18 @@
             <div id="message" class="message"></div>
             
             <div class="section">
+                <h2>⚙️ 系統配置</h2>
+                <div class="input-group">
+                    <label style="min-width: 120px; display: flex; align-items: center;">預約時間窗口：</label>
+                    <select id="bookingWindowSelect" style="padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px;">
+                        <option value="2">2週</option>
+                        <option value="4">1個月（4週）</option>
+                    </select>
+                    <button onclick="saveConfig()">保存配置</button>
+                </div>
+            </div>
+            
+            <div class="section">
                 <h2>➕ 新增用戶</h2>
                 <div class="input-group">
                     <input type="text" id="userIdInput" placeholder="輸入 LINE User ID (例如：U1234567890abcdef)">
@@ -308,6 +320,45 @@
             setTimeout(() => {
                 msgEl.style.display = 'none';
             }, 3000);
+        }
+        
+        async function loadConfig() {
+            try {
+                const response = await fetch('/get_config');
+                const data = await response.json();
+                const config = data.configs || {};
+                
+                if (config.booking_window_weeks) {
+                    document.getElementById('bookingWindowSelect').value = config.booking_window_weeks.value;
+                }
+            } catch (error) {
+                console.error('載入配置失敗:', error);
+            }
+        }
+        
+        async function saveConfig() {
+            const value = document.getElementById('bookingWindowSelect').value;
+            
+            try {
+                const response = await fetch('/set_config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        key: 'booking_window_weeks',
+                        value: value,
+                        description: '用户可预约的周数（2周或4周）'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.status === 'success') {
+                    showMessage('✅ 配置已更新', 'success');
+                } else {
+                    showMessage('❌ 更新失敗', 'error');
+                }
+            } catch (error) {
+                showMessage('❌ 更新失敗', 'error');
+            }
         }
         
         async function loadUsers() {
@@ -428,6 +479,7 @@
         }
         
         window.onload = () => {
+            loadConfig();
             loadUsers();
             const webhookUrl = `${window.location.origin}/webhook`;
             document.getElementById('webhookUrl').textContent = webhookUrl;

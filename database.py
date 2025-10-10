@@ -106,6 +106,22 @@ def init_database():
             VALUES (?, ?, ?, ?)
         ''', (template_id, template_type, content, variables))
     
+    # 系统配置表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS system_config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            description TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # 设置默认配置（如果不存在）
+    cursor.execute('''
+        INSERT OR IGNORE INTO system_config (key, value, description)
+        VALUES ('booking_window_weeks', '2', '用户可预约的周数（2周或4周）')
+    ''')
+    
     conn.commit()
     conn.close()
     print("✅ 数据库初始化完成")
@@ -324,6 +340,44 @@ def get_closed_days() -> List[Dict]:
 def get_all_closed_days() -> List[Dict]:
     """获取所有休诊日（别名函数）"""
     return get_closed_days()
+
+# ==================== 系统配置管理 ====================
+
+def get_config(key: str) -> Optional[str]:
+    """获取配置值"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT value FROM system_config WHERE key = ?', (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row['value'] if row else None
+
+def set_config(key: str, value: str, description: str = '') -> bool:
+    """设置配置值"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT OR REPLACE INTO system_config (key, value, description, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (key, value, description))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"设置配置错误: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_all_configs() -> Dict:
+    """获取所有配置"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT key, value, description FROM system_config')
+    configs = {row['key']: {'value': row['value'], 'description': row['description']} 
+               for row in cursor.fetchall()}
+    conn.close()
+    return configs
 
 # ==================== 通知模板 ====================
 
