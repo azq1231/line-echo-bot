@@ -102,6 +102,12 @@ def webhook():
             user_ids = [u['user_id'] for u in allowed_users]
             
             if user_id in user_ids:
+                # 檢查用戶姓名是否為"未知"，如果是則嘗試更新
+                current_user = next((u for u in allowed_users if u['user_id'] == user_id), None)
+                if current_user and current_user.get('name') == '未知':
+                    user_name = get_line_profile(user_id)
+                    save_user_with_name(user_id, user_name)
+                
                 reply_message(user_id, f"你說了：{user_message}")
             else:
                 user_name = get_line_profile(user_id)
