@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template
 import os
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import uuid
 import pytz
@@ -10,6 +10,7 @@ import pytz
 app = Flask(__name__)
 
 LINE_CHANNEL_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
+TAIPEI_TZ = pytz.timezone('Asia/Taipei')
 
 def load_users():
     try:
@@ -239,6 +240,166 @@ def reply_message(user_id, text):
         print(f"Error sending message: {response.status_code}, {response.text}")
         return False
     return True
+
+# ============ 預約管理功能 ============
+
+def load_appointments():
+    try:
+        with open('appointments.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {"appointments": []}
+
+def save_appointments(appointments_data):
+    with open('appointments.json', 'w', encoding='utf-8') as f:
+        json.dump(appointments_data, f, ensure_ascii=False, indent=2)
+
+def get_week_dates(start_date=None):
+    """獲取本週的日期（週一到週日）"""
+    if start_date is None:
+        start_date = datetime.now(TAIPEI_TZ).date()
+    
+    # 找到本週的週一
+    weekday = start_date.weekday()
+    monday = start_date - timedelta(days=weekday)
+    
+    # 生成週二到週六的日期
+    week_dates = {}
+    for i in range(1, 6):  # 1=週二, 2=週三, ..., 5=週六
+        date = monday + timedelta(days=i)
+        day_name = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'][i]
+        week_dates[i] = {
+            'date': date.strftime('%Y-%m-%d'),
+            'display': f"{date.month}/{date.day}",
+            'day_name': day_name,
+            'weekday': i
+        }
+    
+    return week_dates
+
+def generate_time_slots(weekday):
+    """根據星期生成時間段"""
+    slots = []
+    if weekday in [1, 3, 5]:  # 週二、週四、週六：14:00-18:00
+        start_hour = 14
+        end_hour = 18
+    elif weekday in [2, 4]:  # 週三、週五：18:00-21:00
+        start_hour = 18
+        end_hour = 21
+    else:
+        return []
+    
+    for hour in range(start_hour, end_hour):
+        for minute in [0, 15, 30, 45]:
+            time_str = f"{hour:02d}:{minute:02d}"
+            slots.append(time_str)
+    
+    return slots
+
+@app.route("/appointments")
+def appointments_page():
+    return render_template("appointments.html")
+
+@app.route("/get_week_appointments")
+def get_week_appointments():
+    week_dates = get_week_dates()
+    appointments_data = load_appointments()
+    
+    # 組織本週的預約數據
+    week_schedule = {}
+    for weekday, date_info in week_dates.items():
+        date_str = date_info['date']
+        time_slots = generate_time_slots(weekday)
+        
+        day_appointments = {}
+        for time_slot in time_slots:
+            # 查找該日期時段的預約
+            appointment = next(
+                (apt for apt in appointments_data.get('appointments', [])
+                 if apt['date'] == date_str and apt['time'] == time_slot),
+                None
+            )
+            day_appointments[time_slot] = {
+                'user_name': appointment['user_name'] if appointment else '',
+                'user_id': appointment['user_id'] if appointment else ''
+            }
+        
+        week_schedule[weekday] = {
+            'date_info': date_info,
+            'appointments': day_appointments
+        }
+    
+    return jsonify(week_schedule)
+
+@app.route("/save_appointment", methods=["POST"])
+def save_appointment():
+    data = request.get_json()
+    date = data.get('date')
+    time = data.get('time')
+    user_name = data.get('user_name')
+    user_id = data.get('user_id', '')
+    
+    appointments_data = load_appointments()
+    appointments = appointments_data.get('appointments', [])
+    
+    # 移除該時段的舊預約
+    appointments = [apt for apt in appointments 
+                   if not (apt['date'] == date and apt['time'] == time)]
+    
+    # 如果有選擇用戶，則添加新預約
+    if user_name:
+        appointments.append({
+            'date': date,
+            'time': time,
+            'user_name': user_name,
+            'user_id': user_id
+        })
+    
+    appointments_data['appointments'] = appointments
+    save_appointments(appointments_data)
+    
+    return jsonify({"status": "success"})
+
+@app.route("/send_appointment_reminders", methods=["POST"])
+def send_appointment_reminders():
+    data = request.get_json()
+    send_type = data.get('type', 'week')  # 'week' or 'day'
+    target_date = data.get('date', '')  # 如果是 'day'，需要指定日期
+    
+    appointments_data = load_appointments()
+    appointments = appointments_data.get('appointments', [])
+    
+    # 篩選要發送的預約
+    if send_type == 'day' and target_date:
+        target_appointments = [apt for apt in appointments if apt['date'] == target_date]
+    else:  # week
+        week_dates = get_week_dates()
+        week_date_strs = [info['date'] for info in week_dates.values()]
+        target_appointments = [apt for apt in appointments if apt['date'] in week_date_strs]
+    
+    sent_count = 0
+    failed_count = 0
+    
+    for apt in target_appointments:
+        if apt.get('user_id'):
+            # 格式化日期和時間
+            date_obj = datetime.strptime(apt['date'], '%Y-%m-%d')
+            weekday_names = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+            weekday_name = weekday_names[date_obj.weekday()]
+            
+            message = f"您預約的時間是{date_obj.month}月{date_obj.day}日 {weekday_name} {apt['time']}，謝謝"
+            
+            success = reply_message(apt['user_id'], message)
+            if success:
+                sent_count += 1
+            else:
+                failed_count += 1
+    
+    return jsonify({
+        "status": "success",
+        "sent_count": sent_count,
+        "failed_count": failed_count
+    })
 
 # 初始化排程器（在模組層級啟動，確保無論如何啟動都會執行）
 scheduler = BackgroundScheduler()
