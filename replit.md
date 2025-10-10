@@ -6,6 +6,7 @@ This is a LINE Bot scheduling and user management system built with Flask. The a
 
 **Key Features:**
 - Automatic user registration when users add the bot as a friend or send messages
+- Silent message handling: Bot records user information without sending automatic replies
 - Scheduled message delivery with automatic retry mechanism (up to 3 retries)
 - **Weekly appointment booking system** with visual schedule management
 - **Batch reminder sending** for appointments (whole week or single day)

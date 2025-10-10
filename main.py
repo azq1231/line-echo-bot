@@ -217,8 +217,7 @@ def webhook():
                 if current_user and current_user.get('name') == '未知':
                     user_name = get_line_profile(user_id)
                     save_user_with_name(user_id, user_name)
-                
-                reply_message(user_id, f"你說了：{user_message}")
+                # 不發送任何回應
             else:
                 user_name = get_line_profile(user_id)
                 save_user_with_name(user_id, user_name)
