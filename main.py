@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify, render_template
 import os
 import requests
 import json
+from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
+import uuid
 
 app = Flask(__name__)
 
@@ -65,9 +68,78 @@ def get_line_profile(user_id):
         print(f"獲取用戶資料時發生錯誤: {e}")
     return '未知'
 
+def load_schedules():
+    try:
+        with open('schedules.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('schedules', [])
+    except FileNotFoundError:
+        return []
+
+def save_schedules(schedules):
+    with open('schedules.json', 'w', encoding='utf-8') as f:
+        json.dump({'schedules': schedules}, f, ensure_ascii=False, indent=2)
+
+def add_schedule(user_id, user_name, send_time, message):
+    schedules = load_schedules()
+    schedule_id = str(uuid.uuid4())
+    new_schedule = {
+        "id": schedule_id,
+        "user_id": user_id,
+        "user_name": user_name,
+        "send_time": send_time,
+        "message": message,
+        "status": "pending",
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    schedules.append(new_schedule)
+    save_schedules(schedules)
+    return schedule_id
+
+def delete_schedule(schedule_id):
+    schedules = load_schedules()
+    schedules = [s for s in schedules if s['id'] != schedule_id]
+    save_schedules(schedules)
+    return True
+
+def check_and_send_schedules():
+    schedules = load_schedules()
+    now = datetime.now()
+    updated = False
+    
+    for schedule in schedules:
+        if schedule['status'] == 'pending':
+            send_time = datetime.strptime(schedule['send_time'], "%Y-%m-%d %H:%M")
+            if now >= send_time:
+                success = reply_message(schedule['user_id'], schedule['message'])
+                if success:
+                    schedule['status'] = 'sent'
+                    schedule['sent_at'] = now.strftime("%Y-%m-%d %H:%M:%S")
+                    updated = True
+                    print(f"✅ 已發送排程訊息給 {schedule['user_name']}: {schedule['message']}")
+                else:
+                    if 'retry_count' not in schedule:
+                        schedule['retry_count'] = 0
+                    schedule['retry_count'] += 1
+                    updated = True
+                    
+                    if schedule['retry_count'] >= 3:
+                        schedule['status'] = 'failed'
+                        schedule['failed_at'] = now.strftime("%Y-%m-%d %H:%M:%S")
+                        print(f"❌ 排程發送失敗（已重試3次）：{schedule['user_name']} - {schedule['message']}")
+                    else:
+                        print(f"⚠️ 排程發送失敗（將重試 {schedule['retry_count']}/3）：{schedule['user_name']} - {schedule['message']}")
+    
+    if updated:
+        save_schedules(schedules)
+
 @app.route("/")
 def home():
     return render_template("admin.html")
+
+@app.route("/schedule")
+def schedule():
+    return render_template("schedule.html")
 
 @app.route("/add_user/<user_id>")
 def add_user(user_id):
@@ -85,6 +157,30 @@ def delete_user(user_id):
 def list_users():
     users = load_users()
     return jsonify({"allowed_users": users, "count": len(users)})
+
+@app.route("/add_schedule", methods=["POST"])
+def add_schedule_route():
+    data = request.get_json()
+    user_id = data.get("user_id")
+    user_name = data.get("user_name")
+    send_time = data.get("send_time")
+    message = data.get("message")
+    
+    if not all([user_id, send_time, message]):
+        return jsonify({"status": "error", "message": "缺少必要欄位"}), 400
+    
+    schedule_id = add_schedule(user_id, user_name, send_time, message)
+    return jsonify({"status": "success", "message": "排程已新增", "schedule_id": schedule_id})
+
+@app.route("/list_schedules")
+def list_schedules():
+    schedules = load_schedules()
+    return jsonify({"schedules": schedules, "count": len(schedules)})
+
+@app.route("/delete_schedule/<schedule_id>")
+def delete_schedule_route(schedule_id):
+    delete_schedule(schedule_id)
+    return jsonify({"status": "success", "message": "排程已刪除"})
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -136,6 +232,16 @@ def reply_message(user_id, text):
     response = requests.post(url, headers=headers, json=data)
     if response.status_code != 200:
         print(f"Error sending message: {response.status_code}, {response.text}")
+        return False
+    return True
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(func=check_and_send_schedules, trigger="interval", seconds=30)
+    scheduler.start()
+    print("排程檢查器已啟動，每30秒檢查一次待發送訊息")
+    
+    try:
+        app.run(host="0.0.0.0", port=5000)
+    except (KeyboardInterrupt, SystemExit):
+        scheduler.shutdown()
