@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a LINE Bot scheduling and user management system built with Flask. The application allows administrators to manage authorized LINE users, schedule automated messages, and manage weekly appointment bookings with automated reminder notifications. The system provides a web-based admin interface for user management, message scheduling, and appointment management, with background job processing to handle scheduled message delivery.
+This is a LINE Bot scheduling and user management system built with Flask and SQLite. The application allows administrators to manage authorized LINE users, schedule automated messages, and manage weekly appointment bookings with automated reminder notifications. Users can book appointments directly through LINE using interactive Flex Messages. The system integrates Gemini AI for intelligent scheduling suggestions and provides a web-based admin interface for comprehensive management.
 
 **Key Features:**
 - Automatic user registration when users add the bot as a friend or send messages
@@ -49,10 +49,11 @@ Preferred communication style: Simple, everyday language.
 
 **Authentication Strategy**: The system uses Replit's built-in authentication (`X-Replit-User-*` headers) to identify and authorize admin users accessing the web interface.
 
-**Data Persistence**: JSON file-based storage is used for simplicity:
-- `users.json`: Stores authorized LINE user IDs and names
-- `schedules.json`: Stores scheduled message data including status, timestamps, and delivery information
-- `appointments.json`: Stores weekly appointment bookings with date, time, user information
+**Data Persistence**: SQLite database for robust data management:
+- `appointments.db`: Main SQLite database file
+- Tables: users, appointments, closed_days, schedules, notification_templates
+- Partial unique index on appointments for rebooking cancelled slots
+- Support for multi-slot bookings via booking_group_id
 
 **Background Processing**: APScheduler (BackgroundScheduler) runs scheduled jobs to check for pending messages and deliver them at the specified times.
 
@@ -78,6 +79,43 @@ Preferred communication style: Simple, everyday language.
 - File system (JSON files) for user and schedule persistence
 - No database required - uses simple JSON serialization
 
+**Gemini AI Integration**:
+- `gemini_ai.py`: AI-powered appointment scheduling suggestions
+- Uses Gemini 2.5 Flash model with JSON output mode
+- Analyzes booking patterns and suggests optimal time slots
+- Requires `GEMINI_API_KEY` environment variable
+
 **Runtime Environment**:
-- Environment variables for sensitive credentials (LINE_CHANNEL_TOKEN)
+- Environment variables for sensitive credentials (LINE_CHANNEL_TOKEN, GEMINI_API_KEY)
 - Replit platform for hosting and deployment
+
+## Recent Changes
+
+**2025-10-10: Database Migration & AI Integration**
+- ✅ Migrated from JSON to SQLite database
+- ✅ Integrated Gemini AI for scheduling suggestions
+- ✅ Created LINE Flex Message templates for date/time selection
+- ✅ Fixed partial unique index to allow rebooking cancelled slots
+- ✅ Added support for multi-slot bookings via booking_group_id
+
+## Project Architecture
+
+### Core Modules
+
+**database.py**: SQLite database layer
+- User management (add, update, delete)
+- Appointment CRUD operations
+- Closed day management with auto-cancellation
+- Notification template storage
+- Partial unique indexing for slot rebooking
+
+**gemini_ai.py**: AI-powered scheduling assistant
+- Analyzes appointment patterns and gaps
+- Suggests optimal time slots for users
+- JSON-structured output for easy integration
+
+**line_flex_messages.py**: Interactive LINE UI templates
+- Date selection card with week navigation
+- Time slot selection with availability display
+- Booking confirmation card
+- Closed day notification card
