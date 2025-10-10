@@ -1,3 +1,5 @@
 這個修改的功能是有限的，agent不能無限的使用，Plan 模式還是會算次數。
 若你只是想改程式、不要分析過程 → 直接用 Build 模式最省。
 若要更進一步節省 → 先在chatgpt「生成完整修改需求」，再貼過去。
+
+https://b6423c8e-09e2-46b1-a48c-7b779d2c0fb7-00-2v9j3purjtl9u.sisko.replit.dev

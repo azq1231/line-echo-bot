@@ -1,64 +1,51 @@
 from flask import Flask, request, jsonify, render_template
 import os
 import requests
-import json
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
-import uuid
 import pytz
+import uuid
+import hmac
+import hashlib
+import base64
+
+# 导入数据库和 Flex Message 模块
+import database as db
+import line_flex_messages as flex
+import gemini_ai
 
 app = Flask(__name__)
 
 LINE_CHANNEL_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
+LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 TAIPEI_TZ = pytz.timezone('Asia/Taipei')
 
-def load_users():
-    try:
-        with open('users.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            users_data = data.get('allowed_users', [])
-            if users_data and isinstance(users_data[0], str):
-                users_data = [{"user_id": uid, "name": "未知"} for uid in users_data]
-            return users_data
-    except FileNotFoundError:
-        return []
+# 初始化数据库
+db.init_database()
 
-def save_users(users):
-    with open('users.json', 'w', encoding='utf-8') as f:
-        json.dump({'allowed_users': users}, f, ensure_ascii=False, indent=2)
+# ============ LINE API 辅助函数 ============
 
-def save_user_with_name(user_id, name="未知"):
-    users = load_users()
-    user_ids = [u['user_id'] for u in users]
-    if user_id not in user_ids:
-        users.append({"user_id": user_id, "name": name})
-        save_users(users)
-        print(f"自動新增用戶：{name} ({user_id})")
-    else:
-        for user in users:
-            if user['user_id'] == user_id and user['name'] == '未知' and name != '未知':
-                user['name'] = name
-                save_users(users)
-                print(f"更新用戶姓名：{name} ({user_id})")
-                break
-
-def save_user(user_id):
-    save_user_with_name(user_id)
-
-def delete_user_from_list(user_id):
-    users = load_users()
-    users = [u for u in users if u['user_id'] != user_id]
-    save_users(users)
-    return True
+def validate_signature(body, signature):
+    """验证 LINE webhook 签名"""
+    if not LINE_CHANNEL_SECRET:
+        print("警告：未设置 LINE_CHANNEL_SECRET，跳过签名验证")
+        return True
+    
+    hash_obj = hmac.new(
+        LINE_CHANNEL_SECRET.encode('utf-8'),
+        body.encode('utf-8'),
+        hashlib.sha256
+    )
+    expected_signature = base64.b64encode(hash_obj.digest()).decode('utf-8')
+    
+    return hmac.compare_digest(signature, expected_signature)
 
 def get_line_profile(user_id):
+    """获取 LINE 用户资料"""
     url = f"https://api.line.me/v2/bot/profile/{user_id}"
-    headers = {
-        "Authorization": f"Bearer {LINE_CHANNEL_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {LINE_CHANNEL_TOKEN}"}
     try:
         response = requests.get(url, headers=headers)
-        print(f"LINE Profile API 回應: status={response.status_code}")
         if response.status_code == 200:
             profile = response.json()
             display_name = profile.get('displayName', '未知')
@@ -70,74 +57,86 @@ def get_line_profile(user_id):
         print(f"獲取用戶資料時發生錯誤: {e}")
     return '未知'
 
-def load_schedules():
-    try:
-        with open('schedules.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data.get('schedules', [])
-    except FileNotFoundError:
-        return []
-
-def save_schedules(schedules):
-    with open('schedules.json', 'w', encoding='utf-8') as f:
-        json.dump({'schedules': schedules}, f, ensure_ascii=False, indent=2)
-
-def add_schedule(user_id, user_name, send_time, message):
-    schedules = load_schedules()
-    schedule_id = str(uuid.uuid4())
-    new_schedule = {
-        "id": schedule_id,
-        "user_id": user_id,
-        "user_name": user_name,
-        "send_time": send_time,
-        "message": message,
-        "status": "pending",
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def send_line_message(user_id, messages):
+    """发送 LINE 消息（支持文本和 Flex Message）"""
+    url = "https://api.line.me/v2/bot/message/push"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_CHANNEL_TOKEN}"
     }
-    schedules.append(new_schedule)
-    save_schedules(schedules)
-    return schedule_id
-
-def delete_schedule(schedule_id):
-    schedules = load_schedules()
-    schedules = [s for s in schedules if s['id'] != schedule_id]
-    save_schedules(schedules)
+    
+    # 确保 messages 是列表格式
+    if not isinstance(messages, list):
+        messages = [messages]
+    
+    data = {
+        "to": user_id,
+        "messages": messages
+    }
+    
+    response = requests.post(url, headers=headers, json=data)
+    if response.status_code != 200:
+        print(f"Error sending message: {response.status_code}, {response.text}")
+        return False
     return True
 
-def check_and_send_schedules():
-    schedules = load_schedules()
-    # 使用台北時區（UTC+8）
-    taipei_tz = pytz.timezone('Asia/Taipei')
-    now = datetime.now(taipei_tz)
-    updated = False
+def reply_message(user_id, text):
+    """发送文本消息（兼容旧代码）"""
+    return send_line_message(user_id, [{"type": "text", "text": text}])
+
+# ============ 预约辅助函数 ============
+
+def get_week_dates(week_offset=0):
+    """
+    获取指定周次的日期（週二到週六）
+    week_offset: 0=本週, 1=下週, -1=上週
+    """
+    today = datetime.now(TAIPEI_TZ).date()
+    monday = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
     
-    for schedule in schedules:
-        if schedule['status'] == 'pending':
-            # 將排程時間解析為台北時區的時間
-            send_time_naive = datetime.strptime(schedule['send_time'], "%Y-%m-%d %H:%M")
-            send_time = taipei_tz.localize(send_time_naive)
-            if now >= send_time:
-                success = reply_message(schedule['user_id'], schedule['message'])
-                if success:
-                    schedule['status'] = 'sent'
-                    schedule['sent_at'] = now.strftime("%Y-%m-%d %H:%M:%S")
-                    updated = True
-                    print(f"✅ 已發送排程訊息給 {schedule['user_name']}: {schedule['message']}")
-                else:
-                    if 'retry_count' not in schedule:
-                        schedule['retry_count'] = 0
-                    schedule['retry_count'] += 1
-                    updated = True
-                    
-                    if schedule['retry_count'] >= 3:
-                        schedule['status'] = 'failed'
-                        schedule['failed_at'] = now.strftime("%Y-%m-%d %H:%M:%S")
-                        print(f"❌ 排程發送失敗（已重試3次）：{schedule['user_name']} - {schedule['message']}")
-                    else:
-                        print(f"⚠️ 排程發送失敗（將重試 {schedule['retry_count']}/3）：{schedule['user_name']} - {schedule['message']}")
+    week_dates = []
+    for i in range(1, 6):  # 1=週二 到 5=週六
+        date = monday + timedelta(days=i)
+        day_names = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
+        week_dates.append({
+            'date': date.strftime('%Y-%m-%d'),
+            'day_name': day_names[i],
+            'weekday': i
+        })
     
-    if updated:
-        save_schedules(schedules)
+    return week_dates
+
+def generate_time_slots(weekday):
+    """根据星期生成时间段"""
+    slots = []
+    if weekday in [1, 3, 5]:  # 週二、週四、週六：14:00-18:00（17个时段）
+        for hour in range(14, 18):
+            for minute in [0, 15, 30, 45]:
+                slots.append(f"{hour:02d}:{minute:02d}")
+        slots.append("18:00")  # 18:00 结束
+    elif weekday in [2, 4]:  # 週三、週五：18:00-21:00（13个时段）
+        for hour in range(18, 21):
+            for minute in [0, 15, 30, 45]:
+                slots.append(f"{hour:02d}:{minute:02d}")
+    return slots
+
+def get_available_slots(date, weekday):
+    """获取某日期的可用时段"""
+    all_slots = generate_time_slots(weekday)
+    
+    # 检查是否休诊
+    if db.is_closed_day(date):
+        return []
+    
+    # 获取已预约的时段
+    appointments = db.get_appointments_by_date_range(date, date)
+    booked_times = [apt['time'] for apt in appointments if apt['status'] == 'confirmed']
+    
+    # 返回可用时段
+    available = [slot for slot in all_slots if slot not in booked_times]
+    return available
+
+# ============ WEB 路由 ============
 
 @app.route("/")
 def home():
@@ -147,22 +146,28 @@ def home():
 def schedule():
     return render_template("schedule.html")
 
+@app.route("/appointments")
+def appointments_page():
+    return render_template("appointments.html")
+
+# ============ 用户管理 API ============
+
+@app.route("/list_users")
+def list_users():
+    users = db.get_all_users()
+    return jsonify({"allowed_users": users, "count": len(users)})
+
 @app.route("/add_user/<user_id>")
 def add_user(user_id):
-    save_user(user_id)
+    db.add_user(user_id, "未知")
     return jsonify({"status": "success", "message": f"已新增使用者：{user_id}"})
 
 @app.route("/delete_user/<user_id>")
 def delete_user(user_id):
-    if delete_user_from_list(user_id):
+    if db.delete_user(user_id):
         return jsonify({"status": "success", "message": f"已刪除使用者：{user_id}"})
     else:
         return jsonify({"status": "error", "message": "使用者不存在"})
-
-@app.route("/list_users")
-def list_users():
-    users = load_users()
-    return jsonify({"allowed_users": users, "count": len(users)})
 
 @app.route("/update_user_name", methods=["POST"])
 def update_user_name():
@@ -173,191 +178,49 @@ def update_user_name():
     if not user_id or not new_name:
         return jsonify({"status": "error", "message": "缺少必要欄位"}), 400
     
-    users = load_users()
-    user_found = False
-    
-    for user in users:
-        if user['user_id'] == user_id:
-            user['name'] = new_name
-            user_found = True
-            break
-    
-    if user_found:
-        save_users(users)
+    if db.update_user_name(user_id, new_name):
         return jsonify({"status": "success", "message": f"已更新姓名為：{new_name}"})
     else:
         return jsonify({"status": "error", "message": "找不到用戶"}), 404
 
-@app.route("/add_schedule", methods=["POST"])
-def add_schedule_route():
-    data = request.get_json()
-    user_id = data.get("user_id")
-    user_name = data.get("user_name")
-    send_time = data.get("send_time")
-    message = data.get("message")
-    
-    if not all([user_id, send_time, message]):
-        return jsonify({"status": "error", "message": "缺少必要欄位"}), 400
-    
-    schedule_id = add_schedule(user_id, user_name, send_time, message)
-    return jsonify({"status": "success", "message": "排程已新增", "schedule_id": schedule_id})
-
-@app.route("/list_schedules")
-def list_schedules():
-    schedules = load_schedules()
-    return jsonify({"schedules": schedules, "count": len(schedules)})
-
-@app.route("/delete_schedule/<schedule_id>")
-def delete_schedule_route(schedule_id):
-    delete_schedule(schedule_id)
-    return jsonify({"status": "success", "message": "排程已刪除"})
-
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    body = request.get_json()
-    events = body.get("events", [])
-
-    for event in events:
-        # 處理用戶加好友事件
-        if event["type"] == "follow":
-            user_id = event["source"]["userId"]
-            print(f"用戶加入好友 - 用戶ID: {user_id}")
-            user_name = get_line_profile(user_id)
-            save_user_with_name(user_id, user_name)
-        
-        # 處理訊息事件
-        elif event["type"] == "message" and event["message"]["type"] == "text":
-            user_id = event["source"]["userId"]
-            user_message = event["message"]["text"]
-            
-            print(f"收到訊息 - 用戶ID: {user_id}, 訊息: {user_message}")
-
-            allowed_users = load_users()
-            user_ids = [u['user_id'] for u in allowed_users]
-            
-            if user_id in user_ids:
-                # 檢查用戶姓名是否為"未知"，如果是則嘗試更新
-                current_user = next((u for u in allowed_users if u['user_id'] == user_id), None)
-                if current_user and current_user.get('name') == '未知':
-                    user_name = get_line_profile(user_id)
-                    save_user_with_name(user_id, user_name)
-                # 不發送任何回應
-            else:
-                user_name = get_line_profile(user_id)
-                save_user_with_name(user_id, user_name)
-
-    return jsonify({"status": "ok"})
-
-def reply_message(user_id, text):
-    url = "https://api.line.me/v2/bot/message/push"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_CHANNEL_TOKEN}"
-    }
-    data = {
-        "to": user_id,
-        "messages": [{"type": "text", "text": text}]
-    }
-    response = requests.post(url, headers=headers, json=data)
-    if response.status_code != 200:
-        print(f"Error sending message: {response.status_code}, {response.text}")
-        return False
-    return True
-
-# ============ 預約管理功能 ============
-
-def load_appointments():
-    try:
-        with open('appointments.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {"appointments": []}
-
-def save_appointments(appointments_data):
-    with open('appointments.json', 'w', encoding='utf-8') as f:
-        json.dump(appointments_data, f, ensure_ascii=False, indent=2)
-
-def get_week_dates(start_date=None):
-    """獲取本週的日期（週一到週日）"""
-    if start_date is None:
-        start_date = datetime.now(TAIPEI_TZ).date()
-    
-    # 找到本週的週一
-    weekday = start_date.weekday()
-    monday = start_date - timedelta(days=weekday)
-    
-    # 生成週二到週六的日期
-    week_dates = {}
-    for i in range(1, 6):  # 1=週二, 2=週三, ..., 5=週六
-        date = monday + timedelta(days=i)
-        day_name = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'][i]
-        week_dates[i] = {
-            'date': date.strftime('%Y-%m-%d'),
-            'display': f"{date.month}/{date.day}",
-            'day_name': day_name,
-            'weekday': i
-        }
-    
-    return week_dates
-
-def generate_time_slots(weekday):
-    """根據星期生成時間段"""
-    slots = []
-    if weekday in [1, 3, 5]:  # 週二、週四、週六：14:00-18:00
-        start_hour = 14
-        end_hour = 18
-        # 二四六要包含 18:00
-        for hour in range(start_hour, end_hour):
-            for minute in [0, 15, 30, 45]:
-                time_str = f"{hour:02d}:{minute:02d}"
-                slots.append(time_str)
-        slots.append("18:00")  # 加入最後的 18:00
-    elif weekday in [2, 4]:  # 週三、週五：18:00-21:00
-        start_hour = 18
-        end_hour = 21
-        for hour in range(start_hour, end_hour):
-            for minute in [0, 15, 30, 45]:
-                time_str = f"{hour:02d}:{minute:02d}"
-                slots.append(time_str)
-    else:
-        return []
-    
-    return slots
-
-@app.route("/appointments")
-def appointments_page():
-    return render_template("appointments.html")
+# ============ 预约管理 API ============
 
 @app.route("/get_week_appointments")
 def get_week_appointments():
-    week_dates = get_week_dates()
-    appointments_data = load_appointments()
+    week_offset = int(request.args.get('offset', 0))
+    week_dates = get_week_dates(week_offset)
     
-    # 組織本週的預約數據
+    # 组织本周的预约数据
     week_schedule = {}
-    for weekday, date_info in week_dates.items():
+    all_users = db.get_all_users()
+    
+    for date_info in week_dates:
         date_str = date_info['date']
+        weekday = date_info['weekday']
         time_slots = generate_time_slots(weekday)
+        
+        # 获取该日期的所有预约
+        appointments = db.get_appointments_by_date_range(date_str, date_str)
+        appointments_map = {apt['time']: apt for apt in appointments if apt['status'] == 'confirmed'}
         
         day_appointments = {}
         for time_slot in time_slots:
-            # 查找該日期時段的預約
-            appointment = next(
-                (apt for apt in appointments_data.get('appointments', [])
-                 if apt['date'] == date_str and apt['time'] == time_slot),
-                None
-            )
+            apt = appointments_map.get(time_slot)
             day_appointments[time_slot] = {
-                'user_name': appointment['user_name'] if appointment else '',
-                'user_id': appointment['user_id'] if appointment else ''
+                'user_name': apt['user_name'] if apt else '',
+                'user_id': apt['user_id'] if apt else ''
             }
         
-        week_schedule[weekday] = {
+        week_schedule[date_str] = {
             'date_info': date_info,
             'appointments': day_appointments
         }
     
-    return jsonify(week_schedule)
+    return jsonify({
+        'week_schedule': week_schedule,
+        'users': all_users,
+        'week_offset': week_offset
+    })
 
 @app.route("/save_appointment", methods=["POST"])
 def save_appointment():
@@ -367,50 +230,38 @@ def save_appointment():
     user_name = data.get('user_name')
     user_id = data.get('user_id', '')
     
-    appointments_data = load_appointments()
-    appointments = appointments_data.get('appointments', [])
+    # 先取消该时段的旧预约
+    db.cancel_appointment(date, time)
     
-    # 移除該時段的舊預約
-    appointments = [apt for apt in appointments 
-                   if not (apt['date'] == date and apt['time'] == time)]
-    
-    # 如果有選擇用戶，則添加新預約
-    if user_name:
-        appointments.append({
-            'date': date,
-            'time': time,
-            'user_name': user_name,
-            'user_id': user_id
-        })
-    
-    appointments_data['appointments'] = appointments
-    save_appointments(appointments_data)
+    # 如果有选择用户，则添加新预约
+    if user_name and user_id:
+        db.add_appointment(user_id, user_name, date, time)
     
     return jsonify({"status": "success"})
 
 @app.route("/send_appointment_reminders", methods=["POST"])
 def send_appointment_reminders():
     data = request.get_json()
-    send_type = data.get('type', 'week')  # 'week' or 'day'
-    target_date = data.get('date', '')  # 如果是 'day'，需要指定日期
+    send_type = data.get('type', 'week')
+    target_date = data.get('date', '')
     
-    appointments_data = load_appointments()
-    appointments = appointments_data.get('appointments', [])
-    
-    # 篩選要發送的預約
+    # 筛选要发送的预约
     if send_type == 'day' and target_date:
-        target_appointments = [apt for apt in appointments if apt['date'] == target_date]
+        appointments = db.get_appointments_by_date_range(target_date, target_date)
     else:  # week
         week_dates = get_week_dates()
-        week_date_strs = [info['date'] for info in week_dates.values()]
-        target_appointments = [apt for apt in appointments if apt['date'] in week_date_strs]
+        start_date = week_dates[0]['date']
+        end_date = week_dates[-1]['date']
+        appointments = db.get_appointments_by_date_range(start_date, end_date)
+    
+    # 只发送 confirmed 状态的预约
+    appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
     
     sent_count = 0
     failed_count = 0
     
-    for apt in target_appointments:
+    for apt in appointments:
         if apt.get('user_id'):
-            # 格式化日期和時間
             date_obj = datetime.strptime(apt['date'], '%Y-%m-%d')
             weekday_names = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
             weekday_name = weekday_names[date_obj.weekday()]
@@ -429,7 +280,328 @@ def send_appointment_reminders():
         "failed_count": failed_count
     })
 
-# 初始化排程器（在模組層級啟動，確保無論如何啟動都會執行）
+# ============ 休诊管理 API ============
+
+@app.route("/get_closed_days")
+def get_closed_days():
+    closed_days = db.get_all_closed_days()
+    return jsonify({"closed_days": closed_days})
+
+@app.route("/set_closed_day", methods=["POST"])
+def set_closed_day():
+    data = request.get_json()
+    date = data.get('date')
+    reason = data.get('reason', '休診')
+    
+    if not date:
+        return jsonify({"status": "error", "message": "缺少日期"}), 400
+    
+    # 设置休诊并自动取消该日预约
+    cancelled_count = db.set_closed_day(date, reason)
+    
+    return jsonify({
+        "status": "success",
+        "message": f"已設定休診，取消了 {cancelled_count} 個預約"
+    })
+
+@app.route("/remove_closed_day", methods=["POST"])
+def remove_closed_day():
+    data = request.get_json()
+    date = data.get('date')
+    
+    if db.remove_closed_day(date):
+        return jsonify({"status": "success", "message": "已移除休診設定"})
+    else:
+        return jsonify({"status": "error", "message": "未找到休診記錄"}), 404
+
+# ============ LINE Webhook ============
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    # 获取签名
+    signature = request.headers.get('X-Line-Signature', '')
+    
+    # 获取原始请求体
+    body_text = request.get_data(as_text=True)
+    
+    # 验证签名
+    if not validate_signature(body_text, signature):
+        print("❌ LINE Webhook 签名验证失败")
+        return jsonify({"status": "error", "message": "Invalid signature"}), 403
+    
+    body = request.get_json()
+    events = body.get("events", [])
+
+    for event in events:
+        # 处理用户加好友事件
+        if event["type"] == "follow":
+            user_id = event["source"]["userId"]
+            print(f"用戶加入好友 - 用戶ID: {user_id}")
+            user_name = get_line_profile(user_id)
+            db.add_user(user_id, user_name)
+        
+        # 处理文本消息
+        elif event["type"] == "message" and event["message"]["type"] == "text":
+            user_id = event["source"]["userId"]
+            user_message = event["message"]["text"].strip()
+            
+            print(f"收到訊息 - 用戶ID: {user_id}, 訊息: {user_message}")
+            
+            # 自动注册用户
+            users = db.get_all_users()
+            user_ids = [u['user_id'] for u in users]
+            
+            if user_id not in user_ids:
+                user_name = get_line_profile(user_id)
+                db.add_user(user_id, user_name)
+            
+            # 处理预约命令
+            if user_message in ['預約', '预约', '訂位', '订位']:
+                handle_booking_start(user_id)
+            elif user_message in ['查詢', '查询', '我的預約', '我的预约']:
+                handle_query_appointments(user_id)
+            elif user_message in ['取消', '取消預約', '取消预约']:
+                handle_cancel_booking(user_id)
+        
+        # 处理 postback 事件（按钮点击）
+        elif event["type"] == "postback":
+            user_id = event["source"]["userId"]
+            data = event["postback"]["data"]
+            
+            print(f"收到 Postback - 用戶ID: {user_id}, Data: {data}")
+            handle_postback(user_id, data)
+
+    return jsonify({"status": "ok"})
+
+# ============ LINE 预约流程处理 ============
+
+def handle_booking_start(user_id, week_offset=0):
+    """开始预约流程：显示日期选择"""
+    week_dates = get_week_dates(week_offset)
+    date_card = flex.generate_date_selection_card(week_dates, week_offset)
+    send_line_message(user_id, [date_card])
+
+def handle_postback(user_id, data):
+    """处理 postback 事件"""
+    # 解析 postback 数据
+    params = {}
+    for param in data.split('&'):
+        if '=' in param:
+            key, value = param.split('=', 1)
+            params[key] = value
+    
+    action = params.get('action')
+    
+    if action == 'change_week':
+        # 切换周次
+        offset = int(params.get('offset', 0))
+        handle_booking_start(user_id, offset)
+    
+    elif action == 'show_date_selection':
+        # 返回日期选择
+        handle_booking_start(user_id, 0)
+    
+    elif action == 'select_date':
+        # 选择日期后，显示时段选择
+        date = params.get('date')
+        day_name = params.get('day_name')
+        
+        if not date or not day_name:
+            return
+        
+        # 获取星期数
+        date_obj = datetime.strptime(date, '%Y-%m-%d')
+        weekday = date_obj.weekday()
+        
+        # 检查是否休诊
+        is_closed = db.is_closed_day(date)
+        
+        # 获取可用时段
+        available_slots = get_available_slots(date, weekday)
+        
+        # 生成时段选择卡片
+        time_card = flex.generate_time_selection_card(date, day_name, available_slots, is_closed)
+        send_line_message(user_id, [time_card])
+    
+    elif action == 'select_time':
+        # 选择时段后，显示确认卡片
+        date = params.get('date')
+        day_name = params.get('day_name')
+        time = params.get('time')
+        
+        if not date or not day_name or not time:
+            return
+        
+        # 获取用户姓名
+        user = db.get_user_by_id(user_id)
+        user_name = user['name'] if user else '未知'
+        
+        # 生成确认卡片
+        confirm_card = flex.generate_confirmation_card(date, day_name, time, user_name)
+        send_line_message(user_id, [confirm_card])
+    
+    elif action == 'confirm_booking':
+        # 确认预约
+        date = params.get('date')
+        time = params.get('time')
+        
+        if not date or not time:
+            return
+        
+        # 获取用户信息
+        user = db.get_user_by_id(user_id)
+        user_name = user['name'] if user else '未知'
+        
+        # 添加预约
+        success = db.add_appointment(user_id, user_name, date, time)
+        
+        if success:
+            date_obj = datetime.strptime(date, '%Y-%m-%d')
+            weekday_names = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+            weekday_name = weekday_names[date_obj.weekday()]
+            
+            success_msg = f"✅ 預約成功！\n\n日期：{date_obj.month}月{date_obj.day}日 ({weekday_name})\n時間：{time}\n姓名：{user_name}\n\n我們會在預約前提醒您，謝謝！"
+            send_line_message(user_id, [{"type": "text", "text": success_msg}])
+        else:
+            error_msg = "❌ 預約失敗，該時段可能已被預約。請重新選擇。"
+            send_line_message(user_id, [{"type": "text", "text": error_msg}])
+
+def handle_query_appointments(user_id):
+    """查询用户的预约"""
+    # 获取用户的所有预约（未来7天）
+    today = datetime.now(TAIPEI_TZ).date()
+    end_date = today + timedelta(days=7)
+    
+    appointments = db.get_appointments_by_user(user_id)
+    # 只显示未来的预约
+    future_apts = [apt for apt in appointments 
+                   if datetime.strptime(apt['date'], '%Y-%m-%d').date() >= today
+                   and apt['status'] == 'confirmed']
+    
+    if not future_apts:
+        msg = "您目前沒有預約記錄。\n\n如需預約，請輸入「預約」。"
+    else:
+        msg = "📅 您的預約記錄：\n\n"
+        for apt in sorted(future_apts, key=lambda x: (x['date'], x['time'])):
+            date_obj = datetime.strptime(apt['date'], '%Y-%m-%d')
+            weekday_names = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+            weekday_name = weekday_names[date_obj.weekday()]
+            msg += f"• {date_obj.month}月{date_obj.day}日 ({weekday_name}) {apt['time']}\n"
+        msg += "\n如需取消預約，請輸入「取消」。"
+    
+    send_line_message(user_id, [{"type": "text", "text": msg}])
+
+def handle_cancel_booking(user_id):
+    """处理取消预约"""
+    # 获取用户的预约
+    today = datetime.now(TAIPEI_TZ).date()
+    appointments = db.get_appointments_by_user(user_id)
+    future_apts = [apt for apt in appointments 
+                   if datetime.strptime(apt['date'], '%Y-%m-%d').date() >= today
+                   and apt['status'] == 'confirmed']
+    
+    if not future_apts:
+        msg = "您目前沒有可取消的預約。"
+        send_line_message(user_id, [{"type": "text", "text": msg}])
+    else:
+        # 取消最近的一个预约
+        apt = sorted(future_apts, key=lambda x: (x['date'], x['time']))[0]
+        db.cancel_appointment(apt['date'], apt['time'])
+        
+        date_obj = datetime.strptime(apt['date'], '%Y-%m-%d')
+        weekday_names = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+        weekday_name = weekday_names[date_obj.weekday()]
+        
+        msg = f"✅ 已取消預約\n\n日期：{date_obj.month}月{date_obj.day}日 ({weekday_name})\n時間：{apt['time']}"
+        send_line_message(user_id, [{"type": "text", "text": msg}])
+
+# ============ 排程系统（保留旧功能）============
+
+# 这部分暂时保留 JSON 方式，后续可迁移到数据库
+def load_schedules():
+    import json
+    try:
+        with open('schedules.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('schedules', [])
+    except FileNotFoundError:
+        return []
+
+def save_schedules(schedules):
+    import json
+    with open('schedules.json', 'w', encoding='utf-8') as f:
+        json.dump({'schedules': schedules}, f, ensure_ascii=False, indent=2)
+
+def check_and_send_schedules():
+    schedules = load_schedules()
+    now = datetime.now(TAIPEI_TZ)
+    updated = False
+    
+    for schedule in schedules:
+        if schedule['status'] == 'pending':
+            send_time_naive = datetime.strptime(schedule['send_time'], "%Y-%m-%d %H:%M")
+            send_time = TAIPEI_TZ.localize(send_time_naive)
+            if now >= send_time:
+                success = reply_message(schedule['user_id'], schedule['message'])
+                if success:
+                    schedule['status'] = 'sent'
+                    schedule['sent_at'] = now.strftime("%Y-%m-%d %H:%M:%S")
+                    updated = True
+                    print(f"✅ 已發送排程訊息給 {schedule['user_name']}: {schedule['message']}")
+                else:
+                    if 'retry_count' not in schedule:
+                        schedule['retry_count'] = 0
+                    schedule['retry_count'] += 1
+                    updated = True
+                    
+                    if schedule['retry_count'] >= 3:
+                        schedule['status'] = 'failed'
+                        schedule['failed_at'] = now.strftime("%Y-%m-%d %H:%M:%S")
+                        print(f"❌ 排程發送失敗（已重試3次）：{schedule['user_name']} - {schedule['message']}")
+    
+    if updated:
+        save_schedules(schedules)
+
+@app.route("/add_schedule", methods=["POST"])
+def add_schedule_route():
+    import json
+    data = request.get_json()
+    user_id = data.get("user_id")
+    user_name = data.get("user_name")
+    send_time = data.get("send_time")
+    message = data.get("message")
+    
+    if not all([user_id, send_time, message]):
+        return jsonify({"status": "error", "message": "缺少必要欄位"}), 400
+    
+    schedules = load_schedules()
+    schedule_id = str(uuid.uuid4())
+    new_schedule = {
+        "id": schedule_id,
+        "user_id": user_id,
+        "user_name": user_name,
+        "send_time": send_time,
+        "message": message,
+        "status": "pending",
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    schedules.append(new_schedule)
+    save_schedules(schedules)
+    return jsonify({"status": "success", "message": "排程已新增", "schedule_id": schedule_id})
+
+@app.route("/list_schedules")
+def list_schedules():
+    schedules = load_schedules()
+    return jsonify({"schedules": schedules, "count": len(schedules)})
+
+@app.route("/delete_schedule/<schedule_id>")
+def delete_schedule_route(schedule_id):
+    schedules = load_schedules()
+    schedules = [s for s in schedules if s['id'] != schedule_id]
+    save_schedules(schedules)
+    return jsonify({"status": "success", "message": "排程已刪除"})
+
+# 初始化排程器
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=check_and_send_schedules, trigger="interval", seconds=30)
 scheduler.start()

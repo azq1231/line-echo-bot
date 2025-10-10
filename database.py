@@ -121,6 +121,15 @@ def get_all_users() -> List[Dict]:
     conn.close()
     return users
 
+def get_user_by_id(user_id: str) -> Optional[Dict]:
+    """根据用户ID获取用户信息"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
 def add_user(user_id: str, name: str, phone: Optional[str] = None) -> bool:
     """添加或更新用户"""
     conn = get_db()
@@ -184,6 +193,19 @@ def get_appointments_by_date_range(start_date: str, end_date: str) -> List[Dict]
         WHERE date >= ? AND date <= ? AND status = 'confirmed'
         ORDER BY date, time
     ''', (start_date, end_date))
+    appointments = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return appointments
+
+def get_appointments_by_user(user_id: str) -> List[Dict]:
+    """获取用户的所有预约"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM appointments 
+        WHERE user_id = ?
+        ORDER BY date, time
+    ''', (user_id,))
     appointments = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return appointments
@@ -297,6 +319,10 @@ def get_closed_days() -> List[Dict]:
     closed_days = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return closed_days
+
+def get_all_closed_days() -> List[Dict]:
+    """获取所有休诊日（别名函数）"""
+    return get_closed_days()
 
 # ==================== 通知模板 ====================
 
