@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 import uuid
+import pytz
 
 app = Flask(__name__)
 
@@ -104,12 +105,16 @@ def delete_schedule(schedule_id):
 
 def check_and_send_schedules():
     schedules = load_schedules()
-    now = datetime.now()
+    # 使用台北時區（UTC+8）
+    taipei_tz = pytz.timezone('Asia/Taipei')
+    now = datetime.now(taipei_tz)
     updated = False
     
     for schedule in schedules:
         if schedule['status'] == 'pending':
-            send_time = datetime.strptime(schedule['send_time'], "%Y-%m-%d %H:%M")
+            # 將排程時間解析為台北時區的時間
+            send_time_naive = datetime.strptime(schedule['send_time'], "%Y-%m-%d %H:%M")
+            send_time = taipei_tz.localize(send_time_naive)
             if now >= send_time:
                 success = reply_message(schedule['user_id'], schedule['message'])
                 if success:
@@ -235,12 +240,13 @@ def reply_message(user_id, text):
         return False
     return True
 
+# 初始化排程器（在模組層級啟動，確保無論如何啟動都會執行）
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=check_and_send_schedules, trigger="interval", seconds=30)
+scheduler.start()
+print("🚀 排程檢查器已啟動，每30秒檢查一次待發送訊息")
+
 if __name__ == "__main__":
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(func=check_and_send_schedules, trigger="interval", seconds=30)
-    scheduler.start()
-    print("排程檢查器已啟動，每30秒檢查一次待發送訊息")
-    
     try:
         app.run(host="0.0.0.0", port=5000)
     except (KeyboardInterrupt, SystemExit):

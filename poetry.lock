@@ -1291,6 +1291,17 @@ iso8601 = ">=1.0.2,<3.0.0"
 pycryptodomex = ">=3.18.0"
 
 [[package]]
+name = "pytz"
+version = "2025.2"
+description = "World timezone definitions, modern and historical"
+optional = false
+python-versions = "*"
+files = [
+    {file = "pytz-2025.2-py2.py3-none-any.whl", hash = "sha256:5ddf76296dd8c44c26eb8f4b6f35488f3ccbf6fbbd7adee0b7262d43f0ec2f00"},
+    {file = "pytz-2025.2.tar.gz", hash = "sha256:360b9e3dbb49a209c21ad61809c7fb453643e048b38924c765813546746e81c3"},
+]
+
+[[package]]
 name = "replit"
 version = "3.6.3"
 description = "A library for interacting with features of Replit"
@@ -1553,4 +1564,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10.0,<3.11"
-content-hash = "0657e2cc5110fbfaeac54cdc5dee846f7187174530bb4df7b69317ceb24fd743"
+content-hash = "1fe0aa89cbe80b65a68e2b537376d795b4b1cc4a802c6a17c936d12f32a725cc"

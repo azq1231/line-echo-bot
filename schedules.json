@@ -6,8 +6,9 @@
       "user_name": "郭欽方",
       "send_time": "2025-10-10 12:46",
       "message": "12:46",
-      "status": "pending",
-      "created_at": "2025-10-10 04:44:48"
+      "status": "sent",
+      "created_at": "2025-10-10 04:44:48",
+      "sent_at": "2025-10-10 13:21:34"
     },
     {
       "id": "4fa0e452-b524-4b4e-9391-6bd2fb142ebe",
@@ -15,8 +16,9 @@
       "user_name": "郭欽方",
       "send_time": "2025-10-10 13:05",
       "message": "測試",
-      "status": "pending",
-      "created_at": "2025-10-10 05:04:15"
+      "status": "sent",
+      "created_at": "2025-10-10 05:04:15",
+      "sent_at": "2025-10-10 13:21:34"
     }
   ]
 }
