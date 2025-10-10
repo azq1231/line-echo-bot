@@ -63,10 +63,14 @@ def webhook():
         if event["type"] == "message" and event["message"]["type"] == "text":
             user_id = event["source"]["userId"]
             user_message = event["message"]["text"]
+            
+            print(f"收到訊息 - 用戶ID: {user_id}, 訊息: {user_message}")
 
             allowed_users = load_users()
             if user_id in allowed_users:
                 reply_message(user_id, f"你說了：{user_message}")
+            else:
+                reply_message(user_id, f"您的 LINE User ID 是：\n{user_id}\n\n請將此 ID 提供給管理員以獲得使用權限。")
 
     return jsonify({"status": "ok"})
 
