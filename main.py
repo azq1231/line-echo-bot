@@ -101,7 +101,8 @@ def get_week_dates(week_offset=0):
         week_dates.append({
             'date': date.strftime('%Y-%m-%d'),
             'day_name': day_names[i],
-            'weekday': i
+            'weekday': i,
+            'display': date.strftime('%m/%d')  # 添加格式化的日期显示
         })
     
     return week_dates

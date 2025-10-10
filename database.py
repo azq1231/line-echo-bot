@@ -263,8 +263,8 @@ def get_user_appointments(user_id: str, status: str = 'confirmed') -> List[Dict]
 
 # ==================== 休诊管理 ====================
 
-def set_closed_day(date: str, reason: str = "休診") -> bool:
-    """设置休诊日"""
+def set_closed_day(date: str, reason: str = "休診") -> int:
+    """设置休诊日，返回取消的预约数量"""
     conn = get_db()
     cursor = conn.cursor()
     try:
@@ -280,11 +280,12 @@ def set_closed_day(date: str, reason: str = "休診") -> bool:
             WHERE date = ? AND status = 'confirmed'
         ''', (date,))
         
+        cancelled_count = cursor.rowcount
         conn.commit()
-        return True
+        return cancelled_count
     except Exception as e:
         print(f"设置休诊错误: {e}")
-        return False
+        return 0
     finally:
         conn.close()
 
