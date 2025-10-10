@@ -11,6 +11,8 @@ This is a LINE Bot scheduling and user management system built with Flask and SQ
 - Scheduled message delivery with automatic retry mechanism (up to 3 retries)
 - **Weekly appointment booking system** with visual schedule management
 - **LINE interactive booking**: Users can book appointments directly through LINE Flex Messages
+- **Configurable booking window**: Set 2 weeks or 1 month (4 weeks) advance booking period
+- **Smart time filtering**: Automatically hide past time slots in LINE booking flow
 - **Week navigation**: Browse and manage appointments across multiple weeks
 - **Closed day management**: Set clinic closures with automatic appointment cancellation
 - **Batch reminder sending**: Send appointment reminders for whole week or single day
@@ -41,7 +43,11 @@ Preferred communication style: Simple, everyday language.
 
 **Appointment System Design**:
 - Compact grid layout showing all 5 days (Tue-Sat) in one row on large screens
-- Time slots: Tue/Thu/Sat (14:00-18:00, 17 slots), Wed/Fri (18:00-21:00, 13 slots) in 15-minute intervals
+- Time slots: 
+  - Tue/Thu: 14:00-18:00 (17 slots)
+  - Sat: 10:00-18:00 (33 slots) 
+  - Wed/Fri: 18:00-21:00 (13 slots)
+  - All in 15-minute intervals
 - Minimized spacing for better visibility and compact display
 - Dropdown selection from registered users for each time slot
 - Send reminders for entire week or specific day with one click
@@ -102,6 +108,16 @@ Preferred communication style: Simple, everyday language.
 - Replit platform for hosting and deployment
 
 ## Recent Changes
+
+**2025-10-10: Bug Fixes & Feature Enhancements**
+- 🐛 Fixed backend appointments page showing "undefined" for dates
+- 🐛 Fixed closed days showing "取消true個預約" text formatting issue
+- ⏰ Changed Saturday hours to 10:00-18:00 (was 14:00-18:00)
+- 🔍 Added automatic filtering of past time slots in LINE booking flow
+- ⚙️ Added configurable booking window (2 weeks or 1 month) in system settings
+- 📚 Created comprehensive LINE Rich Menu setup tutorial
+- 📚 Created detailed deployment guide for Heroku, PythonAnywhere, AWS/VPS
+- ✅ Added config validation to ensure only 2 or 4 weeks can be set
 
 **2025-10-10: Complete System Upgrade**
 - ✅ Migrated from JSON to SQLite database
