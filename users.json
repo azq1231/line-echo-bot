@@ -1,5 +1,12 @@
 {
   "allowed_users": [
-    "U9dc4b6047fae384ed8e011a1eef9bb48"
+    {
+      "user_id": "U9dc4b6047fae384ed8e011a1eef9bb48",
+      "name": "未知"
+    },
+    {
+      "user_id": "Utest123456789",
+      "name": "未知"
+    }
   ]
 }

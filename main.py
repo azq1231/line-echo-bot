@@ -11,7 +11,10 @@ def load_users():
     try:
         with open('users.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
-            return data.get('allowed_users', [])
+            users_data = data.get('allowed_users', [])
+            if users_data and isinstance(users_data[0], str):
+                users_data = [{"user_id": uid, "name": "未知"} for uid in users_data]
+            return users_data
     except FileNotFoundError:
         return []
 
@@ -19,19 +22,36 @@ def save_users(users):
     with open('users.json', 'w', encoding='utf-8') as f:
         json.dump({'allowed_users': users}, f, ensure_ascii=False, indent=2)
 
-def save_user(user_id):
+def save_user_with_name(user_id, name="未知"):
     users = load_users()
-    if user_id not in users:
-        users.append(user_id)
+    user_ids = [u['user_id'] for u in users]
+    if user_id not in user_ids:
+        users.append({"user_id": user_id, "name": name})
         save_users(users)
+        print(f"自動新增用戶：{name} ({user_id})")
+
+def save_user(user_id):
+    save_user_with_name(user_id)
 
 def delete_user_from_list(user_id):
     users = load_users()
-    if user_id in users:
-        users.remove(user_id)
-        save_users(users)
-        return True
-    return False
+    users = [u for u in users if u['user_id'] != user_id]
+    save_users(users)
+    return True
+
+def get_line_profile(user_id):
+    url = f"https://api.line.me/v2/bot/profile/{user_id}"
+    headers = {
+        "Authorization": f"Bearer {LINE_CHANNEL_TOKEN}"
+    }
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            profile = response.json()
+            return profile.get('displayName', '未知')
+    except:
+        pass
+    return '未知'
 
 @app.route("/")
 def home():
@@ -67,10 +87,13 @@ def webhook():
             print(f"收到訊息 - 用戶ID: {user_id}, 訊息: {user_message}")
 
             allowed_users = load_users()
-            if user_id in allowed_users:
+            user_ids = [u['user_id'] for u in allowed_users]
+            
+            if user_id in user_ids:
                 reply_message(user_id, f"你說了：{user_message}")
             else:
-                reply_message(user_id, f"您的 LINE User ID 是：\n{user_id}\n\n請將此 ID 提供給管理員以獲得使用權限。")
+                user_name = get_line_profile(user_id)
+                save_user_with_name(user_id, user_name)
 
     return jsonify({"status": "ok"})
 

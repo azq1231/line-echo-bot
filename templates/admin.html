@@ -176,7 +176,9 @@
         <div class="content">
             <div class="info-box">
                 <p><strong>💡 提示：</strong></p>
-                <p>只有在允許清單中的用戶才能使用此 LINE Bot</p>
+                <p>• 任何用戶發送訊息給 Bot 都會自動加入允許清單</p>
+                <p>• 系統會自動記錄用戶 ID 和姓名</p>
+                <p>• 只有允許清單中的用戶會收到 Bot 回覆</p>
                 <p><strong>Webhook URL：</strong></p>
                 <div class="webhook-url" id="webhookUrl">載入中...</div>
             </div>
@@ -223,12 +225,19 @@
                 if (data.allowed_users.length === 0) {
                     userList.innerHTML = '<li class="empty-state">目前沒有允許的用戶</li>';
                 } else {
-                    userList.innerHTML = data.allowed_users.map(userId => `
+                    userList.innerHTML = data.allowed_users.map(user => {
+                        const userId = user.user_id || user;
+                        const userName = user.name || '未知';
+                        return `
                         <li class="user-item">
-                            <span class="user-id">${userId}</span>
+                            <div>
+                                <div style="font-weight: 600; margin-bottom: 4px;">${userName}</div>
+                                <span class="user-id">${userId}</span>
+                            </div>
                             <button class="delete-btn" onclick="deleteUser('${userId}')">刪除</button>
                         </li>
-                    `).join('');
+                        `;
+                    }).join('');
                 }
             } catch (error) {
                 showMessage('載入用戶清單失敗', 'error');
