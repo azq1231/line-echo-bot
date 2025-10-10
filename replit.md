@@ -7,9 +7,11 @@ This is a LINE Bot scheduling and user management system built with Flask. The a
 **Key Features:**
 - Automatic user registration when users add the bot as a friend or send messages
 - Silent message handling: Bot records user information without sending automatic replies
+- **User name editing**: Click on any user's name to edit their display name
 - Scheduled message delivery with automatic retry mechanism (up to 3 retries)
 - **Weekly appointment booking system** with visual schedule management
 - **Batch reminder sending** for appointments (whole week or single day)
+- **Cross-page navigation**: Easy navigation between Admin, Schedule, and Appointments pages
 - Web-based management interface for users, schedules, and appointments
 - Real-time status tracking (pending/sent/failed)
 - Robust error handling with detailed logging
@@ -25,9 +27,11 @@ Preferred communication style: Simple, everyday language.
 
 **Web Interface Pattern**: The application uses server-side rendering with Flask templates to deliver HTML pages. The frontend consists of multiple views:
 
-- **Admin Dashboard** (`templates/admin.html`): User management interface for adding/removing authorized LINE users
+- **Admin Dashboard** (`templates/admin.html`): User management interface for adding/removing authorized LINE users, with inline name editing capability
 - **Schedule Management** (`templates/schedule.html`): Interface for creating and managing scheduled messages
 - **Appointment Management** (`templates/appointments.html`): Weekly appointment booking interface with time slot selection
+
+**User Name Editing**: Uses event delegation pattern with `data-*` attributes to safely handle user name editing. Click events are captured on the user list container and delegated to individual editable name elements, avoiding issues with special characters in onclick attributes.
 
 **Styling Approach**: Custom CSS with gradient backgrounds and modern UI components. The design uses a purple gradient theme (`#667eea` to `#764ba2`) for visual consistency across all pages. Fully responsive design with mobile-optimized layouts (media queries for screens ≤768px).
 

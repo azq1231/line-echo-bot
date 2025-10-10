@@ -329,14 +329,14 @@
                         <li class="user-item">
                             <div>
                                 <div style="font-weight: 600; margin-bottom: 4px;">
-                                    <span class="editable-name" onclick="editUserName('${userId}', '${userName}')" title="點擊編輯姓名">
+                                    <span class="editable-name" data-userid="${userId}" data-username="${userName}" title="點擊編輯姓名">
                                         ${userName}
                                     </span>
                                     <span style="color: #999; font-size: 12px; margin-left: 8px;">✏️</span>
                                 </div>
                                 <span class="user-id">${userId}</span>
                             </div>
-                            <button class="delete-btn" onclick="deleteUser('${userId}')">刪除</button>
+                            <button class="delete-btn" data-userid="${userId}">刪除</button>
                         </li>
                         `;
                     }).join('');
@@ -431,6 +431,23 @@
             loadUsers();
             const webhookUrl = `${window.location.origin}/webhook`;
             document.getElementById('webhookUrl').textContent = webhookUrl;
+            
+            // 使用事件委托處理編輯和刪除按鈕點擊
+            document.getElementById('userList').addEventListener('click', (e) => {
+                // 處理編輯姓名點擊
+                if (e.target.classList.contains('editable-name') || e.target.closest('.editable-name')) {
+                    const nameElement = e.target.classList.contains('editable-name') ? e.target : e.target.closest('.editable-name');
+                    const userId = nameElement.dataset.userid;
+                    const userName = nameElement.dataset.username;
+                    editUserName(userId, userName);
+                }
+                
+                // 處理刪除按鈕點擊
+                if (e.target.classList.contains('delete-btn')) {
+                    const userId = e.target.dataset.userid;
+                    deleteUser(userId);
+                }
+            });
         };
         
         document.getElementById('userIdInput').addEventListener('keypress', (e) => {
