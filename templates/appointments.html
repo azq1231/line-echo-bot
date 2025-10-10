@@ -219,13 +219,20 @@
         <div class="header">
             <h1>📅 預約管理</h1>
             <div class="header-buttons">
+                <button class="btn btn-primary" onclick="changeWeek(-1)">⬅️ 上一週</button>
+                <button class="btn btn-primary" onclick="changeWeek(1)">下一週 ➡️</button>
                 <button class="btn btn-primary" onclick="loadSchedule()">🔄 重新載入</button>
                 <button class="btn btn-success" onclick="sendWeekReminders()">📨 發送整週提醒</button>
             </div>
             <div class="nav-links">
                 <a href="/" class="nav-link">← 用戶管理</a>
                 <a href="/schedule" class="nav-link">排程管理</a>
+                <a href="/closed_days" class="nav-link">休診管理</a>
             </div>
+        </div>
+
+        <div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center;">
+            <h2 id="weekTitle" style="color: #667eea; font-size: 20px; margin: 0;"></h2>
         </div>
 
         <div id="schedule" class="schedule-grid"></div>
@@ -236,6 +243,7 @@
     <script>
         let users = [];
         let weekSchedule = {};
+        let currentWeekOffset = 0;
 
         async function loadUsers() {
             const response = await fetch('/list_users');
@@ -245,9 +253,32 @@
 
         async function loadSchedule() {
             await loadUsers();
-            const response = await fetch('/get_week_appointments');
-            weekSchedule = await response.json();
+            const response = await fetch(`/get_week_appointments?offset=${currentWeekOffset}`);
+            const data = await response.json();
+            weekSchedule = data.week_schedule || data;
+            currentWeekOffset = data.week_offset !== undefined ? data.week_offset : currentWeekOffset;
+            updateWeekTitle();
             renderSchedule();
+        }
+
+        function updateWeekTitle() {
+            const titleEl = document.getElementById('weekTitle');
+            if (currentWeekOffset === 0) {
+                titleEl.textContent = '本週預約';
+            } else if (currentWeekOffset === -1) {
+                titleEl.textContent = '上週預約';
+            } else if (currentWeekOffset === 1) {
+                titleEl.textContent = '下週預約';
+            } else if (currentWeekOffset > 1) {
+                titleEl.textContent = `第${currentWeekOffset}週預約`;
+            } else {
+                titleEl.textContent = `前第${Math.abs(currentWeekOffset)}週預約`;
+            }
+        }
+
+        function changeWeek(offset) {
+            currentWeekOffset += offset;
+            loadSchedule();
         }
 
         function renderSchedule() {

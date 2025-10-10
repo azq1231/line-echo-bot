@@ -10,9 +10,13 @@ This is a LINE Bot scheduling and user management system built with Flask and SQ
 - **User name editing**: Click on any user's name to edit their display name
 - Scheduled message delivery with automatic retry mechanism (up to 3 retries)
 - **Weekly appointment booking system** with visual schedule management
-- **Batch reminder sending** for appointments (whole week or single day)
-- **Cross-page navigation**: Easy navigation between Admin, Schedule, and Appointments pages
-- Web-based management interface for users, schedules, and appointments
+- **LINE interactive booking**: Users can book appointments directly through LINE Flex Messages
+- **Week navigation**: Browse and manage appointments across multiple weeks
+- **Closed day management**: Set clinic closures with automatic appointment cancellation
+- **Batch reminder sending**: Send appointment reminders for whole week or single day
+- **Cross-page navigation**: Easy navigation between Admin, Schedule, Appointments, and Closed Days pages
+- **Secure webhook**: LINE signature verification with HMAC-SHA256
+- Web-based management interface for users, schedules, appointments, and closed days
 - Real-time status tracking (pending/sent/failed)
 - Robust error handling with detailed logging
 - Timezone-aware scheduling (Asia/Taipei UTC+8)
@@ -85,18 +89,32 @@ Preferred communication style: Simple, everyday language.
 - Analyzes booking patterns and suggests optimal time slots
 - Requires `GEMINI_API_KEY` environment variable
 
+**Security**:
+- LINE webhook signature verification (HMAC-SHA256)
+- Requires `LINE_CHANNEL_SECRET` for webhook security
+- Environment-based secret management
+
 **Runtime Environment**:
-- Environment variables for sensitive credentials (LINE_CHANNEL_TOKEN, GEMINI_API_KEY)
+- Environment variables for sensitive credentials:
+  - `LINE_CHANNEL_TOKEN`: LINE Messaging API access token
+  - `LINE_CHANNEL_SECRET`: LINE webhook signature verification secret
+  - `GEMINI_API_KEY`: Gemini AI API key
 - Replit platform for hosting and deployment
 
 ## Recent Changes
 
-**2025-10-10: Database Migration & AI Integration**
+**2025-10-10: Complete System Upgrade**
 - ✅ Migrated from JSON to SQLite database
 - ✅ Integrated Gemini AI for scheduling suggestions
 - ✅ Created LINE Flex Message templates for date/time selection
 - ✅ Fixed partial unique index to allow rebooking cancelled slots
 - ✅ Added support for multi-slot bookings via booking_group_id
+- ✅ Implemented LINE webhook with HMAC-SHA256 signature verification
+- ✅ Added complete booking flow: query, book, cancel appointments
+- ✅ Created admin interfaces: users, schedules, appointments, closed days
+- ✅ Implemented week navigation for appointment management
+- ✅ Added closed day management with automatic appointment cancellation
+- ✅ Cleaned up legacy JSON files (backed up to json_backup/)
 
 ## Project Architecture
 

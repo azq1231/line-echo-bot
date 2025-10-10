@@ -150,6 +150,10 @@ def schedule():
 def appointments_page():
     return render_template("appointments.html")
 
+@app.route("/closed_days")
+def closed_days_page():
+    return render_template("closed_days.html")
+
 # ============ 用户管理 API ============
 
 @app.route("/list_users")
