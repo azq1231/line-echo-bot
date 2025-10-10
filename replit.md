@@ -23,9 +23,8 @@ Preferred communication style: Simple, everyday language.
 
 - **Admin Dashboard** (`templates/admin.html`): User management interface for adding/removing authorized LINE users
 - **Schedule Management** (`templates/schedule.html`): Interface for creating and managing scheduled messages
-- **Authentication Page** (`templates/index.html`): Replit authentication integration for admin access
 
-**Styling Approach**: Custom CSS with gradient backgrounds and modern UI components. The design uses a purple gradient theme (`#667eea` to `#764ba2`) for visual consistency across all pages.
+**Styling Approach**: Custom CSS with gradient backgrounds and modern UI components. The design uses a purple gradient theme (`#667eea` to `#764ba2`) for visual consistency across all pages. Fully responsive design with mobile-optimized layouts (media queries for screens ≤768px).
 
 ### Backend Architecture
 

@@ -226,6 +226,74 @@
             color: #999;
             padding: 40px;
         }
+        
+        /* 手機響應式設計 */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .header {
+                padding: 20px 15px;
+            }
+            
+            .header h1 {
+                font-size: 22px;
+            }
+            
+            .header p {
+                font-size: 14px;
+            }
+            
+            .nav {
+                padding: 12px 15px;
+            }
+            
+            .content {
+                padding: 20px 15px;
+            }
+            
+            .section h2 {
+                font-size: 18px;
+            }
+            
+            .form-group label {
+                font-size: 14px;
+            }
+            
+            select, input[type="datetime-local"], textarea {
+                font-size: 16px;
+            }
+            
+            button {
+                width: 100%;
+                padding: 14px;
+                font-size: 16px;
+            }
+            
+            .schedule-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            
+            .schedule-user {
+                font-size: 15px;
+            }
+            
+            .schedule-time {
+                font-size: 13px;
+            }
+            
+            .schedule-message {
+                font-size: 13px;
+            }
+            
+            .delete-btn {
+                width: 100%;
+                padding: 10px;
+            }
+        }
     </style>
 </head>
 <body>

@@ -1,93 +1,68 @@
-# Python Flask ReplAuth
+# LINE Bot 排程管理系統
 
-Using the ReplAuth with Flask is super easy! First we create a new Flask app: 
+一個基於 Flask 的 LINE Bot 用戶管理和訊息排程系統，提供網頁管理介面和自動發送功能。
 
-<details>
-  <summary>Import Flask and create new Flask app</summary>
+## 功能特色
 
-```python
-from flask import Flask, render_template, request
-app = Flask('app')
-@app.route('/')
+### 📱 自動用戶管理
+- 當用戶加 Bot 為好友時自動記錄
+- 當用戶發送訊息時自動記錄
+- 自動獲取用戶的 LINE 顯示名稱
+- 只有允許清單中的用戶會收到 Bot 回覆
+
+### 📅 訊息排程
+- 選擇用戶並設定發送時間
+- 自定義訊息內容
+- 自動在指定時間發送訊息
+- 支援失敗重試機制（最多 3 次）
+- 即時狀態追蹤（待發送/已發送/發送失敗）
+
+### 💻 網頁管理介面
+- 用戶管理頁面：查看和管理允許清單
+- 排程管理頁面：創建和查看訊息排程
+- 完全響應式設計，支援手機和電腦訪問
+
+## 技術架構
+
+- **後端框架**: Flask
+- **排程系統**: APScheduler（每 30 秒檢查一次）
+- **數據存儲**: JSON 文件（users.json, schedules.json）
+- **外部 API**: LINE Messaging API
+
+## 環境變數
+
+需要設定以下環境變數：
+- `LINE_CHANNEL_TOKEN`: LINE Bot 的 Channel Access Token
+
+## 文件結構
+
 ```
-</details>
-
-And then we request the headers: 
-
-<details>
-  <summary>Requested Headers:</summary>
-
-```python
-def hello_world():
-    print(request.headers)
-    return render_template(
-        'index.html',
-        user_id=request.headers['X-Replit-User-Id'],
-        user_name=request.headers['X-Replit-User-Name'],
-        user_roles=request.headers['X-Replit-User-Roles'],
-        user_bio=request.headers['X-Replit-User-Bio'],
-        user_profile_image=request.headers['X-Replit-User-Profile-Image'],
-        user_teams=request.headers['X-Replit-User-Teams'],
-        user_url=request.headers['X-Replit-User-Url']
-    )
-```
-</details>
-
-In this code we've requested all the possible headers, which are these:
-
-<details>
-  <summary>All Replit Headers</summary>
-
-```python
-X-Replit-User-Bio
-X-Replit-User-Id
-X-Replit-User-Name
-X-Replit-User-Profile-Image
-X-Replit-User-Roles
-X-Replit-User-Teams
-X-Replit-User-Url
-```
-</details>
-
-Once we've requested all these headers, we can show the information we've got after the user has passed through the Auth. This info will be displayed on the console, but can also be displayed in a html file.
-
-We can show this by displaying the variable assigned to a header in a HTML tag (it can also be shown without a tag). If we wanted to show the username of the user we would put this:
-
-```html
-<h1>{{ user_name }}</h1>
+├── main.py              # 主應用程式
+├── templates/           # HTML 模板
+│   ├── admin.html       # 用戶管理頁面
+│   └── schedule.html    # 排程管理頁面
+├── users.json           # 用戶數據
+├── schedules.json       # 排程數據
+└── replit.md           # 專案技術文檔
 ```
 
-And the output will be a heading (h1) with the username. 
+## 訪問方式
 
-# ReplAuth FAQ 
+### 網頁管理介面
+- 用戶管理：`/`
+- 排程管理：`/schedule`
 
-The question is in a quote and in italic and the answer is in a bullet point.
+### Webhook
+- LINE Webhook：`/webhook`
+- 支援事件：follow（加好友）、message（訊息）
 
-<details>
-  <summary>ReplAuth FAQ</summary>
-  
-  > *How many ReplAuths are there?*
-  
-  - There are 2 repl auths!
- ---
-  > *Which ReplAuths are there?*
-  
-  - Node.js and Python Flask
----
-  > *Is there a Replit Documentation on ReplAuths?*
+## 使用說明
 
-  - Yes! You can find it in the [Replit Docs](https://docs.replit.com)
-</details>
+1. 在 LINE Developers 設定 Webhook URL
+2. 用戶加 Bot 為好友或發送訊息後會自動加入允許清單
+3. 使用網頁介面管理用戶和創建排程
+4. 系統會自動在指定時間發送訊息
 
-# Template
+## 手機支援
 
-**Name**: Python Flask ReplAuth
-
-**Description**: Python Flask ReplAuth is easy and useful to use! What are you waiting for? Start using ReplAuth today!
-
-# Questions?
-
-If you have any question please look at our support resources:
-
-- [Replit Docs](https://docs.replit.com)
-- [Ask forum](https://ask.replit.com)
+網站完全支援手機瀏覽器訪問，所有功能都經過手機優化，可直接在手機上管理用戶和排程。
