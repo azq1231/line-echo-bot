@@ -110,8 +110,13 @@ def get_week_dates(week_offset=0):
 def generate_time_slots(weekday):
     """根据星期生成时间段"""
     slots = []
-    if weekday in [1, 3, 5]:  # 週二、週四、週六：14:00-18:00（17个时段）
+    if weekday in [1, 3]:  # 週二、週四：14:00-18:00（17个时段）
         for hour in range(14, 18):
+            for minute in [0, 15, 30, 45]:
+                slots.append(f"{hour:02d}:{minute:02d}")
+        slots.append("18:00")  # 18:00 结束
+    elif weekday == 5:  # 週六：10:00-18:00（33个时段）
+        for hour in range(10, 18):
             for minute in [0, 15, 30, 45]:
                 slots.append(f"{hour:02d}:{minute:02d}")
         slots.append("18:00")  # 18:00 结束
@@ -119,6 +124,7 @@ def generate_time_slots(weekday):
         for hour in range(18, 21):
             for minute in [0, 15, 30, 45]:
                 slots.append(f"{hour:02d}:{minute:02d}")
+        slots.append("21:00")  # 21:00 结束
     return slots
 
 def get_available_slots(date, weekday):
