@@ -36,10 +36,12 @@ Preferred communication style: Simple, everyday language.
 **Styling Approach**: Custom CSS with gradient backgrounds and modern UI components. The design uses a purple gradient theme (`#667eea` to `#764ba2`) for visual consistency across all pages. Fully responsive design with mobile-optimized layouts (media queries for screens ≤768px).
 
 **Appointment System Design**:
-- Grid layout showing Tuesday to Saturday schedules
-- Time slots: Tue/Thu/Sat (14:00-18:00), Wed/Fri (18:00-21:00) in 15-minute intervals
+- Compact grid layout showing all 5 days (Tue-Sat) in one row on large screens
+- Time slots: Tue/Thu/Sat (14:00-18:00, 17 slots), Wed/Fri (18:00-21:00, 13 slots) in 15-minute intervals
+- Minimized spacing for better visibility and compact display
 - Dropdown selection from registered users for each time slot
 - Send reminders for entire week or specific day with one click
+- Responsive design: 5 columns on large screens, 3 on medium, 1 on mobile
 
 ### Backend Architecture
 

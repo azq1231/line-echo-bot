@@ -71,14 +71,14 @@
 
         .schedule-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
         }
 
         .day-card {
             background: white;
             border-radius: 10px;
-            padding: 15px;
+            padding: 12px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
 
@@ -104,27 +104,27 @@
         .time-slot {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px;
-            margin-bottom: 8px;
+            gap: 8px;
+            padding: 5px 6px;
+            margin-bottom: 4px;
             background: #f7fafc;
             border-radius: 5px;
             border: 1px solid #e2e8f0;
         }
 
         .time-label {
-            min-width: 60px;
+            min-width: 50px;
             font-weight: 500;
             color: #4a5568;
-            font-size: 14px;
+            font-size: 13px;
         }
 
         .user-select {
             flex: 1;
-            padding: 6px;
+            padding: 5px;
             border: 1px solid #cbd5e0;
+            font-size: 13px;
             border-radius: 4px;
-            font-size: 14px;
             background: white;
         }
 
@@ -191,6 +191,12 @@
 
         .nav-link:hover {
             text-decoration: underline;
+        }
+
+        @media (max-width: 1200px) {
+            .schedule-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
         }
 
         @media (max-width: 768px) {
@@ -315,27 +321,45 @@
         async function sendWeekReminders() {
             if (!confirm('確定要發送整週的預約提醒嗎？')) return;
 
-            const response = await fetch('/send_appointment_reminders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'week' })
-            });
+            try {
+                const response = await fetch('/send_appointment_reminders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'week' })
+                });
 
-            const result = await response.json();
-            showStatus(`✅ 已發送 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
+                if (!response.ok) {
+                    showStatus('❌ 發送失敗', 'error');
+                    return;
+                }
+
+                const result = await response.json();
+                showStatus(`✅ 已發送 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
+            } catch (error) {
+                showStatus('❌ 發送失敗', 'error');
+            }
         }
 
         async function sendDayReminders(date, dayName) {
             if (!confirm(`確定要發送 ${dayName} 的預約提醒嗎？`)) return;
 
-            const response = await fetch('/send_appointment_reminders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'day', date: date })
-            });
+            try {
+                const response = await fetch('/send_appointment_reminders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'day', date: date })
+                });
 
-            const result = await response.json();
-            showStatus(`✅ 已發送 ${dayName} 的 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
+                if (!response.ok) {
+                    showStatus('❌ 發送失敗', 'error');
+                    return;
+                }
+
+                const result = await response.json();
+                showStatus(`✅ 已發送 ${dayName} 的 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
+            } catch (error) {
+                showStatus('❌ 發送失敗', 'error');
+            }
         }
 
         function showStatus(message, type = 'success') {

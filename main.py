@@ -306,16 +306,21 @@ def generate_time_slots(weekday):
     if weekday in [1, 3, 5]:  # 週二、週四、週六：14:00-18:00
         start_hour = 14
         end_hour = 18
+        # 二四六要包含 18:00
+        for hour in range(start_hour, end_hour):
+            for minute in [0, 15, 30, 45]:
+                time_str = f"{hour:02d}:{minute:02d}"
+                slots.append(time_str)
+        slots.append("18:00")  # 加入最後的 18:00
     elif weekday in [2, 4]:  # 週三、週五：18:00-21:00
         start_hour = 18
         end_hour = 21
+        for hour in range(start_hour, end_hour):
+            for minute in [0, 15, 30, 45]:
+                time_str = f"{hour:02d}:{minute:02d}"
+                slots.append(time_str)
     else:
         return []
-    
-    for hour in range(start_hour, end_hour):
-        for minute in [0, 15, 30, 45]:
-            time_str = f"{hour:02d}:{minute:02d}"
-            slots.append(time_str)
     
     return slots
 
