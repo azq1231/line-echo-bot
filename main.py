@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import os
 import requests
 import json
@@ -15,21 +15,39 @@ def load_users():
     except FileNotFoundError:
         return []
 
+def save_users(users):
+    with open('users.json', 'w', encoding='utf-8') as f:
+        json.dump({'allowed_users': users}, f, ensure_ascii=False, indent=2)
+
 def save_user(user_id):
     users = load_users()
     if user_id not in users:
         users.append(user_id)
-        with open('users.json', 'w', encoding='utf-8') as f:
-            json.dump({'allowed_users': users}, f, ensure_ascii=False, indent=2)
+        save_users(users)
+
+def delete_user_from_list(user_id):
+    users = load_users()
+    if user_id in users:
+        users.remove(user_id)
+        save_users(users)
+        return True
+    return False
 
 @app.route("/")
 def home():
-    return "LINE Bot is running!"
+    return render_template("admin.html")
 
 @app.route("/add_user/<user_id>")
 def add_user(user_id):
     save_user(user_id)
     return jsonify({"status": "success", "message": f"已新增使用者：{user_id}"})
+
+@app.route("/delete_user/<user_id>")
+def delete_user(user_id):
+    if delete_user_from_list(user_id):
+        return jsonify({"status": "success", "message": f"已刪除使用者：{user_id}"})
+    else:
+        return jsonify({"status": "error", "message": "使用者不存在"})
 
 @app.route("/list_users")
 def list_users():
