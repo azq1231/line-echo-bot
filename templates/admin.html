@@ -117,6 +117,34 @@
             background: #ee5a6f;
         }
         
+        .edit-btn {
+            padding: 8px 16px;
+            background: #48bb78;
+            font-size: 14px;
+            margin-right: 8px;
+        }
+        
+        .edit-btn:hover {
+            background: #38a169;
+        }
+        
+        .user-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .editable-name {
+            display: inline-block;
+            cursor: pointer;
+            padding: 2px 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        
+        .editable-name:hover {
+            background: #f0f0f0;
+        }
+        
         .empty-state {
             text-align: center;
             padding: 40px;
@@ -246,7 +274,7 @@
                 <p>• 用戶<strong>加 Bot 為好友</strong>時會自動加入允許清單</p>
                 <p>• 用戶<strong>發送訊息</strong>給 Bot 也會自動加入允許清單</p>
                 <p>• 系統會自動記錄用戶 ID 和姓名</p>
-                <p>• 只有允許清單中的用戶會收到 Bot 回覆</p>
+                <p>• <strong>點擊用戶姓名</strong>可以修改顯示名稱 ✏️</p>
                 <p><strong>Webhook URL：</strong></p>
                 <div class="webhook-url" id="webhookUrl">載入中...</div>
             </div>
@@ -299,7 +327,12 @@
                         return `
                         <li class="user-item">
                             <div>
-                                <div style="font-weight: 600; margin-bottom: 4px;">${userName}</div>
+                                <div style="font-weight: 600; margin-bottom: 4px;">
+                                    <span class="editable-name" onclick="editUserName('${userId}', '${userName}')" title="點擊編輯姓名">
+                                        ${userName}
+                                    </span>
+                                    <span style="color: #999; font-size: 12px; margin-left: 8px;">✏️</span>
+                                </div>
                                 <span class="user-id">${userId}</span>
                             </div>
                             <button class="delete-btn" onclick="deleteUser('${userId}')">刪除</button>
@@ -354,6 +387,42 @@
                 }
             } catch (error) {
                 showMessage('刪除失敗', 'error');
+            }
+        }
+        
+        async function editUserName(userId, currentName) {
+            const newName = prompt('修改用戶姓名：', currentName);
+            
+            if (newName === null || newName.trim() === '') {
+                return;
+            }
+            
+            if (newName === currentName) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/update_user_name', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        name: newName.trim()
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showMessage('✅ 姓名已更新', 'success');
+                    loadUsers();
+                } else {
+                    showMessage('更新失敗', 'error');
+                }
+            } catch (error) {
+                showMessage('更新失敗', 'error');
             }
         }
         

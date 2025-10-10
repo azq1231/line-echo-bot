@@ -164,6 +164,30 @@ def list_users():
     users = load_users()
     return jsonify({"allowed_users": users, "count": len(users)})
 
+@app.route("/update_user_name", methods=["POST"])
+def update_user_name():
+    data = request.get_json()
+    user_id = data.get("user_id")
+    new_name = data.get("name")
+    
+    if not user_id or not new_name:
+        return jsonify({"status": "error", "message": "缺少必要欄位"}), 400
+    
+    users = load_users()
+    user_found = False
+    
+    for user in users:
+        if user['user_id'] == user_id:
+            user['name'] = new_name
+            user_found = True
+            break
+    
+    if user_found:
+        save_users(users)
+        return jsonify({"status": "success", "message": f"已更新姓名為：{new_name}"})
+    else:
+        return jsonify({"status": "error", "message": "找不到用戶"}), 404
+
 @app.route("/add_schedule", methods=["POST"])
 def add_schedule_route():
     data = request.get_json()
