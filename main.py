@@ -29,6 +29,13 @@ def save_user_with_name(user_id, name="未知"):
         users.append({"user_id": user_id, "name": name})
         save_users(users)
         print(f"自動新增用戶：{name} ({user_id})")
+    else:
+        for user in users:
+            if user['user_id'] == user_id and user['name'] == '未知' and name != '未知':
+                user['name'] = name
+                save_users(users)
+                print(f"更新用戶姓名：{name} ({user_id})")
+                break
 
 def save_user(user_id):
     save_user_with_name(user_id)
@@ -46,11 +53,16 @@ def get_line_profile(user_id):
     }
     try:
         response = requests.get(url, headers=headers)
+        print(f"LINE Profile API 回應: status={response.status_code}")
         if response.status_code == 200:
             profile = response.json()
-            return profile.get('displayName', '未知')
-    except:
-        pass
+            display_name = profile.get('displayName', '未知')
+            print(f"成功獲取用戶姓名：{display_name}")
+            return display_name
+        else:
+            print(f"LINE Profile API 錯誤: {response.text}")
+    except Exception as e:
+        print(f"獲取用戶資料時發生錯誤: {e}")
     return '未知'
 
 @app.route("/")
