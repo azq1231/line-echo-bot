@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LINE Bot 用戶管理</title>
+    <script src="https://cdn.jsdelivr.net/npm/pinyin-pro/dist/pinyin-pro.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -105,32 +106,6 @@
         .user-id {
             font-family: 'Courier New', monospace;
             color: #333;
-        }
-        
-        .delete-btn {
-            padding: 8px 16px;
-            background: #ff4757;
-            font-size: 14px;
-        }
-        
-        .delete-btn:hover {
-            background: #ee5a6f;
-        }
-        
-        .edit-btn {
-            padding: 8px 16px;
-            background: #48bb78;
-            font-size: 14px;
-            margin-right: 8px;
-        }
-        
-        .edit-btn:hover {
-            background: #38a169;
-        }
-        
-        .user-actions {
-            display: flex;
-            gap: 8px;
         }
         
         .editable-name {
@@ -241,10 +216,6 @@
             .user-id {
                 font-size: 12px;
                 word-break: break-all;
-            }
-            
-            .delete-btn {
-                width: 100%;
             }
             
             .info-box {
@@ -373,9 +344,12 @@
                 if (data.allowed_users.length === 0) {
                     userList.innerHTML = '<li class="empty-state">目前沒有允許的用戶</li>';
                 } else {
+                    const { pinyin } = pinyinPro;
                     userList.innerHTML = data.allowed_users.map(user => {
                         const userId = user.user_id || user;
                         const userName = user.name || '未知';
+                        const zhuyin = pinyin(userName, { pattern: 'initial', type: 'bopomofo' }).replace(/ /g, '');
+                        
                         return `
                         <li class="user-item">
                             <div>
@@ -385,15 +359,16 @@
                                     </span>
                                     <span style="color: #999; font-size: 12px; margin-left: 8px;">✏️</span>
                                 </div>
+                                <div style="color: #777; font-size: 14px; margin-top: 4px;">${zhuyin}</div>
                                 <span class="user-id">${userId}</span>
                             </div>
-                            <button class="delete-btn" data-userid="${userId}">刪除</button>
                         </li>
                         `;
                     }).join('');
                 }
             } catch (error) {
                 showMessage('載入用戶清單失敗', 'error');
+                console.error('Error loading users:', error);
             }
         }
         
@@ -419,26 +394,6 @@
                 }
             } catch (error) {
                 showMessage('新增失敗', 'error');
-            }
-        }
-        
-        async function deleteUser(userId) {
-            if (!confirm(`確定要刪除用戶 ${userId} 嗎？`)) {
-                return;
-            }
-            
-            try {
-                const response = await fetch(`/delete_user/${userId}`);
-                const data = await response.json();
-                
-                if (data.status === 'success') {
-                    showMessage(data.message, 'success');
-                    loadUsers();
-                } else {
-                    showMessage('刪除失敗', 'error');
-                }
-            } catch (error) {
-                showMessage('刪除失敗', 'error');
             }
         }
         
@@ -484,7 +439,7 @@
             const webhookUrl = `${window.location.origin}/webhook`;
             document.getElementById('webhookUrl').textContent = webhookUrl;
             
-            // 使用事件委托處理編輯和刪除按鈕點擊
+            // 使用事件委托處理編輯按鈕點擊
             document.getElementById('userList').addEventListener('click', (e) => {
                 // 處理編輯姓名點擊
                 if (e.target.classList.contains('editable-name') || e.target.closest('.editable-name')) {
@@ -492,12 +447,6 @@
                     const userId = nameElement.dataset.userid;
                     const userName = nameElement.dataset.username;
                     editUserName(userId, userName);
-                }
-                
-                // 處理刪除按鈕點擊
-                if (e.target.classList.contains('delete-btn')) {
-                    const userId = e.target.dataset.userid;
-                    deleteUser(userId);
                 }
             });
         };
