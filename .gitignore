@@ -1,0 +1,12 @@
+# Environment variables
+.env
+
+# Python cache
+__pycache__/
+
+# SQLite database
+*.db
+*.db-journal
+
+# Local state
+.local/

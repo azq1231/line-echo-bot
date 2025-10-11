@@ -662,7 +662,7 @@ def delete_schedule_route(schedule_id):
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=check_and_send_schedules, trigger="interval", seconds=30)
 scheduler.start()
-print("🚀 排程檢查器已啟動，每30秒檢查一次待發送訊息")
+print("Scheduler started. Checking for messages to send every 30 seconds.")
 
 if __name__ == "__main__":
     try:

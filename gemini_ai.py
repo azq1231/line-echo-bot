@@ -1,5 +1,7 @@
 import json
 import os
+import sys
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from datetime import datetime, timedelta
@@ -8,7 +10,15 @@ from datetime import datetime, timedelta
 # Using Gemini AI blueprint for Python integration
 # Model: gemini-2.5-flash
 
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+load_dotenv()
+
+api_key = os.environ.get("GEMINI_API_KEY")
+if not api_key:
+    print("錯誤：找不到 GEMINI_API_KEY。", file=sys.stderr)
+    print("請建立一個 .env 檔案並在其中加入 GEMINI_API_KEY=\"YOUR_API_KEY\"", file=sys.stderr)
+    sys.exit(1)
+
+client = genai.Client(api_key=api_key)
 
 def analyze_appointment_slots(appointments_data, week_dates):
     """

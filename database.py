@@ -124,7 +124,7 @@ def init_database():
     
     conn.commit()
     conn.close()
-    print("✅ 数据库初始化完成")
+    print("Database initialized.")
 
 # ==================== 用户管理 ====================
 
