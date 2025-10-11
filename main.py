@@ -168,6 +168,10 @@ def appointments_page():
 def closed_days_page():
     return render_template("closed_days.html")
 
+@app.route("/test")
+def test_page():
+    return render_template("test.html")
+
 # ============ 用户管理 API ============ 
 
 @app.route("/list_users")

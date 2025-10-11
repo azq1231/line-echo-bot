@@ -19,7 +19,8 @@
         }
 
         .container {
-            max-width: 1400px;
+            width: 98%;
+            max-width: 1600px; /* Add a larger max-width for very wide screens */
             margin: 0 auto;
         }
 
@@ -70,17 +71,26 @@
         }
 
         .schedule-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 10px;
-        }
+    display: flex;
+    flex-wrap: nowrap; /* 保持在同一行 */
+    gap: 8px;
+    justify-content: space-between;
+    overflow-x: auto; /* 若螢幕不夠寬可左右滑動 */
+    padding-bottom: 5px;
+}
 
-        .day-card {
-            background: white;
-            border-radius: 10px;
-            padding: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
+/* 讓五天剛好能在 1080p 中顯示 */
+.day-card {
+    flex: 1 1 calc(20% - 8px);
+    max-width: calc(20% - 8px);
+    min-width: 180px;
+    background: white;
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+}
 
         .day-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -193,11 +203,7 @@
             text-decoration: underline;
         }
 
-        @media (max-width: 1200px) {
-            .schedule-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-        }
+
 
         @media (max-width: 768px) {
             .schedule-grid {
@@ -212,6 +218,91 @@
                 width: 100%;
             }
         }
+
+        .schedule-grid {
+    display: flex;
+    flex-wrap: nowrap; /* Keep all days on one line */
+    gap: 8px; /* Slightly smaller gap for fitting 5 cards */
+    justify-content: space-between; /* Spread them evenly */
+}
+
+.day-card {
+    flex: 1 1 19%; /* Each card roughly 20% width */
+    max-width: 19%; /* Prevent growing too wide */
+    min-width: 180px; /* Prevent collapse on small screens */
+    background: white;
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Reduce internal padding & font size to save space */
+.day-header {
+    padding: 6px;
+    font-size: 14px;
+}
+.day-header h3 {
+    font-size: 14px;
+}
+.day-header p {
+    font-size: 12px;
+}
+.time-slot {
+    padding: 3px 4px;
+    margin-bottom: 3px;
+}
+.time-label {
+    font-size: 12px;
+    min-width: 45px;
+}
+.user-select {
+    font-size: 12px;
+    padding: 3px;
+}
+.send-day-btn {
+    padding: 6px;
+    font-size: 13px;
+}
+
+/* 限制輸入框與選單不超出 day-card */
+.day-card input,
+.day-card select,
+.day-card textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box; /* 確保 padding 不超出寬度 */
+}
+
+/* 限制 select 不被長內容撐開 */
+.user-select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  display: block;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+/* 讓下拉選單展開時不破版（選項可換行） */
+.user-select option {
+  white-space: normal;
+}
+
+/* 讓 select 內文字超出顯示省略號 */
+.user-select::-ms-expand {
+  display: none; /* 隱藏 IE 下拉箭頭（避免撐開） */
+}
+
+/* 若想加 tooltip（滑鼠移上可看完整文字） */
+.user-select[title] {
+  cursor: help;
+}
     </style>
 </head>
 <body>
