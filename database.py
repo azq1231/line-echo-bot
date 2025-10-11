@@ -1,19 +1,31 @@
 import sqlite3
-import json
-from datetime import datetime
 from typing import List, Dict, Optional
-import os
+from pypinyin import pinyin, Style
 
 DB_FILE = 'appointments.db'
+
+def _name_to_zhuyin(name: str) -> str:
+    """将中文姓名转换为注音首字母字符串，例如 '郭欽方' -> 'ㄍㄑㄈ'"""
+    if not name:
+        return ""
+    try:
+        # 使用 pypinyin 生成注音，Style.BOPOMOFO 返回注音列表
+        zhuyin_list = pinyin(name, style=Style.BOPOMOFO)
+        # 提取每个字的第一个注音符号并连接
+        initials = "".join([item[0][0] for item in zhuyin_list if item and item[0]])
+        return initials
+    except Exception as e:
+        print(f"注音转换失败 for name '{name}': {e}")
+        return ""
 
 def get_db():
     """获取数据库连接"""
     conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row  # 使结果可以像字典一样访问
+    conn.row_factory = sqlite3.Row
     return conn
 
 def init_database():
-    """初始化数据库结构"""
+    """初始化数据库结构，并安全地添加新字段"""
     conn = get_db()
     cursor = conn.cursor()
     
@@ -23,11 +35,19 @@ def init_database():
             user_id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             phone TEXT,
+            zhuyin TEXT, -- 新增注音字段
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+
+    # 检查 users 表是否已存在 zhuyin 字段，如果不存在则添加
+    cursor.execute("PRAGMA table_info(users)")
+    columns = [info['name'] for info in cursor.fetchall()]
+    if 'zhuyin' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN zhuyin TEXT")
+        print("成功为 users 表添加 zhuyin 字段")
+
     # 预约表（支持多时段预约）
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS appointments (
@@ -147,18 +167,20 @@ def get_user_by_id(user_id: str) -> Optional[Dict]:
     return dict(row) if row else None
 
 def add_user(user_id: str, name: str, phone: Optional[str] = None) -> bool:
-    """添加或更新用户"""
+    """添加或更新用户，并自动生成注音"""
     conn = get_db()
     cursor = conn.cursor()
     try:
+        zhuyin = _name_to_zhuyin(name)
         cursor.execute('''
-            INSERT INTO users (user_id, name, phone)
-            VALUES (?, ?, ?)
+            INSERT INTO users (user_id, name, phone, zhuyin)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 name = excluded.name,
                 phone = excluded.phone,
+                zhuyin = excluded.zhuyin,
                 updated_at = CURRENT_TIMESTAMP
-        ''', (user_id, name, phone))
+        ''', (user_id, name, phone, zhuyin))
         conn.commit()
         return True
     except Exception as e:
@@ -182,14 +204,15 @@ def delete_user(user_id: str) -> bool:
         conn.close()
 
 def update_user_name(user_id: str, new_name: str) -> bool:
-    """更新用户姓名"""
+    """更新用户姓名，并重新生成注音"""
     conn = get_db()
     cursor = conn.cursor()
     try:
+        new_zhuyin = _name_to_zhuyin(new_name)
         cursor.execute('''
-            UPDATE users SET name = ?, updated_at = CURRENT_TIMESTAMP 
+            UPDATE users SET name = ?, zhuyin = ?, updated_at = CURRENT_TIMESTAMP 
             WHERE user_id = ?
-        ''', (new_name, user_id))
+        ''', (new_name, new_zhuyin, user_id))
         conn.commit()
         return cursor.rowcount > 0
     except Exception as e:
@@ -197,6 +220,36 @@ def update_user_name(user_id: str, new_name: str) -> bool:
         return False
     finally:
         conn.close()
+
+def update_user_zhuyin(user_id: str, zhuyin: str) -> bool:
+    """手动更新用户的注音字段"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            UPDATE users SET zhuyin = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE user_id = ?
+        ''', (zhuyin, user_id))
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"更新用户注音错误: {e}")
+        return False
+    finally:
+        conn.close()
+
+def generate_and_save_zhuyin(user_id: str) -> Optional[str]:
+    """为指定用户生成并保存注音（如果为空）"""
+    user = get_user_by_id(user_id)
+    if not user or not user['name']:
+        return None
+    
+    zhuyin = _name_to_zhuyin(user['name'])
+    if update_user_zhuyin(user_id, zhuyin):
+        return zhuyin
+    return None
+
+# (以下为其他函数，保持不变)
 
 # ==================== 预约管理 ====================
 

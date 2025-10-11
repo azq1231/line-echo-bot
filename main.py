@@ -23,7 +23,7 @@ TAIPEI_TZ = pytz.timezone('Asia/Taipei')
 # 初始化数据库
 db.init_database()
 
-# ============ LINE API 辅助函数 ============
+# ============ LINE API 辅助函数 ============ 
 
 def validate_signature(body, signature):
     """验证 LINE webhook 签名"""
@@ -65,7 +65,6 @@ def send_line_message(user_id, messages):
         "Authorization": f"Bearer {LINE_CHANNEL_TOKEN}"
     }
     
-    # 确保 messages 是列表格式
     if not isinstance(messages, list):
         messages = [messages]
     
@@ -84,7 +83,7 @@ def reply_message(user_id, text):
     """发送文本消息（兼容旧代码）"""
     return send_line_message(user_id, [{"type": "text", "text": text}])
 
-# ============ 预约辅助函数 ============
+# ============ 预约辅助函数 ============ 
 
 def get_week_dates(week_offset=0):
     """
@@ -102,7 +101,7 @@ def get_week_dates(week_offset=0):
             'date': date.strftime('%Y-%m-%d'),
             'day_name': day_names[i],
             'weekday': i,
-            'display': date.strftime('%m/%d')  # 添加格式化的日期显示
+            'display': date.strftime('%m/%d')
         })
     
     return week_dates
@@ -110,54 +109,48 @@ def get_week_dates(week_offset=0):
 def generate_time_slots(weekday):
     """根据星期生成时间段"""
     slots = []
-    if weekday in [1, 3]:  # 週二、週四：14:00-18:00（17个时段）
+    if weekday in [1, 3]:
         for hour in range(14, 18):
             for minute in [0, 15, 30, 45]:
                 slots.append(f"{hour:02d}:{minute:02d}")
-        slots.append("18:00")  # 18:00 结束
-    elif weekday == 5:  # 週六：10:00-18:00（33个时段）
+        slots.append("18:00")
+    elif weekday == 5:
         for hour in range(10, 18):
             for minute in [0, 15, 30, 45]:
                 slots.append(f"{hour:02d}:{minute:02d}")
-        slots.append("18:00")  # 18:00 结束
-    elif weekday in [2, 4]:  # 週三、週五：18:00-21:00（13个时段）
+        slots.append("18:00")
+    elif weekday in [2, 4]:
         for hour in range(18, 21):
             for minute in [0, 15, 30, 45]:
                 slots.append(f"{hour:02d}:{minute:02d}")
-        slots.append("21:00")  # 21:00 结束
+        slots.append("21:00")
     return slots
 
 def get_available_slots(date, weekday):
     """获取某日期的可用时段（过滤掉已过去的时间）"""
     all_slots = generate_time_slots(weekday)
     
-    # 检查是否休诊
     if db.is_closed_day(date):
         return []
     
-    # 获取已预约的时段
     appointments = db.get_appointments_by_date_range(date, date)
     booked_times = [apt['time'] for apt in appointments if apt['status'] == 'confirmed']
     
-    # 过滤掉已过去的时段
     now = datetime.now(TAIPEI_TZ)
-    date_obj = datetime.strptime(date, '%Y-%m-%d').replace(tzinfo=TAIPEI_TZ)
     
     filtered_slots = []
     for slot in all_slots:
         if slot not in booked_times:
-            # 如果是今天，检查时间是否已过
             if date == now.strftime('%Y-%m-%d'):
                 slot_time = datetime.strptime(f"{date} {slot}", '%Y-%m-%d %H:%M').replace(tzinfo=TAIPEI_TZ)
                 if slot_time > now:
                     filtered_slots.append(slot)
             else:
-                # 未来的日期，保留所有未预约的时段
                 filtered_slots.append(slot)
     
     return filtered_slots
 
-# ============ WEB 路由 ============
+# ============ WEB 路由 ============ 
 
 @app.route("/")
 def home():
@@ -175,7 +168,7 @@ def appointments_page():
 def closed_days_page():
     return render_template("closed_days.html")
 
-# ============ 用户管理 API ============
+# ============ 用户管理 API ============ 
 
 @app.route("/list_users")
 def list_users():
@@ -208,14 +201,35 @@ def update_user_name():
     else:
         return jsonify({"status": "error", "message": "找不到用戶"}), 404
 
-# ============ 预约管理 API ============
+@app.route("/update_user_zhuyin", methods=["POST"])
+def update_user_zhuyin_route():
+    data = request.get_json()
+    user_id = data.get("user_id")
+    zhuyin = data.get("zhuyin")
+    
+    if not user_id or zhuyin is None:
+        return jsonify({"status": "error", "message": "缺少必要参数"}), 400
+
+    if db.update_user_zhuyin(user_id, zhuyin):
+        return jsonify({"status": "success", "message": "注音已更新"})
+    else:
+        return jsonify({"status": "error", "message": "更新失败"}), 500
+
+@app.route("/generate_zhuyin/<user_id>", methods=["POST"])
+def generate_zhuyin_route(user_id):
+    new_zhuyin = db.generate_and_save_zhuyin(user_id)
+    if new_zhuyin is not None:
+        return jsonify({"status": "success", "zhuyin": new_zhuyin})
+    else:
+        return jsonify({"status": "error", "message": "生成失败"}), 404
+
+# ============ 预约管理 API ============ 
 
 @app.route("/get_week_appointments")
 def get_week_appointments():
     week_offset = int(request.args.get('offset', 0))
     week_dates = get_week_dates(week_offset)
     
-    # 组织本周的预约数据
     week_schedule = {}
     all_users = db.get_all_users()
     
@@ -224,7 +238,6 @@ def get_week_appointments():
         weekday = date_info['weekday']
         time_slots = generate_time_slots(weekday)
         
-        # 获取该日期的所有预约
         appointments = db.get_appointments_by_date_range(date_str, date_str)
         appointments_map = {apt['time']: apt for apt in appointments if apt['status'] == 'confirmed'}
         
@@ -255,10 +268,8 @@ def save_appointment():
     user_name = data.get('user_name')
     user_id = data.get('user_id', '')
     
-    # 先取消该时段的旧预约
     db.cancel_appointment(date, time)
     
-    # 如果有选择用户，则添加新预约
     if user_name and user_id:
         db.add_appointment(user_id, user_name, date, time)
     
@@ -270,16 +281,14 @@ def send_appointment_reminders():
     send_type = data.get('type', 'week')
     target_date = data.get('date', '')
     
-    # 筛选要发送的预约
     if send_type == 'day' and target_date:
         appointments = db.get_appointments_by_date_range(target_date, target_date)
-    else:  # week
+    else:
         week_dates = get_week_dates()
         start_date = week_dates[0]['date']
         end_date = week_dates[-1]['date']
         appointments = db.get_appointments_by_date_range(start_date, end_date)
     
-    # 只发送 confirmed 状态的预约
     appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
     
     sent_count = 0
@@ -305,7 +314,7 @@ def send_appointment_reminders():
         "failed_count": failed_count
     })
 
-# ============ 休诊管理 API ============
+# ============ 休诊管理 API ============ 
 
 @app.route("/get_closed_days")
 def get_closed_days():
@@ -321,7 +330,6 @@ def set_closed_day():
     if not date:
         return jsonify({"status": "error", "message": "缺少日期"}), 400
     
-    # 设置休诊并自动取消该日预约
     cancelled_count = db.set_closed_day(date, reason)
     
     return jsonify({
@@ -339,7 +347,7 @@ def remove_closed_day():
     else:
         return jsonify({"status": "error", "message": "未找到休診記錄"}), 404
 
-# ============ 系统配置 API ============
+# ============ 系统配置 API ============ 
 
 @app.route("/get_config")
 def get_config_api():
@@ -356,7 +364,6 @@ def set_config_api():
     if not key or not value:
         return jsonify({"status": "error", "message": "缺少必要参数"}), 400
     
-    # 验证 booking_window_weeks 只能是 2 或 4
     if key == 'booking_window_weeks' and value not in ['2', '4']:
         return jsonify({"status": "error", "message": "预约窗口只能设置为2周或4周"}), 400
     
@@ -365,17 +372,13 @@ def set_config_api():
     else:
         return jsonify({"status": "error", "message": "更新失败"}), 500
 
-# ============ LINE Webhook ============
+# ============ LINE Webhook ============ 
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # 获取签名
     signature = request.headers.get('X-Line-Signature', '')
-    
-    # 获取原始请求体
     body_text = request.get_data(as_text=True)
     
-    # 验证签名
     if not validate_signature(body_text, signature):
         print("❌ LINE Webhook 签名验证失败")
         return jsonify({"status": "error", "message": "Invalid signature"}), 403
@@ -384,21 +387,18 @@ def webhook():
     events = body.get("events", [])
 
     for event in events:
-        # 处理用户加好友事件
         if event["type"] == "follow":
             user_id = event["source"]["userId"]
             print(f"用戶加入好友 - 用戶ID: {user_id}")
             user_name = get_line_profile(user_id)
             db.add_user(user_id, user_name)
         
-        # 处理文本消息
         elif event["type"] == "message" and event["message"]["type"] == "text":
             user_id = event["source"]["userId"]
             user_message = event["message"]["text"].strip()
             
             print(f"收到訊息 - 用戶ID: {user_id}, 訊息: {user_message}")
             
-            # 自动注册用户
             users = db.get_all_users()
             user_ids = [u['user_id'] for u in users]
             
@@ -406,7 +406,6 @@ def webhook():
                 user_name = get_line_profile(user_id)
                 db.add_user(user_id, user_name)
             
-            # 处理预约命令
             if user_message in ['預約', '预约', '訂位', '订位']:
                 handle_booking_start(user_id)
             elif user_message in ['查詢', '查询', '我的預約', '我的预约']:
@@ -414,7 +413,6 @@ def webhook():
             elif user_message in ['取消', '取消預約', '取消预约']:
                 handle_cancel_booking(user_id)
         
-        # 处理 postback 事件（按钮点击）
         elif event["type"] == "postback":
             user_id = event["source"]["userId"]
             data = event["postback"]["data"]
@@ -424,14 +422,11 @@ def webhook():
 
     return jsonify({"status": "ok"})
 
-# ============ LINE 预约流程处理 ============
+# ============ LINE 预约流程处理 ============ 
 
 def handle_booking_start(user_id, week_offset=0):
     """开始预约流程：显示日期选择"""
-    # 获取配置的最大预约周数
     max_weeks = int(db.get_config('booking_window_weeks') or '2')
-    
-    # 限制 week_offset 在有效范围内
     week_offset = max(0, min(week_offset, max_weeks - 1))
     
     week_dates = get_week_dates(week_offset)
@@ -440,7 +435,6 @@ def handle_booking_start(user_id, week_offset=0):
 
 def handle_postback(user_id, data):
     """处理 postback 事件"""
-    # 解析 postback 数据
     params = {}
     for param in data.split('&'):
         if '=' in param:
@@ -450,38 +444,29 @@ def handle_postback(user_id, data):
     action = params.get('action')
     
     if action == 'change_week':
-        # 切换周次
         offset = int(params.get('offset', 0))
         handle_booking_start(user_id, offset)
     
     elif action == 'show_date_selection':
-        # 返回日期选择
         handle_booking_start(user_id, 0)
     
     elif action == 'select_date':
-        # 选择日期后，显示时段选择
         date = params.get('date')
         day_name = params.get('day_name')
         
         if not date or not day_name:
             return
         
-        # 获取星期数
         date_obj = datetime.strptime(date, '%Y-%m-%d')
         weekday = date_obj.weekday()
         
-        # 检查是否休诊
         is_closed = db.is_closed_day(date)
-        
-        # 获取可用时段
         available_slots = get_available_slots(date, weekday)
         
-        # 生成时段选择卡片
         time_card = flex.generate_time_selection_card(date, day_name, available_slots, is_closed)
         send_line_message(user_id, [time_card])
     
     elif action == 'select_time':
-        # 选择时段后，显示确认卡片
         date = params.get('date')
         day_name = params.get('day_name')
         time = params.get('time')
@@ -489,27 +474,22 @@ def handle_postback(user_id, data):
         if not date or not day_name or not time:
             return
         
-        # 获取用户姓名
         user = db.get_user_by_id(user_id)
         user_name = user['name'] if user else '未知'
         
-        # 生成确认卡片
         confirm_card = flex.generate_confirmation_card(date, day_name, time, user_name)
         send_line_message(user_id, [confirm_card])
     
     elif action == 'confirm_booking':
-        # 确认预约
         date = params.get('date')
         time = params.get('time')
         
         if not date or not time:
             return
         
-        # 获取用户信息
         user = db.get_user_by_id(user_id)
         user_name = user['name'] if user else '未知'
         
-        # 添加预约
         success = db.add_appointment(user_id, user_name, date, time)
         
         if success:
@@ -525,12 +505,9 @@ def handle_postback(user_id, data):
 
 def handle_query_appointments(user_id):
     """查询用户的预约"""
-    # 获取用户的所有预约（未来7天）
     today = datetime.now(TAIPEI_TZ).date()
-    end_date = today + timedelta(days=7)
     
     appointments = db.get_appointments_by_user(user_id)
-    # 只显示未来的预约
     future_apts = [apt for apt in appointments 
                    if datetime.strptime(apt['date'], '%Y-%m-%d').date() >= today
                    and apt['status'] == 'confirmed']
@@ -550,7 +527,6 @@ def handle_query_appointments(user_id):
 
 def handle_cancel_booking(user_id):
     """处理取消预约"""
-    # 获取用户的预约
     today = datetime.now(TAIPEI_TZ).date()
     appointments = db.get_appointments_by_user(user_id)
     future_apts = [apt for apt in appointments 
@@ -561,7 +537,6 @@ def handle_cancel_booking(user_id):
         msg = "您目前沒有可取消的預約。"
         send_line_message(user_id, [{"type": "text", "text": msg}])
     else:
-        # 取消最近的一个预约
         apt = sorted(future_apts, key=lambda x: (x['date'], x['time']))[0]
         db.cancel_appointment(apt['date'], apt['time'])
         
@@ -572,9 +547,8 @@ def handle_cancel_booking(user_id):
         msg = f"✅ 已取消預約\n\n日期：{date_obj.month}月{date_obj.day}日 ({weekday_name})\n時間：{apt['time']}"
         send_line_message(user_id, [{"type": "text", "text": msg}])
 
-# ============ 排程系统（保留旧功能）============
+# ============ 排程系统（保留旧功能）============ 
 
-# 这部分暂时保留 JSON 方式，后续可迁移到数据库
 def load_schedules():
     import json
     try:
