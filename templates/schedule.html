@@ -1,42 +1,10 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LINE Bot 排程管理</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft JhengHei", sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 28px;
-            margin-bottom: 10px;
+{% extends "base.html" %}
+{% block title %}LINE Bot 排程管理{% endblock %}
+{% block header %}LINE Bot 排程管理{% endblock %}
+{% block content %}
+<!-- 原本 schedule.html 的主要內容放這裡 -->
+...existing code...
+{% endblock %}
         }
         
         .nav {
@@ -303,9 +271,11 @@
             <p>安排自動發送訊息給用戶</p>
         </div>
         
-        <div class="nav">
-            <a href="/">← 返回用戶管理</a>
-            <a href="/appointments">📋 預約簿</a>
+        <div style="background: #f5f5f5; padding: 15px 30px; display: flex; gap: 20px;">
+            <a href="/" style="color: #667eea; text-decoration: none; font-weight: 500;">👤 用戶管理</a>
+            <a href="/schedule" style="color: #667eea; text-decoration: none; font-weight: 500;">📅 排程管理</a>
+            <a href="/appointments" style="color: #667eea; text-decoration: none; font-weight: 500;">📋 預約簿</a>
+            <a href="/booking" style="color: #667eea; text-decoration: none; font-weight: 500;">💻 線上預約</a>
         </div>
         
         <div class="content">
