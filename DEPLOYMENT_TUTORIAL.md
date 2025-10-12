@@ -116,7 +116,185 @@ python main.py
  * Running on http://0.0.0.0:5000
 ```
 
+## 使用 ngrok 進行本地測試與 HTTPS 穿透
+
+當您在本地開發，或是需要在沒有公開 IP 的環境下測試 LINE Webhook 時，`ngrok` 是一個非常有用的工具。它可以為您本地運行的服務提供一個公開的 HTTPS 網址。
+
+### 步驟 1：安裝 ngrok (以 Debian/Ubuntu 為例)
+
+在您的終端機執行以下指令來安裝 `ngrok`：
+
+```bash
+curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
+  | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null \
+  && echo "deb https://ngrok-agent.s3.amazonaws.com bookworm main" \
+  | sudo tee /etc/apt/sources.list.d/ngrok.list \
+  && sudo apt update \
+  && sudo apt install ngrok
+```
+
+### 步驟 2：設定您的 Authtoken
+
+為了能正常使用 `ngrok` 的功能，您需要設定您的 Authtoken。請先到 [ngrok Dashboard](https://dashboard.ngrok.com/get-started/your-authtoken) 取得您自己的 Authtoken。
+
+取得後，執行以下指令進行設定：
+
+```bash
+ngrok config add-authtoken <你的 ngrok authtoken>
+```
+**注意**：請將 `<你的 ngrok authtoken>` 替換成您自己的真實 Authtoken。
+
+### 步驟 3：啟動 HTTPS 穿透
+
+假設您的 Flask 應用程式正在本地的 5000 連接埠上運行，您可以執行以下指令來啟動穿透：
+
+```bash
+ngrok http 5000
+```
+
+啟動後，`ngrok` 會在終端機上顯示一個公開的 HTTPS 網址 (例如 `https://xxxx-xx-xx-xx-xx.ngrok-free.app`)。您可以將這個網址填入 LINE Developers Console 的 Webhook URL 中，來進行測試。
+
+
+
 ## 平台特定部署指南
+
+
+## 快速部署到您的 VPS
+
+這份指南是針對您目前的 VPS (`root@45.32.60.80`) 的快速部署步驟，並採用了虛擬環境的最佳實踐。
+
+### 步驟 1：透過 SSH 登入並準備環境
+
+在您的本地端電腦上，使用終端機登入您的 VPS：
+
+```bash
+ssh root@45.32.60.80
+```
+
+登入後，更新系統並安裝必要的軟體 (`git` 和 `python3-venv`)：
+
+```bash
+apt update
+apt install -y git python3-venv
+```
+
+### 步驟 2：下載專案程式碼
+
+建立專案資料夾，並使用 `git clone` 從您的 GitHub 倉庫下載程式碼。
+
+```bash
+# 建立並進入您的專案資料夾
+mkdir -p /var/www/myapp
+cd /var/www/myapp
+
+# 從您的 GitHub 倉庫複製檔案到目前資料夾
+git clone https://github.com/azq1231/line-echo-bot.git .
+```
+
+### 步驟 3：建立並啟用虛擬環境
+
+在專案資料夾 (`/var/www/myapp`) 中，建立一個獨立的 Python 虛擬環境。
+
+```bash
+# 建立虛擬環境（此指令只需要執行一次）
+python3 -m venv venv
+```
+
+啟用虛擬環境以開始使用它。
+
+```bash
+# 啟用虛擬環境
+source venv/bin/activate
+```
+
+成功啟用後，您的終端機提示符號前面會出現 `(venv)` 字樣。
+
+### 步驟 4：安裝專案依賴套件
+
+在已啟用虛擬環境的狀態下，使用 `pip` 安裝 `requirements.txt` 中定義的所有 Python 套件。
+
+```bash
+pip install -r requirements.txt
+```
+
+### 步驟 5：執行應用程式 (或進行後續設定)
+
+安裝完套件後，您就可以在此虛擬環境中執行您的應用程式了。
+
+您也可以參考下方的 "AWS EC2 / VPS 部署" 章節，學習如何使用 Gunicorn 和 Nginx 設定一個更正式、更穩定的生產環境。
+
+### (附註) 離開虛擬環境
+
+當您完成操作，想要離開虛擬環境時，可以執行：
+
+```bash
+deactivate
+```
+
+### 步驟 6 (可選)：上傳本地環境檔案與資料庫
+
+如果您的本地電腦上有 `.env` 檔案（包含 API 金鑰）和 `appointments.db`（包含現有資料的資料庫），您需要手動將它們上傳到 VPS。
+
+最安全的方式是使用 `scp` 指令。請在**您的本地電腦**上打開終端機，並執行以下步驟：
+
+1.  **切換到本地專案目錄**
+    ```bash
+    cd d:\MyProjects\line-echo-bot
+    ```
+
+2.  **上傳 `.env` 檔案**
+    ```bash
+    # 將 .env 檔案複製到遠端伺服器的 /var/www/myapp/ 資料夾中
+    scp .env root@45.32.60.80:/var/www/myapp/
+    ```
+
+3.  **上傳資料庫檔案**
+    ```bash
+    # 將 appointments.db 檔案複製到遠端伺服器的 /var/www/myapp/ 資料夾中
+    scp appointments.db root@45.32.60.80:/var/www/myapp/
+    ```
+
+**提示**：注意路徑結尾的斜線 (`/`)，它確保 `scp` 將檔案複製到指定的資料夾內並保持原檔名。
+
+#### 從 VPS 下載檔案
+
+如果您需要將伺服器上的資料庫或其他檔案下載回本地，指令正好相反。同樣在本地電腦的專案資料夾中執行：
+
+```bash
+# 從伺服器下載 appointments.db 到目前資料夾 (.)
+scp root@45.32.60.80:/var/www/myapp/appointments.db .
+```
+這個指令會將遠端的 `appointments.db` 檔案，覆蓋掉您本地的同名檔案。
+
+### 步驟 7：驗證服務與設定防火牆
+
+當您在虛擬環境中執行 `python main.py` 啟動了 Flask 應用程式後，您可以開啟**另一個** SSH 連線到您的 VPS，來執行以下操作：
+
+1.  **檢查服務是否在監聽 5000 連接埠**
+    ```bash
+    sudo lsof -i:5000
+    ```
+    如果服務正常啟動，您應該會看到類似以下的輸出，表示有 `python3` 程序正在監聽 5000 連接埠：
+    ```
+    COMMAND   PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+    python3 12345 root    3u  IPv4 1234567      0t0  TCP *:5000 (LISTEN)
+    ```
+
+2.  **在本機測試服務**
+    您可以使用 `curl` 來確認應用程式是否能正常回應：
+    ```bash
+    curl http://127.0.0.1:5000
+    ```
+    如果您的應用程式首頁有內容，`curl` 會將其 HTML 原始碼輸出到您的終端機。
+
+3.  **開啟防火牆連接埠 (UFW)**
+    為了讓外部網路可以存取您的服務，您需要在 VPS 的防火牆上開啟 5000 連接埠。如果您的 VPS 使用的是 `ufw` (Uncomplicated Firewall)，請執行：
+    ```bash
+    sudo ufw allow 5000
+    ```
+    執行後，您應該就能透過 `http://45.32.60.80:5000` 從任何地方存取您的應用程式了。
+
+---
 
 ### Heroku 部署
 
