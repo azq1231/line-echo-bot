@@ -1,10 +1,306 @@
-{% extends "base.html" %}
-{% block title %}預約管理{% endblock %}
-{% block header %}預約管理{% endblock %}
-{% block content %}
-<!-- 原本 appointments.html 的主要內容放這裡 -->
-...existing code...
-{% endblock %}
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>預約管理</title>
+    <style>
+        :root { --primary-color: #667eea; --secondary-color: #764ba2; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%); min-height: 100vh; padding: 20px; }
+        .container { width: 98%; max-width: 1800px; margin: 0 auto; }
+        .header { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header h1 { color: var(--primary-color); margin-bottom: 15px; }
+        .header-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; font-size: 14px; cursor: pointer; transition: all 0.3s; }
+        .btn-primary { background: var(--primary-color); color: white; }
+        .btn-primary:hover { background: #5568d3; }
+        .btn-success { background: #48bb78; color: white; }
+        .btn-success:hover { background: #38a169; }
+        .nav-links { display: flex; gap: 10px; margin-top: 10px; }
+        .nav-link { color: var(--primary-color); text-decoration: none; font-size: 14px; }
+        .nav-link:hover { text-decoration: underline; }
+        .schedule-grid { display: flex; justify-content: space-between; gap: 1%; }
+        .day-card { flex-basis: 19%; min-width: 0; background: white; border-radius: 10px; padding: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        .day-header { background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%); color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px; text-align: center; }
+        .day-header h3 { font-size: 16px; margin-bottom: 5px; }
+        .day-header p { font-size: 14px; opacity: 0.9; }
+        .time-slots { flex-grow: 1; }
+        .time-slot { display: flex; align-items: center; gap: 8px; padding: 5px 6px; margin-bottom: 4px; }
+        .time-label { min-width: 50px; font-weight: 500; color: #4a5568; font-size: 13px; }
+        .custom-select-container { flex: 1; position: relative; }
+        .custom-select-display { width: 100%; padding: 5px; border: 1px solid #cbd5e0; font-size: 13px; border-radius: 4px; background: white; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; display: flex; justify-content: space-between; align-items: center; }
+        .custom-select-display.empty { color: #888; }
+        .custom-select-display::after { content: '\25bc'; font-size: 10px; }
+        .custom-select-options { display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #cbd5e0; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .custom-select-options.show { display: block; }
+        .custom-option { padding: 8px 10px; cursor: pointer; font-size: 13px; }
+        .custom-option:hover { background: #f0f0f0; }
+        .custom-option.back-option { color: var(--secondary-color); font-weight: bold; border-bottom: 1px solid #eee; }
+        .send-day-btn { margin-top: 10px; width: 100%; padding: 8px; background: #48bb78; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }
+        .send-day-btn:hover { background: #38a169; }
+        .status-message { position: fixed; top: 20px; right: 20px; padding: 15px 20px; background: #2d3748; color: white; border-radius: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); display: none; z-index: 1000; opacity: 0; transition: opacity 0.3s; }
+        .status-message.show { display: block; opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📅 預約管理</h1>
+            <div class="header-buttons">
+                <button class="btn btn-primary" onclick="changeWeek(-1)">⬅️ 上一週</button>
+                <button class="btn btn-primary" onclick="changeWeek(1)">下一週 ➡️</button>
+                <button class="btn btn-primary" onclick="loadInitialData()">🔄 重新載入</button>
+                <button class="btn btn-success" onclick="sendWeekReminders(event)">📨 發送整週提醒</button>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">← 用戶管理</a>
+            </div>
+        </div>
+        <div style="background: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center;">
+            <h2 id="weekTitle" style="color: var(--primary-color); font-size: 20px; margin: 0;"></h2>
+        </div>
+        <div id="schedule" class="schedule-grid"></div>
+    </div>
+    <div id="statusMessage" class="status-message"></div>
+
+    <script>
+        let allUsers = [];
+        let groupedUsers = {};
+        let weekSchedule = {};
+        let currentWeekOffset = 0;
+        let openSelect = null;
+
+        document.addEventListener('click', function(e) {
+            if (openSelect && !openSelect.contains(e.target)) {
+                closeAllSelects();
+            }
+        });
+
+        function closeAllSelects() {
+            document.querySelectorAll('.custom-select-options.show').forEach(el => el.classList.remove('show'));
+            openSelect = null;
+        }
+
+        async function loadInitialData() {
+            showStatus('載入中...', 'info');
+            await loadUsers();
+            await loadSchedule();
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await fetch('/list_users');
+                const data = await response.json();
+                allUsers = data.allowed_users || [];
+                groupedUsers = groupUsersByZhuyin(allUsers);
+            } catch (error) {
+                showStatus('❌ 用戶載入失敗', 'error');
+            }
+        }
+
+        function groupUsersByZhuyin(users) {
+            const groups = users.reduce((acc, user) => {
+                const initial = user.zhuyin ? user.zhuyin[0] : '#';
+                if (!acc[initial]) acc[initial] = [];
+                acc[initial].push(user);
+                return acc;
+            }, {});
+            return groups;
+        }
+
+        async function loadSchedule() {
+            try {
+                const response = await fetch(`/get_week_appointments?offset=${currentWeekOffset}`);
+                const data = await response.json();
+                weekSchedule = data.week_schedule || {};
+                updateWeekTitle();
+                renderSchedule();
+                showStatus('✅ 資料已更新', 'success');
+            } catch (error) {
+                showStatus('❌ 排程載入失敗', 'error');
+            }
+        }
+
+        function updateWeekTitle() {
+            const titleEl = document.getElementById('weekTitle');
+            if (currentWeekOffset === 0) titleEl.textContent = '本週預約';
+            else if (currentWeekOffset === 1) titleEl.textContent = '下週預約';
+            else if (currentWeekOffset === -1) titleEl.textContent = '上週預約';
+            else if (currentWeekOffset > 1) titleEl.textContent = `未來第 ${currentWeekOffset} 週`;
+            else titleEl.textContent = `過去第 ${Math.abs(currentWeekOffset)} 週`;
+        }
+
+        function changeWeek(offset) {
+            currentWeekOffset += offset;
+            loadSchedule();
+        }
+
+        function renderSchedule() {
+            const scheduleDiv = document.getElementById('schedule');
+            scheduleDiv.innerHTML = '';
+            const days = Object.values(weekSchedule);
+            if (days.length === 0) {
+                scheduleDiv.innerHTML = '<p>無預約資料</p>';
+                return;
+            }
+
+            for (const dayData of days) {
+                const dayCard = document.createElement('div');
+                dayCard.className = 'day-card';
+                const { date_info, appointments } = dayData;
+
+                let timeSlotsHtml = Object.entries(appointments).map(([time, apt]) => {
+                    const user = allUsers.find(u => u.user_id === apt.user_id);
+                    return `
+                        <div class="time-slot">
+                            <span class="time-label">${time}</span>
+                            <div class="custom-select-container">
+                                ${generateCustomSelect(date_info.date, time, user)}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                dayCard.innerHTML = `
+                    <div class="day-header"><h3>${date_info.day_name}</h3><p>${date_info.display}</p></div>
+                    <div class="time-slots">${timeSlotsHtml}</div>
+                    <button class="send-day-btn" onclick="sendDayReminders(event, '${date_info.date}', '${date_info.day_name}')">📤 發送 ${date_info.day_name} 提醒</button>   
+                `;
+                scheduleDiv.appendChild(dayCard);
+            }
+        }
+
+        function generateCustomSelect(date, time, user) {
+            const displayText = user ? user.name : '-- 未預約 --';
+            const displayClass = user ? '' : 'empty';
+            const userId = user ? user.user_id : '';
+            return `
+                <div class="custom-select-display ${displayClass}"
+                     data-date="${date}" data-time="${time}" data-user-id="${userId}"
+                     onclick="toggleDropdown(this)">
+                    ${displayText}
+                </div>
+                <div class="custom-select-options"></div>
+            `;
+        }
+
+        function toggleDropdown(displayElement) {
+            const optionsPanel = displayElement.nextElementSibling;
+            const wasOpen = optionsPanel.classList.contains('show');
+            closeAllSelects();
+            if (!wasOpen) {
+                optionsPanel.classList.add('show');
+                openSelect = displayElement.parentElement;
+                renderZhuyinOptions(displayElement);
+            }
+        }
+
+        function renderZhuyinOptions(displayElement) {
+            const optionsPanel = displayElement.nextElementSibling;
+            const zhuyinOrder = 'ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙㄧㄨㄩㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤㄥㄦ#';
+            const sortedKeys = Object.keys(groupedUsers).sort((a, b) => {
+                if (a === '#') return 1;
+                if (b === '#') return -1;
+                return zhuyinOrder.indexOf(a) - zhuyinOrder.indexOf(b);
+            });
+
+            let optionsHtml = `<div class="custom-option" onclick="event.stopPropagation(); selectUser(this, '', '-- 未預約 --')">-- 未預約 --</div>`;
+            optionsHtml += sortedKeys.map(key =>
+                `<div class="custom-option" onclick="event.stopPropagation(); renderUserOptions(this, '${key}')">${key}</div>`
+            ).join('');
+            optionsPanel.innerHTML = optionsHtml;
+        }
+
+        function renderUserOptions(optionElement, zhuyinInitial) {
+            const displayElement = optionElement.closest('.custom-select-container').querySelector('.custom-select-display');
+            const optionsPanel = displayElement.nextElementSibling;
+            const usersInGroup = groupedUsers[zhuyinInitial] || [];
+
+            let userOptionsHtml = `<div class="custom-option back-option" onclick="event.stopPropagation(); renderZhuyinOptions(this.closest('.custom-select-container').queryS\nelector('.custom-select-display'))">← 返回注音</div>`;                                                                                                                                     userOptionsHtml += usersInGroup.map(user =>
+                `<div class="custom-option" onclick="event.stopPropagation(); selectUser(this, '${user.user_id}', '${user.name}')">${user.name}</div>`
+            ).join('');
+
+            optionsPanel.innerHTML = userOptionsHtml;
+        }
+
+        function selectUser(optionElement, userId, userName) {
+            const displayElement = optionElement.closest('.custom-select-container').querySelector('.custom-select-display');
+            displayElement.textContent = userName;
+            displayElement.classList.remove('empty');
+            displayElement.dataset.userId = userId;
+
+            const { date, time } = displayElement.dataset;
+            saveAppointment(date, time, userId, userName);
+            closeAllSelects();
+        }
+
+        async function saveAppointment(date, time, userId, userName) {
+            try {
+                const response = await fetch('/save_appointment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date, time, user_id: userId, user_name: userId ? userName : '' })
+                });
+                if (response.ok) {
+                    showStatus('✅ 預約已儲存', 'success');
+                } else { showStatus('❌ 儲存失敗', 'error'); }
+            } catch (error) { showStatus('❌ 儲存失敗', 'error'); }
+        }
+
+        async function sendWeekReminders(event) {
+            if (!confirm('確定要發送整週的預約提醒嗎？')) return;
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '發送中...';
+            try {
+                const response = await fetch('/send_appointment_reminders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'week' })
+                });
+                const result = await response.json();
+                showStatus(`✅ 已發送 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
+            } catch (error) {
+                showStatus('❌ 發送失敗', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📨 發送整週提醒';
+            }
+        }
+
+        async function sendDayReminders(event, date, dayName) {
+            if (!confirm(`確定要發送 ${dayName} 的預約提醒嗎？`)) return;
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '發送中...';
+            try {
+                const response = await fetch('/send_appointment_reminders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'day', date: date })
+                });
+                const result = await response.json();
+                showStatus(`✅ 已發送 ${dayName} 的 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
+            } catch (error) {
+                showStatus('❌ 發送失敗', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = `📤 發送 ${dayName} 提醒`;
+            }
+        }
+
+        function showStatus(message, type = 'success') {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-message ${type} show`;
+            setTimeout(() => { statusDiv.className = 'status-message'; }, 3000);
+        }
+
+        loadInitialData();
+    </script>
+</body>
+</html>
         .send-day-btn:hover { background: #38a169; }
         .status-message { position: fixed; top: 20px; right: 20px; padding: 15px 20px; background: #2d3748; color: white; border-radius: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); display: none; z-index: 1000; opacity: 0; transition: opacity 0.3s; }
         .status-message.show { display: block; opacity: 1; }
