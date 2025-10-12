@@ -136,6 +136,9 @@ sudo systemctl daemon-reload
 sudo systemctl start linebot
 sudo systemctl enable linebot
 
+重新啟動:(注意名稱)
+sudo systemctl restart mywebsite
+
 三、前台管理介面
 http://VPS_IP:5000/              # 用戶管理
 http://VPS_IP:5000/schedule      # 排程管理
