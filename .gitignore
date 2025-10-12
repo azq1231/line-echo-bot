@@ -1,6 +1,9 @@
 # Environment variables
 .env
 
+# VS Code directory
+.vscode/
+
 # Python cache
 __pycache__/
 
@@ -8,5 +11,7 @@ __pycache__/
 *.db
 *.db-journal
 
-# Local state
+# Local state & test files
 .local/
+sftp_test.txt
+修改內容

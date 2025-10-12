@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -205,9 +204,12 @@
                 if (b === '#') return -1;
                 return zhuyinOrder.indexOf(a) - zhuyinOrder.indexOf(b);
             });
-            optionsPanel.innerHTML = sortedKeys.map(key => 
+
+            let optionsHtml = `<div class="custom-option" onclick="event.stopPropagation(); selectUser(this, '', '-- 未預約 --')">-- 未預約 --</div>`;
+            optionsHtml += sortedKeys.map(key => 
                 `<div class="custom-option" onclick="event.stopPropagation(); renderUserOptions(this, '${key}')">${key}</div>`
             ).join('');
+            optionsPanel.innerHTML = optionsHtml;
         }
 
         function renderUserOptions(optionElement, zhuyinInitial) {
