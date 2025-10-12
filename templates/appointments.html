@@ -20,7 +20,7 @@
 
         .container {
             width: 98%;
-            max-width: 1600px; /* Add a larger max-width for very wide screens */
+            max-width: 1800px; /* Allow a wider max-width */
             margin: 0 auto;
         }
 
@@ -70,25 +70,22 @@
             background: #38a169;
         }
 
+        /* --- Definitive Layout Rules --- */
         .schedule-grid {
             display: flex;
-            flex-wrap: nowrap;
-            gap: 8px;
             justify-content: space-between;
-            overflow-x: auto;
-            padding-bottom: 5px;
+            gap: 1%; /* Use percentage for gap */
         }
+
         .day-card {
-            flex: 1 1 19%;
-            max-width: 19%;
-            min-width: 180px;
+            flex-basis: 19%; /* Each card is 19% of the container */
+            min-width: 0; /* Allow shrinking */
             background: white;
             border-radius: 10px;
-            padding: 10px;
+            padding: 12px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            display: flex;
-            flex-direction: column;
         }
+        /* --- End Definitive Layout Rules --- */
 
         .day-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -134,6 +131,12 @@
             font-size: 13px;
             border-radius: 4px;
             background: white;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            overflow: hidden;
         }
 
         .user-select:focus {
@@ -175,14 +178,8 @@
         }
 
         @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
         }
 
         .nav-links {
@@ -201,9 +198,19 @@
             text-decoration: underline;
         }
 
+        @media (max-width: 900px) { /* Adjust breakpoint for wrapping */
+            .schedule-grid {
+                flex-wrap: wrap;
+            }
+            .day-card {
+                flex-basis: 49%; /* 2 columns on medium screens */
+            }
+        }
 
-
-        @media (max-width: 768px) {
+        @media (max-width: 600px) {
+            .day-card {
+                flex-basis: 100%; /* 1 column on small screens */
+            }
             .header-buttons {
                 flex-direction: column;
             }
@@ -211,102 +218,6 @@
                 width: 100%;
             }
         }
-
-        @media (max-width: 480px) {
-            .schedule-grid {
-                flex-direction: column;
-                gap: 12px;
-            }
-            .day-card {
-                max-width: 100%;
-                min-width: 0;
-            }
-        }
-
-        .schedule-grid {
-    display: flex;
-    flex-wrap: nowrap; /* Keep all days on one line */
-    gap: 8px; /* Slightly smaller gap for fitting 5 cards */
-    justify-content: space-between; /* Spread them evenly */
-}
-
-.day-card {
-    flex: 1 1 19%; /* Each card roughly 20% width */
-    max-width: 19%; /* Prevent growing too wide */
-    min-width: 180px; /* Prevent collapse on small screens */
-    background: white;
-    border-radius: 10px;
-    padding: 10px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    display: flex;
-    flex-direction: column;
-}
-
-/* Reduce internal padding & font size to save space */
-.day-header {
-    padding: 6px;
-    font-size: 14px;
-}
-.day-header h3 {
-    font-size: 14px;
-}
-.day-header p {
-    font-size: 12px;
-}
-.time-slot {
-    padding: 3px 4px;
-    margin-bottom: 3px;
-}
-.time-label {
-    font-size: 12px;
-    min-width: 45px;
-}
-.user-select {
-    font-size: 12px;
-    padding: 3px;
-}
-.send-day-btn {
-    padding: 6px;
-    font-size: 13px;
-}
-
-/* 限制輸入框與選單不超出 day-card */
-.day-card input,
-.day-card select,
-.day-card textarea {
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box; /* 確保 padding 不超出寬度 */
-}
-
-/* 限制 select 不被長內容撐開 */
-.user-select {
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  overflow: hidden;
-  display: block;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-}
-
-/* 讓下拉選單展開時不破版（選項可換行） */
-.user-select option {
-  white-space: normal;
-}
-
-/* 讓 select 內文字超出顯示省略號 */
-.user-select::-ms-expand {
-  display: none; /* 隱藏 IE 下拉箭頭（避免撐開） */
-}
-
-/* 若想加 tooltip（滑鼠移上可看完整文字） */
-.user-select[title] {
-  cursor: help;
-}
     </style>
 </head>
 <body>
@@ -341,28 +252,27 @@
         let currentWeekOffset = 0;
 
         async function loadUsers() {
-        if (users.length > 0) return; // 已載入過用戶則跳過
-        try {
-            const response = await fetch('/list_users');
-            const data = await response.json();
-            users = data.allowed_users || [];
-        } catch (error) {
-            showStatus('❌ 用戶載入失敗', 'error');
-        }
+            try {
+                const response = await fetch('/list_users');
+                const data = await response.json();
+                users = data.allowed_users || [];
+            } catch (error) {
+                showStatus('❌ 用戶載入失敗', 'error');
+            }
         }
 
         async function loadSchedule() {
-        await loadUsers();
-        try {
-            const response = await fetch(`/get_week_appointments?offset=${currentWeekOffset}`);
-            const data = await response.json();
-            weekSchedule = data.week_schedule || data;
-            currentWeekOffset = data.week_offset !== undefined ? data.week_offset : currentWeekOffset;
-            updateWeekTitle();
-            renderSchedule();
-        } catch (error) {
-            showStatus('❌ 排程載入失敗', 'error');
-        }
+            await loadUsers();
+            try {
+                const response = await fetch(`/get_week_appointments?offset=${currentWeekOffset}`);
+                const data = await response.json();
+                weekSchedule = data.week_schedule || data;
+                currentWeekOffset = data.week_offset !== undefined ? data.week_offset : currentWeekOffset;
+                updateWeekTitle();
+                renderSchedule();
+            } catch (error) {
+                showStatus('❌ 排程載入失敗', 'error');
+            }
         }
 
         function updateWeekTitle() {
@@ -386,138 +296,124 @@
         }
 
         function renderSchedule() {
-        const scheduleDiv = document.getElementById('schedule');
-        scheduleDiv.innerHTML = '';
+            const scheduleDiv = document.getElementById('schedule');
+            scheduleDiv.innerHTML = '';
 
-        const days = Object.entries(weekSchedule);
-        if (days.length === 0) {
-            scheduleDiv.innerHTML = '<div style="width:100%;text-align:center;padding:40px 0;color:#667eea;font-size:20px;background:#f7fafc;border-radius:10px;">本週無預約</div>';
-            return;
-        }
+            const days = Object.entries(weekSchedule);
+            if (days.length === 0) {
+                scheduleDiv.innerHTML = '<div style="width:100%;text-align:center;padding:40px 0;color:#667eea;font-size:20px;background:#f7fafc;border-radius:10px;">本週無預約資料</div>';
+                return;
+            }
 
-        for (const [weekday, dayData] of days) {
-            const dayCard = document.createElement('div');
-            dayCard.className = 'day-card';
+            for (const [weekday, dayData] of days) {
+                const dayCard = document.createElement('div');
+                dayCard.className = 'day-card';
 
-            const dateInfo = dayData.date_info;
-            const appointments = dayData.appointments;
+                const dateInfo = dayData.date_info;
+                const appointments = dayData.appointments;
 
-            dayCard.innerHTML = `
-                <div class="day-header">
-                    <h3>${dateInfo.day_name}</h3>
-                    <p>${dateInfo.display}</p>
-                </div>
-                <div class="time-slots">
-                    ${Object.entries(appointments).map(([time, apt]) => `
-                        <div class="time-slot">
-                            <span class="time-label">${time}</span>
-                            <select class="user-select" 
-                                    data-date="${dateInfo.date}" 
-                                    data-time="${time}"
-                                    onchange="saveAppointment(this)">
-                                <option value="">-- 未預約 --</option>
-                                ${users.map(user => `
-                                    <option value="${user.user_id}" 
-                                            ${apt.user_id === user.user_id ? 'selected' : ''}
-                                            title="${user.name}">
-                                        ${user.zhuyin ? user.zhuyin + ' ' : ''}${user.name}
-                                    </option>
-                                `).join('')}
-                            </select>
-                        </div>
-                    `).join('')}
-                </div>
-                <button class="send-day-btn" onclick="sendDayReminders('${dateInfo.date}', '${dateInfo.day_name}')">
-                    📤 發送 ${dateInfo.day_name} 提醒
-                </button>
-            `;
+                dayCard.innerHTML = `
+                    <div class="day-header">
+                        <h3>${dateInfo.day_name}</h3>
+                        <p>${dateInfo.display}</p>
+                    </div>
+                    <div class="time-slots">
+                        ${Object.entries(appointments).map(([time, apt]) => `
+                            <div class="time-slot">
+                                <span class="time-label">${time}</span>
+                                <select class="user-select" 
+                                        data-date="${dateInfo.date}" 
+                                        data-time="${time}"
+                                        onchange="saveAppointment(this)">
+                                    <option value="">-- 未預約 --</option>
+                                    ${users.map(user => `
+                                        <option value="${user.user_id}" 
+                                                ${apt.user_id === user.user_id ? 'selected' : ''}
+                                                title="${user.name}">
+                                            ${user.zhuyin ? user.zhuyin + ' ' : ''}${user.name}
+                                        </option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button class="send-day-btn" onclick="sendDayReminders('${dateInfo.date}', '${dateInfo.day_name}')">
+                        📤 發送 ${dateInfo.day_name} 提醒
+                    </button>
+                `;
 
-            scheduleDiv.appendChild(dayCard);
-        }
+                scheduleDiv.appendChild(dayCard);
+            }
         }
 
         async function saveAppointment(selectElement) {
-        const date = selectElement.dataset.date;
-        const time = selectElement.dataset.time;
-        const userId = selectElement.value;
-        const userName = selectElement.options[selectElement.selectedIndex].text;
-        try {
-            const response = await fetch('/save_appointment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    date: date,
-                    time: time,
-                    user_id: userId,
-                    user_name: userId ? userName : ''
-                })
-            });
-            if (response.ok) {
-                showStatus('✅ 預約已儲存');
-            } else {
+            const date = selectElement.dataset.date;
+            const time = selectElement.dataset.time;
+            const userId = selectElement.value;
+            const selectedOption = selectElement.options[selectElement.selectedIndex];
+            const userName = selectedOption.title; // Use title to get full name
+
+            try {
+                const response = await fetch('/save_appointment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        date: date,
+                        time: time,
+                        user_id: userId,
+                        user_name: userId ? userName : ''
+                    })
+                });
+                if (response.ok) {
+                    showStatus('✅ 預約已儲存');
+                } else {
+                    showStatus('❌ 儲存失敗', 'error');
+                }
+            } catch (error) {
                 showStatus('❌ 儲存失敗', 'error');
             }
-        } catch (error) {
-            showStatus('❌ 儲存失敗', 'error');
-        }
         }
 
         async function sendWeekReminders() {
-        if (!confirm('確定要發送整週的預約提醒嗎？')) return;
-        const btn = document.querySelector('.btn-success');
-        if (btn) {
+            if (!confirm('確定要發送整週的預約提醒嗎？')) return;
+            const btn = event.target;
             btn.disabled = true;
             btn.textContent = '發送中...';
-        }
-        try {
-            const response = await fetch('/send_appointment_reminders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'week' })
-            });
-            if (!response.ok) {
+            try {
+                const response = await fetch('/send_appointment_reminders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'week' })
+                });
+                const result = await response.json();
+                showStatus(`✅ 已發送 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
+            } catch (error) {
                 showStatus('❌ 發送失敗', 'error');
-                return;
-            }
-            const result = await response.json();
-            showStatus(`✅ 已發送 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
-        } catch (error) {
-            showStatus('❌ 發送失敗', 'error');
-        } finally {
-            if (btn) {
+            } finally {
                 btn.disabled = false;
                 btn.textContent = '📨 發送整週提醒';
             }
         }
-        }
 
         async function sendDayReminders(date, dayName) {
-        if (!confirm(`確定要發送 ${dayName} 的預約提醒嗎？`)) return;
-        const btn = document.querySelector(`button.send-day-btn[onclick*="${date}"]`);
-        if (btn) {
+            if (!confirm(`確定要發送 ${dayName} 的預約提醒嗎？`)) return;
+            const btn = event.target;
             btn.disabled = true;
             btn.textContent = '發送中...';
-        }
-        try {
-            const response = await fetch('/send_appointment_reminders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'day', date: date })
-            });
-            if (!response.ok) {
+            try {
+                const response = await fetch('/send_appointment_reminders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'day', date: date })
+                });
+                const result = await response.json();
+                showStatus(`✅ 已發送 ${dayName} 的 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
+            } catch (error) {
                 showStatus('❌ 發送失敗', 'error');
-                return;
-            }
-            const result = await response.json();
-            showStatus(`✅ 已發送 ${dayName} 的 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
-        } catch (error) {
-            showStatus('❌ 發送失敗', 'error');
-        } finally {
-            if (btn) {
+            } finally {
                 btn.disabled = false;
                 btn.textContent = `📤 發送 ${dayName} 提醒`;
             }
-        }
         }
 
         function showStatus(message, type = 'success') {
