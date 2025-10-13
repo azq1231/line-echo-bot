@@ -87,10 +87,14 @@
     .info-container {
         display: flex;
         align-items: center;
-        gap: 5px;
-        margin-top: 4px;
+        gap: 8px;
+        margin-top: 6px;
         color: #777;
         font-size: 14px;
+    }
+    .info-label {
+        font-weight: 500;
+        min-width: 40px;
     }
     .empty-state {
         text-align: center;
@@ -198,21 +202,20 @@
                     const userId = user.user_id;
                     const userName = user.name || '未知';
                     const zhuyin = user.zhuyin || '';
-                    const phone = user.phone || '';
+                    const phone1 = user.phone || '';
+                    const phone2 = user.phone2 || '';
 
-                    let zhuyinDisplay = '';
-                    if (zhuyin) {
-                        zhuyinDisplay = `<span class="editable-name" data-userid="${userId}" data-current-zhuyin="${zhuyin}" title="點擊編輯注音">${zhuyin}</span>`;
-                    } else {
-                        zhuyinDisplay = `<button class="action-btn btn-secondary" data-userid="${userId}">產生注音</button>`;
-                    }
+                    const zhuyinDisplay = zhuyin 
+                        ? `<span class="editable-name" data-userid="${userId}" data-current-zhuyin="${zhuyin}" title="點擊編輯注音">${zhuyin}</span>`
+                        : `<button class="action-btn btn-secondary" data-userid="${userId}" data-action="generate-zhuyin">產生注音</button>`;
 
-                    let phoneDisplay = '';
-                    if (phone) {
-                        phoneDisplay = `<span class="editable-name" data-userid="${userId}" data-current-phone="${phone}" title="點擊編輯電話">📞 ${phone}</span>`;
-                    } else {
-                        phoneDisplay = `<button class="action-btn btn-secondary" data-userid="${userId}" data-current-phone="">新增電話</button>`;
-                    }
+                    const phone1Display = phone1
+                        ? `<span class="editable-name" data-userid="${userId}" data-field="phone" data-current-phone="${phone1}" title="點擊編輯市話">${phone1}</span>`
+                        : `<button class="action-btn btn-secondary" data-userid="${userId}" data-field="phone" data-current-phone="">新增</button>`;
+
+                    const phone2Display = phone2
+                        ? `<span class="editable-name" data-userid="${userId}" data-field="phone2" data-current-phone="${phone2}" title="點擊編輯手機">${phone2}</span>`
+                        : `<button class="action-btn btn-secondary" data-userid="${userId}" data-field="phone2" data-current-phone="">新增</button>`;
 
                     return `
                     <li class="user-item">
@@ -223,10 +226,13 @@
                                 </span>
                             </div>
                             <div class="info-container">
-                                ${zhuyinDisplay}
+                                <span class="info-label">注音:</span> ${zhuyinDisplay}
                             </div>
                             <div class="info-container">
-                                ${phoneDisplay}
+                                <span class="info-label">市話:</span> ${phone1Display}
+                            </div>
+                            <div class="info-container">
+                                <span class="info-label">手機:</span> ${phone2Display}
                             </div>
                             <span class="user-id">${userId}</span>
                         </div>
@@ -258,7 +264,7 @@
 
     async function editUserName(userId, currentName) {
         const newName = prompt('修改用戶姓名：', currentName);
-        if (!newName || newName.trim() === '' || newName === currentName) return;
+        if (newName === null || newName.trim() === '' || newName === currentName) return;
         
         try {
             const response = await fetch('/update_user_name', {
@@ -292,15 +298,19 @@
         } catch (error) { showMessage('更新失敗', 'error'); }
     }
 
-    async function editUserPhone(userId, currentPhone) {
-        const newPhone = prompt('請輸入電話號碼：', currentPhone);
+    async function editUserPhone(userId, field, currentPhone) {
+        const newPhone = prompt(`請輸入新的${field === 'phone' ? '市話' : '手機'}號碼：`, currentPhone);
         if (newPhone === null || newPhone.trim() === currentPhone) return;
 
         try {
             const response = await fetch('/update_user_phone', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId, phone: newPhone.trim() })
+                body: JSON.stringify({ 
+                    user_id: userId, 
+                    field: field,
+                    phone: newPhone.trim() 
+                })
             });
             const data = await response.json();
             if (data.status === 'success') {
@@ -328,21 +338,18 @@
         
         document.getElementById('userList').addEventListener('click', (e) => {
             const target = e.target;
-            if (target.dataset.userid) {
-                const userId = target.dataset.userid;
-                if (target.dataset.username) {
-                    editUserName(userId, target.dataset.username);
-                } else if (target.dataset.currentZhuyin !== undefined) {
-                    editZhuyin(userId, target.dataset.currentZhuyin);
-                } else if (target.dataset.currentPhone !== undefined) {
-                    editUserPhone(userId, target.dataset.currentPhone);
-                } else if (target.tagName === 'BUTTON') { // For "產生注音" or "新增電話"
-                    if (target.textContent === '產生注音') {
-                        generateZhuyin(userId);
-                    } else if (target.textContent === '新增電話') {
-                        editUserPhone(userId, '');
-                    }
-                }
+            if (!target.dataset.userid) return;
+
+            const userId = target.dataset.userid;
+
+            if (target.dataset.username) {
+                editUserName(userId, target.dataset.username);
+            } else if (target.dataset.currentZhuyin !== undefined) {
+                editZhuyin(userId, target.dataset.currentZhuyin);
+            } else if (target.dataset.field) { // Handles both phone and phone2
+                editUserPhone(userId, target.dataset.field, target.dataset.currentPhone);
+            } else if (target.dataset.action === 'generate-zhuyin') {
+                generateZhuyin(userId);
             }
         });
     };

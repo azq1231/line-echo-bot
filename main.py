@@ -278,11 +278,12 @@ def update_user_phone_route():
     data = request.get_json()
     user_id = data.get("user_id")
     phone = data.get("phone")
+    field = data.get("field", 'phone')
 
-    if not user_id or not phone:
+    if not user_id or phone is None:
         return jsonify({"status": "error", "message": "缺少使用者 ID 或電話號碼"}), 400
 
-    if db.update_user_phone(user_id, phone):
+    if db.update_user_phone_field(user_id, field, phone):
         return jsonify({"status": "success", "message": "電話號碼已更新"})
     else:
         return jsonify({"status": "error", "message": "更新失敗"}), 500

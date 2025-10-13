@@ -34,19 +34,23 @@ def init_database():
         CREATE TABLE IF NOT EXISTS users (
             user_id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
-            phone TEXT,
-            zhuyin TEXT, -- 新增注音字段
+            phone TEXT, -- 市話
+            phone2 TEXT, -- 手機
+            zhuyin TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
-    # 检查 users 表是否已存在 zhuyin 字段，如果不存在则添加
+    # 检查并添加新字段
     cursor.execute("PRAGMA table_info(users)")
     columns = [info['name'] for info in cursor.fetchall()]
     if 'zhuyin' not in columns:
         cursor.execute("ALTER TABLE users ADD COLUMN zhuyin TEXT")
         print("成功为 users 表添加 zhuyin 字段")
+    if 'phone2' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN phone2 TEXT")
+        print("成功为 users 表添加 phone2 字段")
 
     # 预约表（支持多时段预约）
     cursor.execute('''
@@ -203,11 +207,13 @@ def delete_user(user_id: str) -> bool:
     finally:
         conn.close()
 
-def get_user_by_phone(phone: str) -> Optional[Dict]:
-    """根据电话号码获取用户信息"""
+def get_user_by_any_phone(phone: str) -> Optional[Dict]:
+    """根据电话号码在 phone 或 phone2 栏位中获取用户信息"""
+    if not phone:
+        return None
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM users WHERE phone = ?', (phone,))
+    cursor.execute('SELECT * FROM users WHERE phone = ? OR phone2 = ?', (phone, phone))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -215,15 +221,13 @@ def get_user_by_phone(phone: str) -> Optional[Dict]:
 def get_or_create_user_by_phone(phone: str) -> Dict:
     """
     根据电话号码获取或创建用户。
-    如果用户不存在，则使用电话号码作为 user_id 和 name 创建新用户。
+    优先在 phone 和 phone2 栏位中查找。如果用户不存在，则创建新用户并将电话存入 phone 栏位。
     """
-    user = get_user_by_phone(phone)
+    user = get_user_by_any_phone(phone)
     if user:
         return user
     
-    # 如果用户不存在，则创建一个新用户
-    # 在这个场景下，我们使用电话号码作为 user_id 和 name
-    user_id = f"web_{phone}" # 添加前缀以区分 LINE 用户
+    user_id = f"web_{phone}"
     name = phone
     
     conn = get_db()
@@ -237,14 +241,11 @@ def get_or_create_user_by_phone(phone: str) -> Dict:
         conn.commit()
         print(f"创建了新用户: {name} ({user_id})")
         
-        # 重新获取刚创建的用户信息
         cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
         new_user = cursor.fetchone()
         return dict(new_user)
-
     except Exception as e:
         print(f"创建用户时出错: {e}")
-        # 如果发生错误，返回一个包含基本信息的字典
         return {'user_id': user_id, 'name': name, 'phone': phone}
     finally:
         conn.close()
@@ -254,41 +255,44 @@ def _merge_user_data(conn, from_user_id: str, to_user_id: str, to_user_name: str
     cursor = conn.cursor()
     print(f"开始合并用户数据：从 {from_user_id} 到 {to_user_id}")
     
-    # 1. 将源用户的所有预约记录重新归属到目标用户，并更新用户名
     cursor.execute('''
         UPDATE appointments SET user_id = ?, user_name = ? WHERE user_id = ?
     ''', (to_user_id, to_user_name, from_user_id))
     print(f"更新了 {cursor.rowcount} 条预约记录的归属。")
 
-    # 2. 删除源用户
     cursor.execute('DELETE FROM users WHERE user_id = ?', (from_user_id,))
     print(f"删除了源用户 {from_user_id}。")
 
-def update_user_phone(user_id: str, phone: str) -> bool:
-    """更新用户的电话号码，并处理潜在的用户合并。"""
+def update_user_phone_field(user_id: str, field: str, phone: str) -> bool:
+    """
+    更新用户的指定电话栏位（phone 或 phone2），并处理潜在的用户合并。
+    如果 phone 为空字符串，则清空该栏位。
+    """
+    if field not in ['phone', 'phone2']:
+        print(f"错误的栏位名称: {field}")
+        return False
+
     conn = get_db()
     cursor = conn.cursor()
     try:
-        # 检查这个电话号码是否已被另一个“访客”用户（ID 以 'web_' 开头）占用
-        cursor.execute("SELECT * FROM users WHERE phone = ? AND user_id != ?", (phone, user_id))
-        existing_user_with_phone = cursor.fetchone()
+        phone_to_save = phone.strip() if phone else None
 
-        # 如果存在，并且是一个访客用户，则合并
-        if existing_user_with_phone and existing_user_with_phone['user_id'].startswith('web_'):
-            # 获取目标用户的真实姓名
-            cursor.execute("SELECT name FROM users WHERE user_id = ?", (user_id,))
-            target_user = cursor.fetchone()
-            if target_user:
-                target_user_name = target_user['name']
-            else:
-                target_user_name = '未知'
-            
-            _merge_user_data(conn, from_user_id=existing_user_with_phone['user_id'], to_user_id=user_id, to_user_name=target_user_name)
+        if phone_to_save:
+            # 检查这个电话号码是否已被另一个“访客”用户占用
+            query = "SELECT * FROM users WHERE (phone = ? OR phone2 = ?) AND user_id != ?"
+            cursor.execute(query, (phone_to_save, phone_to_save, user_id))
+            existing_user = cursor.fetchone()
 
-        # 更新目标用户的电话号码
-        cursor.execute('''
-            UPDATE users SET phone = ? WHERE user_id = ?
-        ''', (phone, user_id))
+            if existing_user and existing_user['user_id'].startswith('web_'):
+                cursor.execute("SELECT name FROM users WHERE user_id = ?", (user_id,))
+                target_user = cursor.fetchone()
+                target_user_name = target_user['name'] if target_user else '未知'
+                
+                _merge_user_data(conn, from_user_id=existing_user['user_id'], to_user_id=user_id, to_user_name=target_user_name)
+
+        # 使用白名单确保栏位名称安全，然后更新目标用户的电话号码
+        update_query = f"UPDATE users SET {field} = ? WHERE user_id = ?"
+        cursor.execute(update_query, (phone_to_save, user_id))
         
         conn.commit()
         return True
