@@ -203,6 +203,52 @@ def delete_user(user_id: str) -> bool:
     finally:
         conn.close()
 
+def get_user_by_phone(phone: str) -> Optional[Dict]:
+    """根据电话号码获取用户信息"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE phone = ?', (phone,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_or_create_user_by_phone(phone: str) -> Dict:
+    """
+    根据电话号码获取或创建用户。
+    如果用户不存在，则使用电话号码作为 user_id 和 name 创建新用户。
+    """
+    user = get_user_by_phone(phone)
+    if user:
+        return user
+    
+    # 如果用户不存在，则创建一个新用户
+    # 在这个场景下，我们使用电话号码作为 user_id 和 name
+    user_id = f"web_{phone}" # 添加前缀以区分 LINE 用户
+    name = phone
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        zhuyin = _name_to_zhuyin(name)
+        cursor.execute('''
+            INSERT INTO users (user_id, name, phone, zhuyin)
+            VALUES (?, ?, ?, ?)
+        ''', (user_id, name, phone, zhuyin))
+        conn.commit()
+        print(f"创建了新用户: {name} ({user_id})")
+        
+        # 重新获取刚创建的用户信息
+        cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+        new_user = cursor.fetchone()
+        return dict(new_user)
+
+    except Exception as e:
+        print(f"创建用户时出错: {e}")
+        # 如果发生错误，返回一个包含基本信息的字典
+        return {'user_id': user_id, 'name': name, 'phone': phone}
+    finally:
+        conn.close()
+
 def update_user_name(user_id: str, new_name: str) -> bool:
     """更新用户姓名，并重新生成注音"""
     conn = get_db()

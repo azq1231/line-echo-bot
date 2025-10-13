@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}線上預約{% endblock %}
+{% block header %}線上預約系統{% endblock %}
+{% block content %}
+<style>
+    .slot-button {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+</style>
+
+<div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- Phone Number Input Form -->
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-md-8">
+            <form method="GET" action="/booking/" class="card p-4 shadow-sm mb-5">
+                <div class="mb-3">
+                    <label for="phone" class="form-label fs-5">請輸入您的電話號碼：</label>
+                    <input type="tel" class="form-control" id="phone" name="phone" placeholder="例如：0912345678" value="{{ phone or '' }}" required>
+                </div>
+                <button type="submit" class="btn btn-primary">查詢可預約時間</button>
+            </form>
+        </div>
+    </div>
+
+        <!-- Schedule Display -->
+        {% if schedule %}
+        <div class="schedule-container">
+            <h2 class="text-center mb-4">本週可預約時段 ({{ phone }})</h2>
+            <div class="row">
+                {% for day in schedule %}
+                <div class="col-md-4 col-lg mb-3">
+                    <div class="card h-100">
+                        <div class="card-header text-center">
+                            <strong>{{ day.day_name }}</strong><br>
+                            <small class="text-muted">{{ day.display }}</small>
+                        </div>
+                        <div class="card-body">
+                            {% if day.slots %}
+                                {% for slot in day.slots %}
+                                    {% if slot.available %}
+                                        <form method="POST" action="/booking/" class="d-grid">
+                                            <input type="hidden" name="phone" value="{{ phone }}">
+                                            <input type="hidden" name="date" value="{{ day.date }}">
+                                            <input type="hidden" name="time" value="{{ slot.time }}">
+                                            <button type="submit" class="btn btn-outline-success slot-button">{{ slot.time }}</button>
+                                        </form>
+                                    {% else %}
+                                        <button type="button" class="btn btn-secondary slot-button" disabled>{{ slot.time }}</button>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-center text-muted">本日無可預約時段</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% elif phone %}
+            <div class="text-center">
+                <p class="fs-5">正在為您查詢時段...</p>
+            </div>
+        {% else %}
+            <div class="text-center">
+                 <p class="text-muted">請先輸入電話號碼以查詢可預約時段。</p>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

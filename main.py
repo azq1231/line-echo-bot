@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, flash, redirect, url_for
 import os
 import requests
 from datetime import datetime, timedelta
@@ -15,6 +15,7 @@ import line_flex_messages as flex
 import gemini_ai
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24) # for flash messages
 
 LINE_CHANNEL_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
@@ -171,6 +172,59 @@ def closed_days_page():
 @app.route("/test")
 def test_page():
     return render_template("test.html")
+
+# ============ Web Booking Site ============ 
+
+@app.route("/booking/", methods=["GET", "POST"])
+def booking_page():
+    if request.method == "POST":
+        phone = request.form.get('phone')
+        date = request.form.get('date')
+        time = request.form.get('time')
+
+        if not all([phone, date, time]):
+            flash("預約資料不完整，請重試。", "danger")
+            return redirect(url_for('booking_page'))
+
+        user = db.get_or_create_user_by_phone(phone)
+        
+        success = db.add_appointment(
+            user_id=user['user_id'],
+            user_name=user['name'],
+            date=date,
+            time=time
+        )
+
+        if success:
+            flash(f"恭喜！您已成功預約 {date} {time} 的時段。", "success")
+        else:
+            flash(f"抱歉，{date} {time} 的時段已被預約，請選擇其他時段。", "danger")
+        
+        return redirect(url_for('booking_page', phone=phone))
+
+    phone = request.args.get('phone', '')
+    schedule_data = None
+
+    if phone:
+        week_dates = get_week_dates(week_offset=0)
+        schedule_data = []
+        for day in week_dates:
+            available_slots = get_available_slots(day['date'], day['weekday'])
+            all_slots = generate_time_slots(day['weekday'])
+            day_schedule = {
+                'date': day['date'],
+                'display': day['display'],
+                'day_name': day['day_name'],
+                'slots': []
+            }
+            for slot in all_slots:
+                day_schedule['slots'].append({
+                    'time': slot,
+                    'available': slot in available_slots
+                })
+            schedule_data.append(day_schedule)
+
+    return render_template("booking.html", phone=phone, schedule=schedule_data)
 
 # ============ 用户管理 API ============ 
 
@@ -644,6 +698,6 @@ print("Scheduler started. Checking for messages to send every 30 seconds.")
 
 if __name__ == "__main__":
     try:
-        app.run(host="0.0.0.0", port=5000)
+        app.run(host="0.0.0.0", port=5000, debug=True)
     except (KeyboardInterrupt, SystemExit):
         scheduler.shutdown()
