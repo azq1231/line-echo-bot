@@ -273,6 +273,20 @@ def update_user_zhuyin_route():
     else:
         return jsonify({"status": "error", "message": "更新失败"}), 500
 
+@app.route("/update_user_phone", methods=["POST"])
+def update_user_phone_route():
+    data = request.get_json()
+    user_id = data.get("user_id")
+    phone = data.get("phone")
+
+    if not user_id or not phone:
+        return jsonify({"status": "error", "message": "缺少使用者 ID 或電話號碼"}), 400
+
+    if db.update_user_phone(user_id, phone):
+        return jsonify({"status": "success", "message": "電話號碼已更新"})
+    else:
+        return jsonify({"status": "error", "message": "更新失敗"}), 500
+
 @app.route("/generate_zhuyin/<user_id>", methods=["POST"])
 def generate_zhuyin_route(user_id):
     new_zhuyin = db.generate_and_save_zhuyin(user_id)

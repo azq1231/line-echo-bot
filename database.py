@@ -249,6 +249,48 @@ def get_or_create_user_by_phone(phone: str) -> Dict:
     finally:
         conn.close()
 
+def _merge_user_data(conn, from_user_id: str, to_user_id: str):
+    """私有函数：合并两个用户的预约数据，然后删除源用户。"""
+    cursor = conn.cursor()
+    print(f"开始合并用户数据：从 {from_user_id} 到 {to_user_id}")
+    
+    # 1. 将源用户的所有预约记录重新归属到目标用户
+    cursor.execute('''
+        UPDATE appointments SET user_id = ? WHERE user_id = ?
+    ''', (to_user_id, from_user_id))
+    print(f"更新了 {cursor.rowcount} 条预约记录的归属。")
+
+    # 2. 删除源用户
+    cursor.execute('DELETE FROM users WHERE user_id = ?', (from_user_id,))
+    print(f"删除了源用户 {from_user_id}。")
+
+def update_user_phone(user_id: str, phone: str) -> bool:
+    """更新用户的电话号码，并处理潜在的用户合并。"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        # 检查这个电话号码是否已被另一个“访客”用户（ID 以 'web_' 开头）占用
+        cursor.execute("SELECT * FROM users WHERE phone = ? AND user_id != ?", (phone, user_id))
+        existing_user = cursor.fetchone()
+
+        # 如果存在，并且是一个访客用户，则合并
+        if existing_user and existing_user['user_id'].startswith('web_'):
+            _merge_user_data(conn, from_user_id=existing_user['user_id'], to_user_id=user_id)
+
+        # 更新目标用户的电话号码
+        cursor.execute('''
+            UPDATE users SET phone = ? WHERE user_id = ?
+        ''', (phone, user_id))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"更新电话号码时出错: {e}")
+        return False
+    finally:
+        conn.close()
+
 def update_user_name(user_id: str, new_name: str) -> bool:
     """更新用户姓名，并重新生成注音"""
     conn = get_db()

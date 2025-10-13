@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 {% block title %}LINE Bot 用戶管理{% endblock %}
 {% block header %}LINE Bot 用戶管理{% endblock %}
@@ -85,7 +84,7 @@
     .editable-name:hover {
         background: #e0e0e0;
     }
-    .zhuyin-container {
+    .info-container {
         display: flex;
         align-items: center;
         gap: 5px;
@@ -135,9 +134,6 @@
         margin-top: 10px;
     }
     @media (max-width: 768px) {
-        .header { padding: 20px 15px; }
-        .header h1 { font-size: 22px; }
-        .header p { font-size: 14px; }
         .content { padding: 20px 15px; }
         .section h2 { font-size: 18px; }
         .input-group { flex-direction: column; }
@@ -153,7 +149,8 @@
     <div class="info-box">
         <p><strong>💡 提示：</strong></p>
         <p>• 用戶加好友或發訊息時會自動加入清單。</p>
-        <p>• 點擊用戶姓名或注音可以手動修改。✏️</p>
+        <p>• 點擊用戶姓名、注音或電話可以手動修改。✏️</p>
+        <p>• 將電話號碼指定給 LINE 用戶，系統會自動合併帳號與預約紀錄。</p>
         <p><strong>Webhook URL：</strong></p>
         <div class="webhook-url" id="webhookUrl">載入中...</div>
     </div>
@@ -201,12 +198,20 @@
                     const userId = user.user_id;
                     const userName = user.name || '未知';
                     const zhuyin = user.zhuyin || '';
+                    const phone = user.phone || '';
 
                     let zhuyinDisplay = '';
                     if (zhuyin) {
-                        zhuyinDisplay = `<span class="editable-name" data-userid="${userId}" data-current-zhuyin="${zhuyin}">${zhuyin}</span>`;
+                        zhuyinDisplay = `<span class="editable-name" data-userid="${userId}" data-current-zhuyin="${zhuyin}" title="點擊編輯注音">${zhuyin}</span>`;
                     } else {
                         zhuyinDisplay = `<button class="action-btn btn-secondary" data-userid="${userId}">產生注音</button>`;
+                    }
+
+                    let phoneDisplay = '';
+                    if (phone) {
+                        phoneDisplay = `<span class="editable-name" data-userid="${userId}" data-current-phone="${phone}" title="點擊編輯電話">📞 ${phone}</span>`;
+                    } else {
+                        phoneDisplay = `<button class="action-btn btn-secondary" data-userid="${userId}" data-current-phone="">新增電話</button>`;
                     }
 
                     return `
@@ -217,8 +222,11 @@
                                     ${userName}
                                 </span>
                             </div>
-                            <div class="zhuyin-container">
+                            <div class="info-container">
                                 ${zhuyinDisplay}
+                            </div>
+                            <div class="info-container">
+                                ${phoneDisplay}
                             </div>
                             <span class="user-id">${userId}</span>
                         </div>
@@ -284,6 +292,24 @@
         } catch (error) { showMessage('更新失敗', 'error'); }
     }
 
+    async function editUserPhone(userId, currentPhone) {
+        const newPhone = prompt('請輸入電話號碼：', currentPhone);
+        if (newPhone === null || newPhone.trim() === currentPhone) return;
+
+        try {
+            const response = await fetch('/update_user_phone', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, phone: newPhone.trim() })
+            });
+            const data = await response.json();
+            if (data.status === 'success') {
+                showMessage('✅ 電話號碼已更新，用戶資料已合併。', 'success');
+                loadUsers();
+            } else { showMessage('更新失敗', 'error'); }
+        } catch (error) { showMessage('更新失敗', 'error'); }
+    }
+
     async function generateZhuyin(userId) {
         try {
             const response = await fetch(`/generate_zhuyin/${userId}`, { method: 'POST' });
@@ -304,12 +330,18 @@
             const target = e.target;
             if (target.dataset.userid) {
                 const userId = target.dataset.userid;
-                if (target.dataset.username) { // Clicked on user name
+                if (target.dataset.username) {
                     editUserName(userId, target.dataset.username);
-                } else if (target.dataset.currentZhuyin !== undefined) { // Clicked on zhuyin
+                } else if (target.dataset.currentZhuyin !== undefined) {
                     editZhuyin(userId, target.dataset.currentZhuyin);
-                } else if (target.tagName === 'BUTTON') { // Clicked on generate button
-                    generateZhuyin(userId);
+                } else if (target.dataset.currentPhone !== undefined) {
+                    editUserPhone(userId, target.dataset.currentPhone);
+                } else if (target.tagName === 'BUTTON') { // For "產生注音" or "新增電話"
+                    if (target.textContent === '產生注音') {
+                        generateZhuyin(userId);
+                    } else if (target.textContent === '新增電話') {
+                        editUserPhone(userId, '');
+                    }
                 }
             }
         });
