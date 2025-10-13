@@ -182,7 +182,7 @@ def booking_page():
         date = request.form.get('date')
         time = request.form.get('time')
 
-        if not all([phone, date, time]):
+        if phone is None or date is None or time is None:
             flash("預約資料不完整，請重試。", "danger")
             return redirect(url_for('booking_page'))
 
@@ -471,12 +471,9 @@ def webhook():
             
             print(f"收到訊息 - 用戶ID: {user_id}, 訊息: {user_message}")
             
-            users = db.get_all_users()
-            user_ids = [u['user_id'] for u in users]
-            
-            if user_id not in user_ids:
-                user_name = get_line_profile(user_id)
-                db.add_user(user_id, user_name)
+            # 每次收到訊息都嘗試更新用戶資料，db.add_user 會處理衝突
+            user_name = get_line_profile(user_id)
+            db.add_user(user_id, user_name)
             
             if user_message in ['預約', '预约', '訂位', '订位']:
                 handle_booking_start(user_id)
