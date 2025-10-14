@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, flash, redirect, url_for
+from flask import Flask, request, jsonify, render_template, flash, redirect, url_for, Response
 import os
 import requests
 from datetime import datetime, timedelta
@@ -223,7 +223,9 @@ def get_week_schedule_for_booking(week_offset=0):
 
 @app.route("/")
 def home():
-    return render_template("admin.html")
+    # 從資料庫讀取刪除功能的開關狀態，預設為關閉 (False)
+    allow_deletion = db.get_config('allow_user_deletion') == 'true'
+    return render_template("admin.html", allow_user_deletion=allow_deletion)
 
 @app.route("/schedule")
 def schedule():
@@ -350,6 +352,39 @@ def delete_user(user_id):
         return jsonify({"status": "success", "message": f"已刪除使用者：{user_id}"})
     else:
         return jsonify({"status": "error", "message": "使用者不存在"})
+
+@app.route("/refresh_user_profile/<user_id>", methods=["POST"])
+def refresh_user_profile(user_id):
+    """手動從 LINE 更新用戶的個人資料（特別是頭像）"""
+    user_info = get_line_profile(user_id)
+    if user_info and user_info['name'] != '未知':
+        # add_user 包含智能更新邏輯：如果名稱被手動修改過，則只更新頭像
+        db.add_user(user_id, user_info['name'], user_info['picture_url'])
+        return jsonify({"status": "success", "message": "用戶資料已從 LINE 更新。"})
+    else:
+        return jsonify({"status": "error", "message": "從 LINE 獲取資料失敗。"}), 404
+
+@app.route('/user_avatar/<user_id>')
+def user_avatar(user_id):
+    """作為用戶頭像的代理，以實現瀏覽器快取"""
+    user = db.get_user_by_id(user_id)
+    
+    # 如果找不到用戶或用戶沒有頭像URL，重定向到一個預設圖片
+    if not user or not user.get('picture_url'):
+        return redirect('https://via.placeholder.com/40')
+
+    try:
+        # 從 LINE 的伺服器下載圖片
+        picture_response = requests.get(user['picture_url'], timeout=5)
+        picture_response.raise_for_status() # 如果請求失敗則拋出異常
+
+        # 建立一個 Flask Response 物件，並設定快取時間為 1 小時
+        response = Response(picture_response.content, mimetype=picture_response.headers['Content-Type'])
+        response.headers['Cache-Control'] = 'public, max-age=3600'
+        return response
+    except requests.RequestException as e:
+        print(f"下載頭像失敗 for user {user_id}: {e}")
+        return redirect('https://via.placeholder.com/40')
 
 @app.route("/update_user_name", methods=["POST"])
 def update_user_name():
@@ -583,22 +618,24 @@ def webhook():
             user_info = get_line_profile(user_id)
             db.add_user(user_id, user_info['name'], user_info['picture_url'])
         
-        elif event["type"] == "message" and event["message"]["type"] == "text":
+        elif event["type"] == "message":
             user_id = event["source"]["userId"]
-            user_message = event["message"]["text"].strip()
-            
-            print(f"收到訊息 - 用戶ID: {user_id}, 訊息: {user_message}")
+            message_type = event["message"]["type"]
+            print(f"收到訊息 - 用戶ID: {user_id}, 類型: {message_type}")
             
             # 每次收到訊息都嘗試更新用戶資料，db.add_user 會處理衝突
             user_info = get_line_profile(user_id)
             db.add_user(user_id, user_info['name'], user_info['picture_url'])
             
-            if user_message in ['預約', '预约', '訂位', '订位']:
-                handle_booking_start(user_id)
-            elif user_message in ['查詢', '查询', '我的預約', '我的预约']:
-                handle_query_appointments(user_id)
-            elif user_message in ['取消', '取消預約', '取消预约']:
-                handle_cancel_booking(user_id)
+            # 如果是文字訊息，才進一步處理內容
+            if message_type == "text":
+                user_message = event["message"]["text"].strip()
+                if user_message in ['預約', '预约', '訂位', '订位']:
+                    handle_booking_start(user_id)
+                elif user_message in ['查詢', '查询', '我的預約', '我的预约']:
+                    handle_query_appointments(user_id)
+                elif user_message in ['取消', '取消預約', '取消预约']:
+                    handle_cancel_booking(user_id)
         
         elif event["type"] == "postback":
             user_id = event["source"]["userId"]

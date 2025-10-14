@@ -41,6 +41,11 @@
         display: inline-block;
         text-decoration: none;
     }
+    .action-btn-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
     button:hover, .action-btn:hover {
         background: #5568d3;
     }
@@ -91,6 +96,19 @@
         font-size: 12px;
         word-break: break-all;
     }
+    .form-check-input:checked {
+        background-color: #e53e3e;
+        border-color: #e53e3e;
+    }
+    .form-switch .form-check-input {
+        width: 3em;
+        height: 1.5em;
+    }
+    .form-check-label {
+        font-weight: 500;
+        color: #c53030;
+    }
+
     .editable-name {
         display: inline-block;
         cursor: pointer;
@@ -133,6 +151,11 @@
         background: #f8d7da;
         color: #721c24;
         border: 1px solid #f5c6cb;
+    }
+    .message.info {
+        background: #e7f3ff;
+        color: #1976D2;
+        border: 1px solid #b3e5fc;
     }
     .info-box {
         background: #e7f3ff;
@@ -179,6 +202,16 @@
     <div id="message" class="message"></div>
 
     <div class="section">
+        <h2>⚙️ 系統設定</h2>
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="allowDeletionSwitch" {% if allow_user_deletion %}checked{% endif %} onchange="toggleDeletionSetting(this.checked)">
+            <label class="form-check-label" for="allowDeletionSwitch">
+                允許刪除用戶 (危險)
+            </label>
+        </div>
+    </div>
+
+    <div class="section">
         <h2>➕ 新增用戶</h2>
         <div class="input-group">
             <input type="text" id="userIdInput" placeholder="輸入 LINE User ID (例如：U1234567890abcdef)">
@@ -195,6 +228,8 @@
 </div>
 
 <script>
+    let allowUserDeletion = {{ allow_user_deletion|tojson }};
+
     function showMessage(text, type) {
         const msgEl = document.getElementById('message');
         msgEl.textContent = text;
@@ -233,10 +268,15 @@
                     const phone2Display = phone2
                         ? `<span class="editable-name" data-userid="${userId}" data-field="phone2" data-current-phone="${phone2}" title="點擊編輯手機">${phone2}</span>`
                         : `<button class="action-btn btn-secondary" data-userid="${userId}" data-field="phone2" data-current-phone="">新增</button>`;
+                    
+                    const deleteButtonHtml = allowUserDeletion ? `
+                        <button class="action-btn btn-danger" data-userid="${userId}" data-username="${userName}" data-action="delete-user">刪除</button>
+                    ` : '';
+
 
                     return `
                     <li class="user-item">
-                        <img src="${user.picture_url || 'https://via.placeholder.com/40'}" alt="avatar" class="user-avatar">
+                        <img src="/user_avatar/${userId}" alt="avatar" class="user-avatar" data-avatar-id="${userId}" onerror="this.src='https://via.placeholder.com/40'; this.onerror=null;">
                         <div class="user-info-wrapper">
                             <div style="font-weight: 600; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;">
                                 <span class="editable-name" data-userid="${userId}" data-username="${userName}" title="點擊編輯姓名">
@@ -254,8 +294,9 @@
                             </div>
                             <span class="user-id">${userId}</span>
                         </div>
-                        <div>
-                            <button class="action-btn btn-danger" data-userid="${userId}" data-username="${userName}" data-action="delete-user">刪除</button>
+                        <div class="action-btn-group">
+                            <button class="action-btn btn-secondary" data-userid="${userId}" data-action="refresh-profile" title="從 LINE 更新用戶資料">更新資料</button>
+                            ${deleteButtonHtml}
                         </div>
                     </li>
                     `;
@@ -296,6 +337,44 @@
                 showMessage(data.message || '刪除失敗', 'error');
             }
         } catch (error) { showMessage('刪除失敗', 'error'); }
+    }
+
+    async function refreshUserProfile(userId) {
+        showMessage('正在從 LINE 更新資料...', 'info');
+        try {
+            const response = await fetch(`/refresh_user_profile/${userId}`, { method: 'POST' });
+            const data = await response.json();
+            if (data.status === 'success') {
+                showMessage('✅ 用戶資料已更新', 'success');
+                // 找到對應的頭像並更新它，而不是重新載入整個列表
+                const avatarImg = document.querySelector(`img[data-avatar-id="${userId}"]`);
+                if (avatarImg) {
+                    avatarImg.src = `/user_avatar/${userId}?t=${new Date().getTime()}`;
+                }
+            } else {
+                showMessage(data.message || '更新失敗', 'error');
+            }
+        } catch (error) { showMessage('更新失敗', 'error'); }
+    }
+
+    async function toggleDeletionSetting(isEnabled) {
+        try {
+            const response = await fetch('/set_config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    key: 'allow_user_deletion',
+                    value: isEnabled ? 'true' : 'false',
+                    description: '是否允許從管理介面刪除用戶'
+                })
+            });
+            const data = await response.json();
+            if (data.status === 'success') {
+                showMessage(`✅ 設定已更新`, 'success');
+                allowUserDeletion = isEnabled; // 更新前端狀態
+                loadUsers(); // 重新載入用戶列表以應用變更
+            } else { showMessage('設定更新失敗', 'error'); }
+        } catch (error) { showMessage('設定更新失敗', 'error'); }
     }
 
     async function editUserName(userId, currentName) {
@@ -385,6 +464,8 @@
                 deleteUser(userId, target.dataset.username);
             } else if (action === 'generate-zhuyin') {
                 generateZhuyin(userId);
+            } else if (action === 'refresh-profile') {
+                refreshUserProfile(userId);
             // 其次判斷可編輯的欄位
             } else if (target.dataset.username) { // 編輯姓名
                 editUserName(userId, target.dataset.username);
