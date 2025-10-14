@@ -15,7 +15,7 @@
     .btn-primary { background: var(--primary-color); color: white; }
     .btn-primary:hover { background: #5568d3; }
     .btn-success { background: #48bb78; color: white; }
-    .btn-success:hover { background: #38a169; }
+    .btn-success:hover { background: #38a169; }    
     .schedule-grid { display: flex; justify-content: space-between; gap: 1%; }
     .day-card { flex-basis: 19%; min-width: 0; background: white; border-radius: 10px; padding: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
     .day-header { background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%); color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px; text-align: center; }
@@ -37,6 +37,22 @@
     .send-day-btn:hover { background: #38a169; }
     .status-message { position: fixed; top: 20px; right: 20px; padding: 15px 20px; background: #2d3748; color: white; border-radius: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); display: none; z-index: 1000; opacity: 0; transition: opacity 0.3s; }
     .status-message.show { display: block; opacity: 1; }
+
+    /* 響應式設計：中等螢幕（例如平板） */
+    @media (max-width: 1200px) {
+        .schedule-grid {
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .day-card {
+            flex-basis: calc(50% - 8px); /* 2欄佈局 */
+        }
+    }
+
+    /* 響應式設計：小型螢幕（例如手機） */
+    @media (max-width: 768px) {
+        .day-card { flex-basis: 100%; } /* 1欄佈局 */
+    }
 </style>
 
 <div class="page-header">
