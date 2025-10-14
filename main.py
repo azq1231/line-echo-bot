@@ -444,11 +444,12 @@ def send_appointment_reminders():
             message = f"您預約的時間是{date_obj.month}月{date_obj.day}日 {weekday_name} {apt['time']}，謝謝"
             
             success = reply_message(apt['user_id'], message)
-            db.log_message(
-                user_id=apt['user_id'], 
-                msg_type='reminder', 
-                content=message, 
-                status='success' if success else 'failed'
+            db.log_message_send(
+                user_id=apt['user_id'],
+                target_name=apt['user_name'],
+                message_type='reminder',
+                status='success' if success else 'failed',
+                message_excerpt=message
             )
             if success:
                 sent_count += 1
@@ -561,6 +562,11 @@ def webhook():
             user_id = event["source"]["userId"]
             data = event["postback"]["data"]
             
+            # 確保用戶存在於資料庫中
+            user_name = get_line_profile(user_id)
+            if user_name:
+                db.add_user(user_id, user_name)
+
             print(f"收到 Postback - 用戶ID: {user_id}, Data: {data}")
             handle_postback(user_id, data)
 

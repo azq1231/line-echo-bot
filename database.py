@@ -80,6 +80,16 @@ def init_database():
         )
     ''')
 
+    # 系统配置表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS configs (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            description TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     
     # 新增紀錄發送訊息函數
 def log_message_send(user_id: str, target_name: str, message_type: str, status: str, error_message: Optional[str] = None, message_excerpt: Optional[str] = None):
@@ -309,6 +319,16 @@ def update_user_name(user_id: str, new_name: str) -> bool:
     conn.close()
     return updated
 
+def delete_user(user_id: str) -> bool:
+    """删除用户"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
 # ==================== 预约管理 ====================
 
 def add_appointment(user_id: str, user_name: str, date: str, time: str, notes: Optional[str] = None) -> bool:
@@ -337,6 +357,17 @@ def get_appointments_by_date_range(start_date: str, end_date: str) -> List[Dict]
         WHERE date BETWEEN ? AND ?
         ORDER BY date, time
     ''', (start_date, end_date))
+    appointments = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return appointments
+
+def get_appointments_by_user(user_id: str) -> List[Dict]:
+    """获取指定用户的所有预约"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM appointments WHERE user_id = ? ORDER BY date, time
+    ''', (user_id,))
     appointments = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return appointments
@@ -392,4 +423,91 @@ def remove_closed_day(date: str) -> bool:
     conn.commit()
     conn.close()
     return removed
+
+# ==================== 杂项功能 ====================
+
+def update_user_zhuyin(user_id: str, zhuyin: str) -> bool:
+    """更新用户注音"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET zhuyin = ? WHERE user_id = ?', (zhuyin, user_id))
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
+def update_user_phone_field(user_id: str, field: str, phone: str) -> bool:
+    """更新用户的电话字段（phone 或 phone2）"""
+    if field not in ['phone', 'phone2']:
+        return False
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(f'UPDATE users SET {field} = ? WHERE user_id = ?', (phone, user_id))
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
+def generate_and_save_zhuyin(user_id: str) -> Optional[str]:
+    """为用户生成并保存注音"""
+    user = get_user_by_id(user_id)
+    if not user:
+        return None
+    new_zhuyin = _name_to_zhuyin(user['name'])
+    if update_user_zhuyin(user_id, new_zhuyin):
+        return new_zhuyin
+    return None
+
+def get_or_create_user_by_phone(phone: str) -> Dict:
+    """通过电话号码获取或创建用户"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE phone = ? OR phone2 = ?', (phone, phone))
+    user = cursor.fetchone()
+    if user:
+        conn.close()
+        return dict(user)
+    else:
+        # 如果用户不存在，创建一个新用户
+        user_id = f"phone_user_{phone}"
+        name = f"用戶_{phone[-4:]}"
+        add_user(user_id, name, phone=phone)
+        return get_user_by_id(user_id)
+
+# ==================== 系统配置 ====================
+
+def get_all_configs() -> List[Dict]:
+    """获取所有系统配置"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM configs ORDER BY key')
+    configs = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return configs
+
+def get_config(key: str) -> Optional[str]:
+    """获取单个系统配置值"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT value FROM configs WHERE key = ?', (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row['value'] if row else None
+
+def set_config(key: str, value: str, description: Optional[str] = None) -> bool:
+    """设置或更新系统配置"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO configs (key, value, description, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(key) DO UPDATE SET
+        value = excluded.value,
+        description = COALESCE(excluded.description, description),
+        updated_at = CURRENT_TIMESTAMP
+    ''', (key, value, description))
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
 # ... (rest of the file remains the same)
