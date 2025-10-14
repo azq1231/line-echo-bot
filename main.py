@@ -58,7 +58,7 @@ def get_line_profile(user_id):
         print(f"獲取用戶資料時發生錯誤: {e}")
     return '未知'
 
-def send_line_message(user_id, messages):
+def send_line_message(user_id, messages, message_type="message", target_name=None):
     """发送 LINE 消息（支持文本和 Flex Message）"""
     url = "https://api.line.me/v2/bot/message/push"
     headers = {
@@ -74,15 +74,57 @@ def send_line_message(user_id, messages):
         "messages": messages
     }
     
-    response = requests.post(url, headers=headers, json=data)
-    if response.status_code != 200:
-        print(f"Error sending message: {response.status_code}, {response.text}")
+    # 準備摘要
+    message_excerpt = None
+    if len(messages) > 0:
+        first_message = messages[0]
+        if isinstance(first_message, dict) and first_message.get("type") == "text":
+            message_excerpt = first_message["text"][:100] + "..." if len(first_message["text"]) > 100 else first_message["text"]
+        elif isinstance(first_message, str):
+            message_excerpt = first_message[:100] + "..." if len(first_message) > 100 else first_message
+    
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            # 記錄成功發送
+            db.log_message_send(
+                user_id=user_id,
+                target_name=target_name or '未知',
+                message_type=message_type,
+                status='success',
+                message_excerpt=message_excerpt
+            )
+            return True
+        else:
+            error_msg = f"Error {response.status_code}: {response.text}"
+            # 記錄失敗
+            db.log_message_send(
+                user_id=user_id,
+                target_name=target_name or '未知',
+                message_type=message_type,
+                status='failed',
+                error_message=error_msg,
+                message_excerpt=message_excerpt
+            )
+            print(f"Error sending message: {error_msg}")
+            return False
+    except Exception as e:
+        error_msg = str(e)
+        # 記錄例外
+        db.log_message_send(
+            user_id=user_id,
+            target_name=target_name or '未知',
+            message_type=message_type,
+            status='failed',
+            error_message=error_msg,
+            message_excerpt=message_excerpt
+        )
+        print(f"Exception sending message: {error_msg}")
         return False
-    return True
 
 def reply_message(user_id, text):
     """发送文本消息（兼容旧代码）"""
-    return send_line_message(user_id, [{"type": "text", "text": text}])
+    return send_line_message(user_id, [{"type": "text", "text": text}], message_type="text")
 
 # ============ 预约辅助函数 ============ 
 
@@ -169,9 +211,31 @@ def appointments_page():
 def closed_days_page():
     return render_template("closed_days.html")
 
-@app.route("/test")
-def test_page():
-    return render_template("test.html")
+@app.route("/stats")
+def stats_page():
+    # 獲取月份參數，預設為當前月份
+    current_month = request.args.get('month', datetime.now(TAIPEI_TZ).strftime('%Y-%m'))
+    message_type = request.args.get('type')
+    
+    # 獲取統計數據
+    stats_data = db.get_message_stats(
+        month=current_month,
+        message_type=message_type if message_type else None
+    )
+    
+    return render_template('stats.html', 
+                         stats=stats_data,
+                         current_month=current_month)
+
+@app.route("/api/message_stats")
+def message_stats_api():
+    month = request.args.get('month')
+    message_type = request.args.get('type')
+    user_id = request.args.get('user')
+    
+    stats_data = db.get_message_stats(month, user_id, message_type)
+    
+    return jsonify(stats_data)
 
 # ============ Web Booking Site ============ 
 
@@ -376,6 +440,12 @@ def send_appointment_reminders():
             message = f"您預約的時間是{date_obj.month}月{date_obj.day}日 {weekday_name} {apt['time']}，謝謝"
             
             success = reply_message(apt['user_id'], message)
+            db.log_message(
+                user_id=apt['user_id'], 
+                msg_type='reminder', 
+                content=message, 
+                status='success' if success else 'failed'
+            )
             if success:
                 sent_count += 1
             else:
@@ -501,7 +571,7 @@ def handle_booking_start(user_id, week_offset=0):
     
     week_dates = get_week_dates(week_offset)
     date_card = flex.generate_date_selection_card(week_dates, week_offset, max_weeks)
-    send_line_message(user_id, [date_card])
+    send_line_message(user_id, [date_card], message_type="date_selection")
 
 def handle_postback(user_id, data):
     """处理 postback 事件"""
@@ -534,7 +604,7 @@ def handle_postback(user_id, data):
         available_slots = get_available_slots(date, weekday)
         
         time_card = flex.generate_time_selection_card(date, day_name, available_slots, is_closed)
-        send_line_message(user_id, [time_card])
+        send_line_message(user_id, [time_card], message_type="time_selection")
     
     elif action == 'select_time':
         date = params.get('date')
@@ -548,7 +618,7 @@ def handle_postback(user_id, data):
         user_name = user['name'] if user else '未知'
         
         confirm_card = flex.generate_confirmation_card(date, day_name, time, user_name)
-        send_line_message(user_id, [confirm_card])
+        send_line_message(user_id, [confirm_card], message_type="booking_confirmation", target_name=user_name)
     
     elif action == 'confirm_booking':
         date = params.get('date')
@@ -568,10 +638,10 @@ def handle_postback(user_id, data):
             weekday_name = weekday_names[date_obj.weekday()]
             
             success_msg = f"✅ 預約成功！\n\n日期：{date_obj.month}月{date_obj.day}日 ({weekday_name})\n時間：{time}\n姓名：{user_name}\n\n我們會在預約前提醒您，謝謝！"
-            send_line_message(user_id, [{"type": "text", "text": success_msg}])
+            send_line_message(user_id, [{"type": "text", "text": success_msg}], message_type="booking_success", target_name=user_name)
         else:
             error_msg = "❌ 預約失敗，該時段可能已被預約。請重新選擇。"
-            send_line_message(user_id, [{"type": "text", "text": error_msg}])
+            send_line_message(user_id, [{"type": "text", "text": error_msg}], message_type="booking_error", target_name=user_name)
 
 def handle_query_appointments(user_id):
     """查询用户的预约"""
@@ -593,7 +663,7 @@ def handle_query_appointments(user_id):
             msg += f"• {date_obj.month}月{date_obj.day}日 ({weekday_name}) {apt['time']}\n"
         msg += "\n如需取消預約，請輸入「取消」。"
     
-    send_line_message(user_id, [{"type": "text", "text": msg}])
+    send_line_message(user_id, [{"type": "text", "text": msg}], message_type="appointment_list")
 
 def handle_cancel_booking(user_id):
     """处理取消预约"""
@@ -605,7 +675,7 @@ def handle_cancel_booking(user_id):
     
     if not future_apts:
         msg = "您目前沒有可取消的預約。"
-        send_line_message(user_id, [{"type": "text", "text": msg}])
+        send_line_message(user_id, [{"type": "text", "text": msg}], message_type="cancel_booking_error")
     else:
         apt = sorted(future_apts, key=lambda x: (x['date'], x['time']))[0]
         db.cancel_appointment(apt['date'], apt['time'])
@@ -615,7 +685,38 @@ def handle_cancel_booking(user_id):
         weekday_name = weekday_names[date_obj.weekday()]
         
         msg = f"✅ 已取消預約\n\n日期：{date_obj.month}月{date_obj.day}日 ({weekday_name})\n時間：{apt['time']}"
-        send_line_message(user_id, [{"type": "text", "text": msg}])
+        send_line_message(user_id, [{"type": "text", "text": msg}], message_type="cancel_booking_success")
+
+# ============ 訊息統計 ============
+
+@app.route('/stats')
+def message_stats():
+    """顯示訊息發送統計資料"""
+    month = request.args.get('month')
+    if not month:
+        # 預設顯示當月
+        month = datetime.now(TAIPEI_TZ).strftime('%Y-%m')
+    
+    user_id = request.args.get('user_id')
+    message_type = request.args.get('type')
+    
+    stats = db.get_message_stats(month, user_id, message_type)
+    
+    return render_template(
+        'stats.html',
+        stats=stats,
+        current_month=month
+    )
+
+@app.route('/api/message_stats')
+def api_message_stats():
+    """API端點，返回訊息統計資料"""
+    month = request.args.get('month', datetime.now(TAIPEI_TZ).strftime('%Y-%m'))
+    user_id = request.args.get('user_id')
+    message_type = request.args.get('type')
+    
+    stats = db.get_message_stats(month, user_id, message_type)
+    return jsonify(stats)
 
 # ============ 排程系统（保留旧功能）============ 
 

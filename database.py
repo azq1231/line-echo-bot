@@ -42,17 +42,22 @@ def init_database():
         )
     ''')
 
-    # 检查并添加新字段
-    cursor.execute("PRAGMA table_info(users)")
-    columns = [info['name'] for info in cursor.fetchall()]
-    if 'zhuyin' not in columns:
-        cursor.execute("ALTER TABLE users ADD COLUMN zhuyin TEXT")
-        print("成功为 users 表添加 zhuyin 字段")
-    if 'phone2' not in columns:
-        cursor.execute("ALTER TABLE users ADD COLUMN phone2 TEXT")
-        print("成功为 users 表添加 phone2 字段")
+    # 预约表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS message_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            target_name TEXT NOT NULL,
+            message_type TEXT NOT NULL,
+            send_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status TEXT NOT NULL,
+            error_message TEXT,
+            message_excerpt TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+    ''')
 
-    # 预约表（支持多时段预约）
+    # 预约表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS appointments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,87 +73,165 @@ def init_database():
         )
     ''')
     
-    # 创建部分唯一索引：只对 confirmed 状态的预约强制唯一性
+    # 新增紀錄發送訊息函數
+def log_message_send(user_id: str, target_name: str, message_type: str, status: str, error_message: Optional[str] = None, message_excerpt: Optional[str] = None):
+    conn = get_db()
+    cursor = conn.cursor()
+    
     cursor.execute('''
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_confirmed_slot 
-        ON appointments(date, time) 
-        WHERE status = 'confirmed'
-    ''')
-    
-    # 休诊日期表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS closed_days (
-            date TEXT PRIMARY KEY,
-            reason TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # 排程消息表（保留原有功能）
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS schedules (
-            schedule_id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            user_name TEXT,
-            send_time TEXT NOT NULL,
-            message TEXT NOT NULL,
-            status TEXT DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            sent_at TIMESTAMP,
-            retry_count INTEGER DEFAULT 0
-        )
-    ''')
-    
-    # 通知模板表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS notification_templates (
-            template_id TEXT PRIMARY KEY,
-            template_type TEXT NOT NULL,
-            content TEXT NOT NULL,
-            variables TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # 插入默认通知模板
-    default_templates = [
-        ('appointment_confirmed', 'appointment', 
-         '已為您預約 ${日期} ${時間}，若需取消請回覆「取消」。', 
-         '["日期", "時間", "姓名"]'),
-        ('appointment_multi', 'appointment', 
-         '已為您預約 ${日期} ${時間列表}，共${人數}位。若需取消請回覆「取消」。', 
-         '["日期", "時間列表", "人數"]'),
-        ('clinic_closed', 'notification', 
-         '原定 ${日期} 門診已休診，您的預約將自動取消，造成不便敬請見諒 🙏', 
-         '["日期"]'),
-    ]
-    
-    for template_id, template_type, content, variables in default_templates:
-        cursor.execute('''
-            INSERT OR IGNORE INTO notification_templates 
-            (template_id, template_type, content, variables)
-            VALUES (?, ?, ?, ?)
-        ''', (template_id, template_type, content, variables))
-    
-    # 系统配置表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS system_config (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL,
-            description TEXT,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # 设置默认配置（如果不存在）
-    cursor.execute('''
-        INSERT OR IGNORE INTO system_config (key, value, description)
-        VALUES ('booking_window_weeks', '2', '用户可预约的周数（2周或4周）')
-    ''')
+        INSERT INTO message_log 
+        (user_id, target_name, message_type, status, error_message, message_excerpt)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (user_id, target_name, message_type, status, error_message, message_excerpt))
     
     conn.commit()
     conn.close()
+
+def get_message_stats(month: Optional[str] = None, user_id: Optional[str] = None, message_type: Optional[str] = None):
+    """獲取訊息統計資料
+    
+    Args:
+        month: 統計月份，格式：YYYY-MM
+        user_id: 特定使用者
+        message_type: 訊息類型（單日/整週）
+    
+    Returns:
+        Dict: 包含統計資料的字典
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    conditions = []
+    params = []
+    
+    # 建立 SQL WHERE 條件
+    if month:
+        conditions.append("strftime('%Y-%m', send_time) = ?")
+        params.append(month)
+    if user_id:
+        conditions.append("user_id = ?")
+        params.append(user_id)
+    if message_type:
+        conditions.append("message_type = ?")
+        params.append(message_type)
+        
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+    
+    # 獲取基本統計資料
+    stats = {
+        "total_messages": 0,
+        "success_count": 0,
+        "failed_count": 0,
+        "success_rate": 0,
+        "message_types": {},
+        "daily_stats": [],
+        "errors": []
+    }
+    
+    # 統計總數和成功/失敗數
+    cursor.execute(f'''
+        SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+        FROM message_log
+        {where_clause}
+    ''', params)
+    row = cursor.fetchone()
+    if row:
+        stats["total_messages"] = row[0]
+        stats["success_count"] = row[1]
+        stats["failed_count"] = row[2]
+        stats["success_rate"] = (row[1] / row[0] * 100) if row[0] > 0 else 0
+    
+    # 按訊息類型統計
+    cursor.execute(f'''
+        SELECT 
+            message_type,
+            COUNT(*) as count,
+            SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count
+        FROM message_log
+        {where_clause}
+        GROUP BY message_type
+    ''', params)
+    for row in cursor.fetchall():
+        stats["message_types"][row[0]] = {
+            "total": row[1],
+            "success": row[2],
+            "success_rate": (row[2] / row[1] * 100) if row[1] > 0 else 0
+        }
+    
+    # 按日期統計
+    cursor.execute(f'''
+        SELECT 
+            date(send_time) as send_date,
+            COUNT(*) as count,
+            SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success_count
+        FROM message_log
+        {where_clause}
+        GROUP BY date(send_time)
+        ORDER BY send_date
+    ''', params)
+    for row in cursor.fetchall():
+        stats["daily_stats"].append({
+            "date": row[0],
+            "total": row[1],
+            "success": row[2],
+            "success_rate": (row[2] / row[1] * 100) if row[1] > 0 else 0
+        })
+    
+    # 獲取最近的錯誤
+    cursor.execute(f'''
+        SELECT 
+            send_time,
+            target_name,
+            message_type,
+            error_message,
+            message_excerpt
+        FROM message_log
+        {where_clause}
+        AND status = 'failed'
+        ORDER BY send_time DESC
+        LIMIT 10
+    ''', params)
+    for row in cursor.fetchall():
+        stats["errors"].append({
+            "time": row[0],
+            "target_name": row[1],
+            "message_type": row[2],
+            "error": row[3],
+            "message": row[4]
+        })
+    
+    conn.close()
+    return stats
+    conn.commit()
+    conn.close()
     print("Database initialized.")
+
+def get_recent_message_logs(limit: int = 20):
+    """獲取最近的發送記錄"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT 
+            send_time,
+            user_id,
+            target_name,
+            message_type,
+            status,
+            message_excerpt,
+            error_message
+        FROM message_log
+        ORDER BY send_time DESC
+        LIMIT ?
+    """, (limit,))
+    
+    logs = cursor.fetchall()
+    conn.close()
+    
+    return [dict(row) for row in logs]
 
 # ==================== 用户管理 ====================
 
@@ -161,400 +244,4 @@ def get_all_users() -> List[Dict]:
     conn.close()
     return users
 
-def get_user_by_id(user_id: str) -> Optional[Dict]:
-    """根据用户ID获取用户信息"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    return dict(row) if row else None
-
-def add_user(user_id: str, name: str, phone: Optional[str] = None) -> bool:
-    """添加或更新用户，并自动生成注音"""
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        zhuyin = _name_to_zhuyin(name)
-        cursor.execute('''
-            INSERT INTO users (user_id, name, phone, zhuyin)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-                name = excluded.name,
-                phone = excluded.phone,
-                zhuyin = excluded.zhuyin,
-                updated_at = CURRENT_TIMESTAMP
-        ''', (user_id, name, phone, zhuyin))
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"添加用户错误: {e}")
-        return False
-    finally:
-        conn.close()
-
-def delete_user(user_id: str) -> bool:
-    """删除用户"""
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"删除用户错误: {e}")
-        return False
-    finally:
-        conn.close()
-
-def get_user_by_any_phone(phone: str) -> Optional[Dict]:
-    """根据电话号码在 phone 或 phone2 栏位中获取用户信息"""
-    if not phone:
-        return None
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM users WHERE phone = ? OR phone2 = ?', (phone, phone))
-    row = cursor.fetchone()
-    conn.close()
-    return dict(row) if row else None
-
-def get_or_create_user_by_phone(phone: str) -> Dict:
-    """
-    根据电话号码获取或创建用户。
-    优先在 phone 和 phone2 栏位中查找。如果用户不存在，则创建新用户并将电话存入 phone 栏位。
-    """
-    user = get_user_by_any_phone(phone)
-    if user:
-        return user
-    
-    user_id = f"web_{phone}"
-    name = phone
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        zhuyin = _name_to_zhuyin(name)
-        cursor.execute('''
-            INSERT INTO users (user_id, name, phone, zhuyin)
-            VALUES (?, ?, ?, ?)
-        ''', (user_id, name, phone, zhuyin))
-        conn.commit()
-        print(f"创建了新用户: {name} ({user_id})")
-        
-        cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
-        new_user = cursor.fetchone()
-        return dict(new_user)
-    except Exception as e:
-        print(f"创建用户时出错: {e}")
-        return {'user_id': user_id, 'name': name, 'phone': phone}
-    finally:
-        conn.close()
-
-def _merge_user_data(conn, from_user_id: str, to_user_id: str, to_user_name: str):
-    """私有函数：合并两个用户的预约数据，然后删除源用户。"""
-    cursor = conn.cursor()
-    print(f"开始合并用户数据：从 {from_user_id} 到 {to_user_id}")
-    
-    cursor.execute('''
-        UPDATE appointments SET user_id = ?, user_name = ? WHERE user_id = ?
-    ''', (to_user_id, to_user_name, from_user_id))
-    print(f"更新了 {cursor.rowcount} 条预约记录的归属。")
-
-    cursor.execute('DELETE FROM users WHERE user_id = ?', (from_user_id,))
-    print(f"删除了源用户 {from_user_id}。")
-
-def update_user_phone_field(user_id: str, field: str, phone: str) -> bool:
-    """
-    更新用户的指定电话栏位（phone 或 phone2），并处理潜在的用户合并。
-    如果 phone 为空字符串，则清空该栏位。
-    """
-    if field not in ['phone', 'phone2']:
-        print(f"错误的栏位名称: {field}")
-        return False
-
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        phone_to_save = phone.strip() if phone else None
-
-        if phone_to_save:
-            # 检查这个电话号码是否已被另一个“访客”用户占用
-            query = "SELECT * FROM users WHERE (phone = ? OR phone2 = ?) AND user_id != ?"
-            cursor.execute(query, (phone_to_save, phone_to_save, user_id))
-            existing_user = cursor.fetchone()
-
-            if existing_user and existing_user['user_id'].startswith('web_'):
-                cursor.execute("SELECT name FROM users WHERE user_id = ?", (user_id,))
-                target_user = cursor.fetchone()
-                target_user_name = target_user['name'] if target_user else '未知'
-                
-                _merge_user_data(conn, from_user_id=existing_user['user_id'], to_user_id=user_id, to_user_name=target_user_name)
-
-        # 使用白名单确保栏位名称安全，然后更新目标用户的电话号码
-        update_query = f"UPDATE users SET {field} = ? WHERE user_id = ?"
-        cursor.execute(update_query, (phone_to_save, user_id))
-        
-        conn.commit()
-        return True
-    except Exception as e:
-        conn.rollback()
-        print(f"更新电话号码时出错: {e}")
-        return False
-    finally:
-        conn.close()
-
-def update_user_name(user_id: str, new_name: str) -> bool:
-    """更新用户姓名，并重新生成注音"""
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        new_zhuyin = _name_to_zhuyin(new_name)
-        cursor.execute('''
-            UPDATE users SET name = ?, zhuyin = ?, updated_at = CURRENT_TIMESTAMP 
-            WHERE user_id = ?
-        ''', (new_name, new_zhuyin, user_id))
-        conn.commit()
-        return cursor.rowcount > 0
-    except Exception as e:
-        print(f"更新用户姓名错误: {e}")
-        return False
-    finally:
-        conn.close()
-
-def update_user_zhuyin(user_id: str, zhuyin: str) -> bool:
-    """手动更新用户的注音字段"""
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            UPDATE users SET zhuyin = ?, updated_at = CURRENT_TIMESTAMP 
-            WHERE user_id = ?
-        ''', (zhuyin, user_id))
-        conn.commit()
-        return cursor.rowcount > 0
-    except Exception as e:
-        print(f"更新用户注音错误: {e}")
-        return False
-    finally:
-        conn.close()
-
-def generate_and_save_zhuyin(user_id: str) -> Optional[str]:
-    """为指定用户生成并保存注音（如果为空）"""
-    user = get_user_by_id(user_id)
-    if not user or not user['name']:
-        return None
-    
-    zhuyin = _name_to_zhuyin(user['name'])
-    if update_user_zhuyin(user_id, zhuyin):
-        return zhuyin
-    return None
-
-# (以下为其他函数，保持不变)
-
-# ==================== 预约管理 ====================
-
-def get_appointments_by_date_range(start_date: str, end_date: str) -> List[Dict]:
-    """获取日期范围内的所有预约"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT * FROM appointments 
-        WHERE date >= ? AND date <= ? AND status = 'confirmed'
-        ORDER BY date, time
-    ''', (start_date, end_date))
-    appointments = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return appointments
-
-def get_appointments_by_user(user_id: str) -> List[Dict]:
-    """获取用户的所有预约"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT * FROM appointments 
-        WHERE user_id = ?
-        ORDER BY date, time
-    ''', (user_id,))
-    appointments = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return appointments
-
-def add_appointment(user_id: str, user_name: str, date: str, time: str, 
-                   booking_group_id: Optional[str] = None, notes: Optional[str] = None) -> bool:
-    """添加预约"""
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            INSERT INTO appointments (user_id, user_name, date, time, booking_group_id, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, user_name, date, time, booking_group_id, notes))
-        conn.commit()
-        return True
-    except sqlite3.IntegrityError:
-        print(f"时段冲突: {date} {time} 已被预约")
-        return False
-    except Exception as e:
-        print(f"添加预约错误: {e}")
-        return False
-    finally:
-        conn.close()
-
-def cancel_appointment(date: str, time: str) -> bool:
-    """取消预约"""
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            UPDATE appointments SET status = 'cancelled' 
-            WHERE date = ? AND time = ?
-        ''', (date, time))
-        conn.commit()
-        return cursor.rowcount > 0
-    except Exception as e:
-        print(f"取消预约错误: {e}")
-        return False
-    finally:
-        conn.close()
-
-def get_user_appointments(user_id: str, status: str = 'confirmed') -> List[Dict]:
-    """获取用户的所有预约"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT * FROM appointments 
-        WHERE user_id = ? AND status = ?
-        ORDER BY date, time
-    ''', (user_id, status))
-    appointments = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return appointments
-
-# ==================== 休诊管理 ====================
-
-def set_closed_day(date: str, reason: str = "休診") -> int:
-    """设置休诊日，返回取消的预约数量"""
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        # 添加休诊日
-        cursor.execute('''
-            INSERT OR REPLACE INTO closed_days (date, reason)
-            VALUES (?, ?)
-        ''', (date, reason))
-        
-        # 取消该日所有预约
-        cursor.execute('''
-            UPDATE appointments SET status = 'cancelled_by_clinic' 
-            WHERE date = ? AND status = 'confirmed'
-        ''', (date,))
-        
-        cancelled_count = cursor.rowcount
-        conn.commit()
-        return cancelled_count
-    except Exception as e:
-        print(f"设置休诊错误: {e}")
-        return 0
-    finally:
-        conn.close()
-
-def remove_closed_day(date: str) -> bool:
-    """取消休诊"""
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('DELETE FROM closed_days WHERE date = ?', (date,))
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"取消休诊错误: {e}")
-        return False
-    finally:
-        conn.close()
-
-def is_closed_day(date: str) -> bool:
-    """检查是否为休诊日"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT date FROM closed_days WHERE date = ?', (date,))
-    result = cursor.fetchone()
-    conn.close()
-    return result is not None
-
-def get_closed_days() -> List[Dict]:
-    """获取所有休诊日"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM closed_days ORDER BY date')
-    closed_days = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return closed_days
-
-def get_all_closed_days() -> List[Dict]:
-    """获取所有休诊日（别名函数）"""
-    return get_closed_days()
-
-# ==================== 系统配置管理 ====================
-
-def get_config(key: str) -> Optional[str]:
-    """获取配置值"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT value FROM system_config WHERE key = ?', (key,))
-    row = cursor.fetchone()
-    conn.close()
-    return row['value'] if row else None
-
-def set_config(key: str, value: str, description: str = '') -> bool:
-    """设置配置值"""
-    conn = get_db()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            INSERT OR REPLACE INTO system_config (key, value, description, updated_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (key, value, description))
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"设置配置错误: {e}")
-        return False
-    finally:
-        conn.close()
-
-def get_all_configs() -> Dict:
-    """获取所有配置"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT key, value, description FROM system_config')
-    configs = {row['key']: {'value': row['value'], 'description': row['description']} 
-               for row in cursor.fetchall()}
-    conn.close()
-    return configs
-
-# ==================== 通知模板 ====================
-
-def get_template(template_id: str) -> Optional[Dict]:
-    """获取通知模板"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM notification_templates WHERE template_id = ?', (template_id,))
-    template = cursor.fetchone()
-    conn.close()
-    return dict(template) if template else None
-
-def render_template(template_id: str, variables: Dict) -> str:
-    """渲染通知模板"""
-    template = get_template(template_id)
-    if not template:
-        return ""
-    
-    content = template['content']
-    for key, value in variables.items():
-        content = content.replace(f"${{{key}}}", str(value))
-    
-    return content
-
-# 初始化数据库
-if __name__ == "__main__":
-    init_database()
+# ... (rest of the file remains the same)

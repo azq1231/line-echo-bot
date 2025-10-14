@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% block title %}訊息統計{% endblock %}
+{% block content %}
+<div class="container my-4">
+    <!-- 篩選區 -->
+    <div class="card p-3 mb-4">
+        <form id="statsForm" class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">月份</label>
+                <input type="month" class="form-control" id="monthFilter" name="month" value="{{ current_month }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">訊息類型</label>
+                <select class="form-select" id="typeFilter" name="type">
+                    <option value="">全部</option>
+                    <option value="booking_confirmation">預約確認</option>
+                    <option value="booking_success">預約成功</option>
+                    <option value="booking_error">預約失敗</option>
+                    <option value="appointment_list">預約清單</option>
+                    <option value="cancel_booking_success">取消預約成功</option>
+                    <option value="cancel_booking_error">取消預約失敗</option>
+                    <option value="date_selection">日期選擇</option>
+                    <option value="time_selection">時間選擇</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-end gap-2">
+                    <button type="button" class="btn btn-primary" onclick="updateStats()">
+                        <i class="bi bi-search"></i> 查詢
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- 整體統計 -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">總發送訊息</h5>
+                    <p class="card-text display-6">{{ stats.total_messages }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">成功發送</h5>
+                    <p class="card-text display-6 text-success">{{ stats.success_count }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">發送失敗</h5>
+                    <p class="card-text display-6 text-danger">{{ stats.failed_count }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">成功率</h5>
+                    <p class="card-text display-6 {% if stats.success_rate >= 99 %}text-success{% elif stats.success_rate >= 95 %}text-warning{% else %}text-danger{% endif %}">
+                        {{ "%.1f"|format(stats.success_rate) }}%
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 圖表區 -->
+    <div class="row mb-4">
+        <!-- 每日統計圖表 -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">每日發送統計</h5>
+                    <canvas id="dailyStats"></canvas>
+                </div>
+            </div>
+        </div>
+        <!-- 訊息類型圖表 -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">訊息類型分佈</h5>
+                    <canvas id="messageTypes"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 錯誤紀錄 -->
+    {% if stats.errors %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">最近錯誤紀錄</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>時間</th>
+                            <th>對象</th>
+                            <th>類型</th>
+                            <th>訊息內容</th>
+                            <th>錯誤說明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for error in stats.errors %}
+                        <tr>
+                            <td>{{ error.time }}</td>
+                            <td>{{ error.target_name }}</td>
+                            <td>{{ error.message_type }}</td>
+                            <td><small class="text-muted">{{ error.message }}</small></td>
+                            <td class="text-danger">{{ error.error }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function updateStats() {
+    const month = document.getElementById('monthFilter').value;
+    const type = document.getElementById('typeFilter').value;
+
+    window.location.href = `/stats?month=${month}${type ? '&type=' + type : ''}`;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 準備圖表數據
+    const dailyStats = {{ stats.daily_stats|tojson }};
+    const messageTypes = {{ stats.message_types|tojson }};
+
+    // 每日統計圖表
+    new Chart(document.getElementById('dailyStats'), {
+        type: 'line',
+        data: {
+            labels: dailyStats.map(d => d.date),
+            datasets: [{
+                label: '總發送',
+                data: dailyStats.map(d => d.total),
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }, {
+                label: '成功發送',
+                data: dailyStats.map(d => d.success),
+                borderColor: 'rgb(54, 162, 235)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    // 訊息類型圖表
+    new Chart(document.getElementById('messageTypes'), {
+        type: 'pie',
+        data: {
+            labels: Object.keys(messageTypes),
+            datasets: [{
+                data: Object.entries(messageTypes).map(([_, v]) => v.total),
+                backgroundColor: [
+                    'rgb(255, 99, 132)',
+                    'rgb(54, 162, 235)',
+                    'rgb(255, 205, 86)',
+                    'rgb(75, 192, 192)',
+                    'rgb(153, 102, 255)',
+                    'rgb(255, 159, 64)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true
+        }
+    });
+});
+</script>
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// 準備圖表數據
+const STATS_DATA = {
+    dailyStats: {{ stats.daily_stats|tojson|safe }},
+    messageTypes: {{ stats.message_types|tojson|safe }}
+};
+
+function updateStats() {
+    const month = document.getElementById('monthFilter').value;
+    const type = document.getElementById('typeFilter').value;
+
+    window.location.href = `/stats?month=${month}${type ? '&type=' + type : ''}`;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 每日統計圖表
+    new Chart(document.getElementById('dailyStats'), {
+        type: 'line',
+        data: {
+            labels: STATS_DATA.dailyStats.map(d => d.date),
+            datasets: [{
+                label: '總發送',
+                data: STATS_DATA.dailyStats.map(d => d.total),
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }, {
+                label: '成功發送',
+                data: STATS_DATA.dailyStats.map(d => d.success),
+                borderColor: 'rgb(54, 162, 235)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    // 訊息類型圖表
+    new Chart(document.getElementById('messageTypes'), {
+        type: 'pie',
+        data: {
+            labels: Object.keys(STATS_DATA.messageTypes),
+            datasets: [{
+                data: Object.entries(STATS_DATA.messageTypes).map(([_, v]) => v.total),
+                backgroundColor: [
+                    'rgb(255, 99, 132)',
+                    'rgb(54, 162, 235)',
+                    'rgb(255, 205, 86)',
+                    'rgb(75, 192, 192)',
+                    'rgb(153, 102, 255)',
+                    'rgb(255, 159, 64)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true
+        }
+    });
+});
+</script>
+{% endblock %}
+{% endblock %}
