@@ -5,11 +5,11 @@
     <!-- 篩選區 -->
     <div class="card p-3 mb-4">
         <form id="statsForm" class="row g-3">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label">月份</label>
                 <input type="month" class="form-control" id="monthFilter" name="month" value="{{ current_month }}">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label">訊息類型</label>
                 <select class="form-select" id="typeFilter" name="type">
                     <option value="">全部</option>
@@ -21,9 +21,21 @@
                     <option value="cancel_booking_error">取消預約失敗</option>
                     <option value="date_selection">日期選擇</option>
                     <option value="time_selection">時間選擇</option>
+                    <option value="reminder">預約提醒</option>
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
+                <label class="form-label">使用者</label>
+                <select class="form-select" id="userFilter" name="user">
+                    <option value="">全部使用者</option>
+                    {% for user in all_users %}
+                        <option value="{{ user.user_id }}" {% if user.user_id == current_user %}selected{% endif %}>
+                            {{ user.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
                 <div class="d-flex align-items-end gap-2">
                     <button type="button" class="btn btn-primary" onclick="updateStats()">
                         <i class="bi bi-search"></i> 查詢
@@ -63,9 +75,13 @@
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title">成功率</h5>
-                    <p class="card-text display-6 {% if stats.success_rate >= 99 %}text-success{% elif stats.success_rate >= 95 %}text-warning{% else %}text-danger{% endif %}">
-                        {{ "%.1f"|format(stats.success_rate) }}%
-                    </p>
+                    {% if stats.success_rate == 'N/A' %}
+                        <p class="card-text display-6 text-muted">N/A</p>
+                    {% else %}
+                        <p class="card-text display-6 {% if stats.success_rate >= 99 %}text-success{% elif stats.success_rate >= 95 %}text-warning{% else %}text-danger{% endif %}">
+                            {{ "%.1f"|format(stats.success_rate) }}%
+                        </p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -129,84 +145,29 @@
     {% endif %}
 </div>
 
-<script>
-function updateStats() {
-    const month = document.getElementById('monthFilter').value;
-    const type = document.getElementById('typeFilter').value;
-
-    window.location.href = `/stats?month=${month}${type ? '&type=' + type : ''}`;
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    // 準備圖表數據
-    const dailyStats = {{ stats.daily_stats|tojson }};
-    const messageTypes = {{ stats.message_types|tojson }};
-
-    // 每日統計圖表
-    new Chart(document.getElementById('dailyStats'), {
-        type: 'line',
-        data: {
-            labels: dailyStats.map(d => d.date),
-            datasets: [{
-                label: '總發送',
-                data: dailyStats.map(d => d.total),
-                borderColor: 'rgb(75, 192, 192)',
-                tension: 0.1
-            }, {
-                label: '成功發送',
-                data: dailyStats.map(d => d.success),
-                borderColor: 'rgb(54, 162, 235)',
-                tension: 0.1
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
-
-    // 訊息類型圖表
-    new Chart(document.getElementById('messageTypes'), {
-        type: 'pie',
-        data: {
-            labels: Object.keys(messageTypes),
-            datasets: [{
-                data: Object.entries(messageTypes).map(([_, v]) => v.total),
-                backgroundColor: [
-                    'rgb(255, 99, 132)',
-                    'rgb(54, 162, 235)',
-                    'rgb(255, 205, 86)',
-                    'rgb(75, 192, 192)',
-                    'rgb(153, 102, 255)',
-                    'rgb(255, 159, 64)'
-                ]
-            }]
-        },
-        options: {
-            responsive: true
-        }
-    });
-});
-</script>
-
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // 準備圖表數據
 const STATS_DATA = {
-    dailyStats: {{ stats.daily_stats|tojson|safe }},
-    messageTypes: {{ stats.message_types|tojson|safe }}
+    dailyStats: JSON.parse('{{ stats.daily_stats|tojson }}'),
+    messageTypes: JSON.parse('{{ stats.message_types|tojson }}')
 };
+
+// 頁面載入時設定篩選器的預設值
+document.getElementById('typeFilter').value = '{{ current_type or "" }}';
+document.getElementById('userFilter').value = '{{ current_user or "" }}';
 
 function updateStats() {
     const month = document.getElementById('monthFilter').value;
     const type = document.getElementById('typeFilter').value;
+    const user = document.getElementById('userFilter').value;
 
-    window.location.href = `/stats?month=${month}${type ? '&type=' + type : ''}`;
+    const params = new URLSearchParams({ month });
+    if (type) params.append('type', type);
+    if (user) params.append('user', user);
+
+    window.location.href = `/stats?${params.toString()}`;
 }
 
 document.addEventListener('DOMContentLoaded', function() {

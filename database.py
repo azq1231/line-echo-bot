@@ -156,11 +156,13 @@ def get_message_stats(month: Optional[str] = None, user_id: Optional[str] = None
         {where_clause}
     ''', params)
     row = cursor.fetchone()
-    if row:
+    if row and row[0] > 0:
         stats["total_messages"] = row[0]
         stats["success_count"] = row[1]
         stats["failed_count"] = row[2]
-        stats["success_rate"] = (row[1] / row[0] * 100) if row[0] > 0 else 0
+        stats["success_rate"] = (row[1] / row[0] * 100)
+    else:
+        stats["success_rate"] = 'N/A'
     
     # 按訊息類型統計
     cursor.execute(f'''
@@ -176,7 +178,7 @@ def get_message_stats(month: Optional[str] = None, user_id: Optional[str] = None
         stats["message_types"][row[0]] = {
             "total": row[1],
             "success": row[2],
-            "success_rate": (row[2] / row[1] * 100) if row[1] > 0 else 0
+            "success_rate": (row[2] / row[1] * 100) if row[1] > 0 else 'N/A'
         }
     
     # 按日期統計
@@ -195,7 +197,7 @@ def get_message_stats(month: Optional[str] = None, user_id: Optional[str] = None
             "date": row[0],
             "total": row[1],
             "success": row[2],
-            "success_rate": (row[2] / row[1] * 100) if row[1] > 0 else 0
+            "success_rate": (row[2] / row[1] * 100) if row[1] > 0 else 'N/A'
         })
     
     # 獲取最近的錯誤
@@ -458,7 +460,7 @@ def generate_and_save_zhuyin(user_id: str) -> Optional[str]:
         return new_zhuyin
     return None
 
-def get_or_create_user_by_phone(phone: str) -> Dict:
+def get_or_create_user_by_phone(phone: str) -> Optional[Dict]:
     """通过电话号码获取或创建用户"""
     conn = get_db()
     cursor = conn.cursor()

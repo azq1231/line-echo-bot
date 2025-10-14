@@ -193,6 +193,29 @@ def get_available_slots(date, weekday):
     
     return filtered_slots
 
+def get_week_schedule_for_booking(week_offset=0):
+    """一次性获取整周的预约时段，用于线上预约页面"""
+    week_dates = get_week_dates(week_offset)
+    start_date = week_dates[0]['date']
+    end_date = week_dates[-1]['date']
+
+    # 一次性获取整周的预约和休诊日
+    all_appointments = db.get_appointments_by_date_range(start_date, end_date)
+    all_closed_days = {day['date'] for day in db.get_all_closed_days()}
+    
+    # 将预约按日期分组
+    appointments_by_date = {}
+    for apt in all_appointments:
+        if apt['status'] == 'confirmed':
+            appointments_by_date.setdefault(apt['date'], set()).add(apt['time'])
+
+    schedule_data = []
+    for day in week_dates:
+        day['is_closed'] = day['date'] in all_closed_days
+        day['available_slots'] = get_available_slots(day['date'], day['weekday'])
+        schedule_data.append(day)
+    return schedule_data
+
 # ============ WEB 路由 ============ 
 
 @app.route("/")
@@ -215,17 +238,26 @@ def closed_days_page():
 def stats_page():
     # 獲取月份參數，預設為當前月份
     current_month = request.args.get('month', datetime.now(TAIPEI_TZ).strftime('%Y-%m'))
+    # 獲取其他篩選參數
     message_type = request.args.get('type')
+    user_id = request.args.get('user')
+
+    # 獲取所有用戶以供篩選
+    all_users = db.get_all_users()
     
     # 獲取統計數據
     stats_data = db.get_message_stats(
         month=current_month,
-        message_type=message_type if message_type else None
+        message_type=message_type if message_type else None,
+        user_id=user_id if user_id else None
     )
     
     return render_template('stats.html', 
                          stats=stats_data,
-                         current_month=current_month)
+                         current_month=current_month,
+                         all_users=all_users,
+                         current_user=user_id,
+                         current_type=message_type)
 
 @app.route("/api/message_stats")
 def message_stats_api():
@@ -251,6 +283,10 @@ def booking_page():
             return redirect(url_for('booking_page'))
 
         user = db.get_or_create_user_by_phone(phone)
+
+        if user is None:
+            flash("無法找到或建立用戶資料，請稍後再試。", "danger")
+            return redirect(url_for('booking_page', phone=phone))
         
         success = db.add_appointment(
             user_id=user['user_id'],
@@ -271,22 +307,20 @@ def booking_page():
 
     if phone:
         week_dates = get_week_dates(week_offset=0)
+        start_date = week_dates[0]['date']
+        end_date = week_dates[-1]['date']
+        
+        # 一次性获取整周的预约和休诊日
+        appointments_this_week = db.get_appointments_by_date_range(start_date, end_date)
+        booked_slots = {(apt['date'], apt['time']) for apt in appointments_this_week if apt['status'] == 'confirmed'}
+        closed_days = {day['date'] for day in db.get_all_closed_days()}
+
         schedule_data = []
         for day in week_dates:
-            available_slots = get_available_slots(day['date'], day['weekday'])
             all_slots = generate_time_slots(day['weekday'])
-            day_schedule = {
-                'date': day['date'],
-                'display': day['display'],
-                'day_name': day['day_name'],
-                'slots': []
-            }
-            for slot in all_slots:
-                day_schedule['slots'].append({
-                    'time': slot,
-                    'available': slot in available_slots
-                })
-            schedule_data.append(day_schedule)
+            available_slots = [s for s in all_slots if (day['date'], s) not in booked_slots and day['date'] not in closed_days]
+            day['slots'] = [{'time': s, 'available': s in available_slots} for s in all_slots]
+            schedule_data.append(day)
 
     return render_template("booking.html", phone=phone, schedule=schedule_data)
 
@@ -697,82 +731,10 @@ def handle_cancel_booking(user_id):
         msg = f"✅ 已取消預約\n\n日期：{date_obj.month}月{date_obj.day}日 ({weekday_name})\n時間：{apt['time']}"
         send_line_message(user_id, [{"type": "text", "text": msg}], message_type="cancel_booking_success")
 
-# ============ 訊息統計 ============
-
-@app.route('/stats')
-def message_stats():
-    """顯示訊息發送統計資料"""
-    month = request.args.get('month')
-    if not month:
-        # 預設顯示當月
-        month = datetime.now(TAIPEI_TZ).strftime('%Y-%m')
-    
-    user_id = request.args.get('user_id')
-    message_type = request.args.get('type')
-    
-    stats = db.get_message_stats(month, user_id, message_type)
-    
-    return render_template(
-        'stats.html',
-        stats=stats,
-        current_month=month
-    )
-
-@app.route('/api/message_stats')
-def api_message_stats():
-    """API端點，返回訊息統計資料"""
-    month = request.args.get('month', datetime.now(TAIPEI_TZ).strftime('%Y-%m'))
-    user_id = request.args.get('user_id')
-    message_type = request.args.get('type')
-    
-    stats = db.get_message_stats(month, user_id, message_type)
-    return jsonify(stats)
-
-# ============ 排程系统（保留旧功能）============ 
-
-def load_schedules():
-    import json
-    try:
-        with open('schedules.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data.get('schedules', [])
-    except FileNotFoundError:
-        return []
-
-def save_schedules(schedules):
-    import json
-    with open('schedules.json', 'w', encoding='utf-8') as f:
-        json.dump({'schedules': schedules}, f, ensure_ascii=False, indent=2)
-
 def check_and_send_schedules():
-    schedules = load_schedules()
-    now = datetime.now(TAIPEI_TZ)
-    updated = False
-    
-    for schedule in schedules:
-        if schedule['status'] == 'pending':
-            send_time_naive = datetime.strptime(schedule['send_time'], "%Y-%m-%d %H:%M")
-            send_time = TAIPEI_TZ.localize(send_time_naive)
-            if now >= send_time:
-                success = reply_message(schedule['user_id'], schedule['message'])
-                if success:
-                    schedule['status'] = 'sent'
-                    schedule['sent_at'] = now.strftime("%Y-%m-%d %H:%M:%S")
-                    updated = True
-                    print(f"✅ 已發送排程訊息給 {schedule['user_name']}: {schedule['message']}")
-                else:
-                    if 'retry_count' not in schedule:
-                        schedule['retry_count'] = 0
-                    schedule['retry_count'] += 1
-                    updated = True
-                    
-                    if schedule['retry_count'] >= 3:
-                        schedule['status'] = 'failed'
-                        schedule['failed_at'] = now.strftime("%Y-%m-%d %H:%M:%S")
-                        print(f"❌ 排程發送失敗（已重試3次）：{schedule['user_name']} - {schedule['message']}")
-    
-    if updated:
-        save_schedules(schedules)
+    """此函式用於檢查並發送資料庫中的排程訊息，目前為空。"""
+    # 未來可以實作從資料庫讀取排程並發送的邏輯
+    pass
 
 @app.route("/add_schedule", methods=["POST"])
 def add_schedule_route():
@@ -786,32 +748,16 @@ def add_schedule_route():
     if not all([user_id, send_time, message]):
         return jsonify({"status": "error", "message": "缺少必要欄位"}), 400
     
-    schedules = load_schedules()
-    schedule_id = str(uuid.uuid4())
-    new_schedule = {
-        "id": schedule_id,
-        "user_id": user_id,
-        "user_name": user_name,
-        "send_time": send_time,
-        "message": message,
-        "status": "pending",
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-    schedules.append(new_schedule)
-    save_schedules(schedules)
-    return jsonify({"status": "success", "message": "排程已新增", "schedule_id": schedule_id})
+    # 這裡應改為寫入資料庫的邏輯
+    return jsonify({"status": "error", "message": "此功能尚未與資料庫整合"}), 501
 
 @app.route("/list_schedules")
 def list_schedules():
-    schedules = load_schedules()
-    return jsonify({"schedules": schedules, "count": len(schedules)})
+    return jsonify({"schedules": [], "count": 0})
 
 @app.route("/delete_schedule/<schedule_id>")
 def delete_schedule_route(schedule_id):
-    schedules = load_schedules()
-    schedules = [s for s in schedules if s['id'] != schedule_id]
-    save_schedules(schedules)
-    return jsonify({"status": "success", "message": "排程已刪除"})
+    return jsonify({"status": "error", "message": "此功能尚未與資料庫整合"}), 501
 
 # 初始化排程器
 scheduler = BackgroundScheduler()
