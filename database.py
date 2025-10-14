@@ -42,6 +42,17 @@ def init_database():
         )
     ''')
 
+    # 安全地為 users 表添加 picture_url 字段
+    cursor.execute("PRAGMA table_info(users)")
+    columns = [column[1] for column in cursor.fetchall()]
+    if 'picture_url' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN picture_url TEXT")
+    # 安全地為 users 表添加 manual_update 字段，用於標記手動更新
+    if 'manual_update' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN manual_update BOOLEAN DEFAULT FALSE")
+
+
+
     # 预约表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS message_log (
@@ -275,32 +286,40 @@ def get_user_by_id(user_id: str) -> Optional[Dict]:
     conn.close()
     return dict(user) if user else None
 
-def add_user(user_id: str, name: str, phone: Optional[str] = None, phone2: Optional[str] = None) -> None:
+def add_user(user_id: str, name: str, picture_url: Optional[str] = None, phone: Optional[str] = None, phone2: Optional[str] = None) -> None:
     """新增或更新用户，如果用户已存在，则更新姓名"""
     conn = get_db()
     cursor = conn.cursor()
     
     # 检查用户是否存在
-    cursor.execute('SELECT name FROM users WHERE user_id = ?', (user_id,))
+    cursor.execute('SELECT name, picture_url, manual_update FROM users WHERE user_id = ?', (user_id,))
     existing_user = cursor.fetchone()
     
     zhuyin = _name_to_zhuyin(name)
 
     if existing_user:
-        # 如果姓名不同，则更新
-        if existing_user['name'] != name:
+        # 如果用戶名稱是手動更新的，則只更新頭像，不覆蓋名稱
+        if existing_user['manual_update']:
+            if existing_user['picture_url'] != picture_url:
+                cursor.execute('''
+                    UPDATE users SET picture_url = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
+                ''', (picture_url, user_id))
+                print(f"Updated user {user_id}'s picture_url (name is manually set)")
+        # 否則，正常更新姓名和頭像
+        elif existing_user['name'] != name or existing_user['picture_url'] != picture_url:
             cursor.execute('''
                 UPDATE users 
-                SET name = ?, zhuyin = ?, updated_at = CURRENT_TIMESTAMP 
+                SET name = ?, zhuyin = ?, picture_url = ?, updated_at = CURRENT_TIMESTAMP 
                 WHERE user_id = ?
-            ''', (name, zhuyin, user_id))
-            print(f"Updated user {user_id}'s name to {name}")
+            ''', (name, zhuyin, picture_url, user_id))
+            print(f"Updated user {user_id}'s info (name: {name}, picture_url: {picture_url})")
+
     else:
         # 新增用户
         cursor.execute('''
-            INSERT INTO users (user_id, name, phone, phone2, zhuyin)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, name, phone, phone2, zhuyin))
+            INSERT INTO users (user_id, name, picture_url, phone, phone2, zhuyin)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, name, picture_url, phone, phone2, zhuyin))
         print(f"Added new user: {name} ({user_id})")
         
     conn.commit()
@@ -313,7 +332,7 @@ def update_user_name(user_id: str, new_name: str) -> bool:
     zhuyin = _name_to_zhuyin(new_name)
     cursor.execute('''
         UPDATE users 
-        SET name = ?, zhuyin = ?, updated_at = CURRENT_TIMESTAMP 
+        SET name = ?, zhuyin = ?, manual_update = TRUE, updated_at = CURRENT_TIMESTAMP 
         WHERE user_id = ?
     ''', (new_name, zhuyin, user_id))
     updated = cursor.rowcount > 0
@@ -473,7 +492,7 @@ def get_or_create_user_by_phone(phone: str) -> Optional[Dict]:
         # 如果用户不存在，创建一个新用户
         user_id = f"phone_user_{phone}"
         name = f"用戶_{phone[-4:]}"
-        add_user(user_id, name, phone=phone)
+        add_user(user_id, name, phone=phone, picture_url=None)
         return get_user_by_id(user_id)
 
 # ==================== 系统配置 ====================

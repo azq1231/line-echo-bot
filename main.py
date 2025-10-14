@@ -49,14 +49,17 @@ def get_line_profile(user_id):
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             profile = response.json()
-            display_name = profile.get('displayName', '未知')
-            print(f"成功獲取用戶姓名：{display_name}")
-            return display_name
+            user_info = {
+                'name': profile.get('displayName', '未知'),
+                'picture_url': profile.get('pictureUrl')
+            }
+            print(f"成功獲取用戶資料：{user_info['name']}")
+            return user_info
         else:
             print(f"LINE Profile API 錯誤: {response.text}")
     except Exception as e:
         print(f"獲取用戶資料時發生錯誤: {e}")
-    return '未知'
+    return {'name': '未知', 'picture_url': None}
 
 def send_line_message(user_id, messages, message_type="message", target_name=None):
     """发送 LINE 消息（支持文本和 Flex Message）"""
@@ -333,7 +336,12 @@ def list_users():
 
 @app.route("/add_user/<user_id>")
 def add_user(user_id):
-    db.add_user(user_id, "未知")
+    # 從 LINE 獲取用戶資料
+    user_info = get_line_profile(user_id)
+    # 將完整資料存入資料庫
+    db.add_user(user_id, user_info['name'], user_info['picture_url']) 
+    db.update_user_name(user_id, user_info['name']) # 標記為手動（或至少是管理員介入）
+    
     return jsonify({"status": "success", "message": f"已新增使用者：{user_id}"})
 
 @app.route("/delete_user/<user_id>")
@@ -572,8 +580,8 @@ def webhook():
         if event["type"] == "follow":
             user_id = event["source"]["userId"]
             print(f"用戶加入好友 - 用戶ID: {user_id}")
-            user_name = get_line_profile(user_id)
-            db.add_user(user_id, user_name)
+            user_info = get_line_profile(user_id)
+            db.add_user(user_id, user_info['name'], user_info['picture_url'])
         
         elif event["type"] == "message" and event["message"]["type"] == "text":
             user_id = event["source"]["userId"]
@@ -582,8 +590,8 @@ def webhook():
             print(f"收到訊息 - 用戶ID: {user_id}, 訊息: {user_message}")
             
             # 每次收到訊息都嘗試更新用戶資料，db.add_user 會處理衝突
-            user_name = get_line_profile(user_id)
-            db.add_user(user_id, user_name)
+            user_info = get_line_profile(user_id)
+            db.add_user(user_id, user_info['name'], user_info['picture_url'])
             
             if user_message in ['預約', '预约', '訂位', '订位']:
                 handle_booking_start(user_id)
@@ -597,9 +605,9 @@ def webhook():
             data = event["postback"]["data"]
             
             # 確保用戶存在於資料庫中
-            user_name = get_line_profile(user_id)
-            if user_name:
-                db.add_user(user_id, user_name)
+            user_info = get_line_profile(user_id)
+            if user_info:
+                db.add_user(user_id, user_info['name'], user_info['picture_url'])
 
             print(f"收到 Postback - 用戶ID: {user_id}, Data: {data}")
             handle_postback(user_id, data)

@@ -55,6 +55,12 @@
     .btn-secondary:hover {
         background: #718096;
     }
+    .btn-danger {
+        background: #e53e3e;
+    }
+    .btn-danger:hover {
+        background: #c53030;
+    }
     .user-list {
         list-style: none;
         padding: 0;
@@ -68,11 +74,22 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 15px;
+    }
+    .user-info-wrapper {
+        flex-grow: 1;
+        min-width: 0; /* Prevents flex item from overflowing */
+    }
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
     }
     .user-id {
         font-family: 'Courier New', monospace;
         color: #555;
         font-size: 12px;
+        word-break: break-all;
     }
     .editable-name {
         display: inline-block;
@@ -219,8 +236,9 @@
 
                     return `
                     <li class="user-item">
-                        <div>
-                            <div style="font-weight: 600; margin-bottom: 4px;">
+                        <img src="${user.picture_url || 'https://via.placeholder.com/40'}" alt="avatar" class="user-avatar">
+                        <div class="user-info-wrapper">
+                            <div style="font-weight: 600; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;">
                                 <span class="editable-name" data-userid="${userId}" data-username="${userName}" title="點擊編輯姓名">
                                     ${userName}
                                 </span>
@@ -235,6 +253,9 @@
                                 <span class="info-label">手機:</span> ${phone2Display}
                             </div>
                             <span class="user-id">${userId}</span>
+                        </div>
+                        <div>
+                            <button class="action-btn btn-danger" data-userid="${userId}" data-username="${userName}" data-action="delete-user">刪除</button>
                         </div>
                     </li>
                     `;
@@ -260,6 +281,21 @@
                 loadUsers();
             } else { showMessage('新增失敗', 'error'); }
         } catch (error) { showMessage('新增失敗', 'error'); }
+    }
+
+    async function deleteUser(userId, userName) {
+        if (!confirm(`確定要刪除用戶「${userName}」嗎？\n\n此操作無法復原。`)) return;
+
+        try {
+            const response = await fetch(`/delete_user/${userId}`);
+            const data = await response.json();
+            if (data.status === 'success') {
+                showMessage('✅ 用戶已刪除', 'success');
+                loadUsers();
+            } else {
+                showMessage(data.message || '刪除失敗', 'error');
+            }
+        } catch (error) { showMessage('刪除失敗', 'error'); }
     }
 
     async function editUserName(userId, currentName) {
@@ -338,18 +374,24 @@
         
         document.getElementById('userList').addEventListener('click', (e) => {
             const target = e.target;
-            if (!target.dataset.userid) return;
-
+            // 如果點擊的目標沒有 userid，就直接返回
+            if (!target.dataset.userid) return; 
+            
             const userId = target.dataset.userid;
-
-            if (target.dataset.username) {
-                editUserName(userId, target.dataset.username);
-            } else if (target.dataset.currentZhuyin !== undefined) {
-                editZhuyin(userId, target.dataset.currentZhuyin);
-            } else if (target.dataset.field) { // Handles both phone and phone2
-                editUserPhone(userId, target.dataset.field, target.dataset.currentPhone);
-            } else if (target.dataset.action === 'generate-zhuyin') {
+            const action = target.dataset.action;
+            
+            // 優先判斷特定動作按鈕
+            if (action === 'delete-user') {
+                deleteUser(userId, target.dataset.username);
+            } else if (action === 'generate-zhuyin') {
                 generateZhuyin(userId);
+            // 其次判斷可編輯的欄位
+            } else if (target.dataset.username) { // 編輯姓名
+                editUserName(userId, target.dataset.username);
+            } else if (target.dataset.currentZhuyin !== undefined) { // 編輯注音
+                editZhuyin(userId, target.dataset.currentZhuyin);
+            } else if (target.dataset.field) { // 編輯電話 (市話或手機)
+                editUserPhone(userId, target.dataset.field, target.dataset.currentPhone);
             }
         });
     };
