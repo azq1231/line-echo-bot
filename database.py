@@ -72,6 +72,14 @@ def init_database():
             FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
     ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS closed_days (
+            date TEXT PRIMARY KEY,
+            reason TEXT
+        )
+    ''')
+
     
     # 新增紀錄發送訊息函數
 def log_message_send(user_id: str, target_name: str, message_type: str, status: str, error_message: Optional[str] = None, message_excerpt: Optional[str] = None):
@@ -244,4 +252,144 @@ def get_all_users() -> List[Dict]:
     conn.close()
     return users
 
+# ... (rest of the file remains the same)
+
+def get_user_by_id(user_id: str) -> Optional[Dict]:
+    """通过 user_id 获取用户"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    return dict(user) if user else None
+
+def add_user(user_id: str, name: str, phone: Optional[str] = None, phone2: Optional[str] = None) -> None:
+    """新增或更新用户，如果用户已存在，则更新姓名"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 检查用户是否存在
+    cursor.execute('SELECT name FROM users WHERE user_id = ?', (user_id,))
+    existing_user = cursor.fetchone()
+    
+    zhuyin = _name_to_zhuyin(name)
+
+    if existing_user:
+        # 如果姓名不同，则更新
+        if existing_user['name'] != name:
+            cursor.execute('''
+                UPDATE users 
+                SET name = ?, zhuyin = ?, updated_at = CURRENT_TIMESTAMP 
+                WHERE user_id = ?
+            ''', (name, zhuyin, user_id))
+            print(f"Updated user {user_id}'s name to {name}")
+    else:
+        # 新增用户
+        cursor.execute('''
+            INSERT INTO users (user_id, name, phone, phone2, zhuyin)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, name, phone, phone2, zhuyin))
+        print(f"Added new user: {name} ({user_id})")
+        
+    conn.commit()
+    conn.close()
+
+def update_user_name(user_id: str, new_name: str) -> bool:
+    """更新用户名和注音"""
+    conn = get_db()
+    cursor = conn.cursor()
+    zhuyin = _name_to_zhuyin(new_name)
+    cursor.execute('''
+        UPDATE users 
+        SET name = ?, zhuyin = ?, updated_at = CURRENT_TIMESTAMP 
+        WHERE user_id = ?
+    ''', (new_name, zhuyin, user_id))
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
+# ==================== 预约管理 ====================
+
+def add_appointment(user_id: str, user_name: str, date: str, time: str, notes: Optional[str] = None) -> bool:
+    """新增预约"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO appointments (user_id, user_name, date, time, notes)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, user_name, date, time, notes))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        # 唯一性约束失败
+        return False
+    finally:
+        conn.close()
+
+def get_appointments_by_date_range(start_date: str, end_date: str) -> List[Dict]:
+    """获取指定日期范围内的预约"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM appointments 
+        WHERE date BETWEEN ? AND ?
+        ORDER BY date, time
+    ''', (start_date, end_date))
+    appointments = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return appointments
+
+def cancel_appointment(date: str, time: str) -> bool:
+    """取消指定日期的预约"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM appointments WHERE date = ? AND time = ?", (date, time))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+# ... (rest of the file remains the same)
+
+# ==================== 休診日管理 ====================
+
+def get_all_closed_days() -> List[Dict]:
+    """獲取所有休診日"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM closed_days ORDER BY date DESC')
+    days = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return days
+
+def is_closed_day(date: str) -> bool:
+    """檢查某天是否為休診日"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT 1 FROM closed_days WHERE date = ?', (date,))
+    is_closed = cursor.fetchone() is not None
+    conn.close()
+    return is_closed
+
+def set_closed_day(date: str, reason: str) -> int:
+    """設定休診日並取消當天所有預約"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('INSERT OR REPLACE INTO closed_days (date, reason) VALUES (?, ?)', (date, reason))
+    cursor.execute("DELETE FROM appointments WHERE date = ?", (date,))
+    cancelled_count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return cancelled_count
+
+def remove_closed_day(date: str) -> bool:
+    """移除休診日設定"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM closed_days WHERE date = ?', (date,))
+    removed = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return removed
 # ... (rest of the file remains the same)

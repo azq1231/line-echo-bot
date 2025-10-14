@@ -365,6 +365,8 @@ def generate_zhuyin_route(user_id):
 @app.route("/get_week_appointments")
 def get_week_appointments():
     week_offset = int(request.args.get('offset', 0))
+    print(f"get_week_appointments: offset={week_offset}")  # Add log
+
     week_dates = get_week_dates(week_offset)
     
     week_schedule = {}
@@ -373,7 +375,7 @@ def get_week_appointments():
     for date_info in week_dates:
         date_str = date_info['date']
         weekday = date_info['weekday']
-        time_slots = generate_time_slots(weekday)
+        time_slots = generate_time_slots(weekday)  # Corrected variable name
         
         appointments = db.get_appointments_by_date_range(date_str, date_str)
         appointments_map = {apt['time']: apt for apt in appointments if apt['status'] == 'confirmed'}
@@ -391,12 +393,14 @@ def get_week_appointments():
             'appointments': day_appointments
         }
     
-    return jsonify({
+    response_data = {
         'week_schedule': week_schedule,
         'users': all_users,
         'week_offset': week_offset
-    })
-
+    }
+    
+    print(f"get_week_appointments: response={response_data}")  # Add log
+    return jsonify(response_data)
 @app.route("/save_appointment", methods=["POST"])
 def save_appointment():
     data = request.get_json()
@@ -811,6 +815,6 @@ print("Scheduler started. Checking for messages to send every 30 seconds.")
 
 if __name__ == "__main__":
     try:
-        app.run(host="0.0.0.0", port=5000, debug=True)
+        app.run(host="0.0.0.0", port=5000, debug=False)
     except (KeyboardInterrupt, SystemExit):
         scheduler.shutdown()
