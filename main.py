@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, flash, redirect, url_for, Response
+from flask import Flask, request, jsonify, render_template, flash, redirect, url_for, Response, session
 import os
 import requests
 from datetime import datetime, timedelta
@@ -19,6 +19,8 @@ app.secret_key = os.urandom(24) # for flash messages
 
 LINE_CHANNEL_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
+LINE_LOGIN_CHANNEL_ID = os.getenv("LINE_LOGIN_CHANNEL_ID")
+LINE_LOGIN_CHANNEL_SECRET = os.getenv("LINE_LOGIN_CHANNEL_SECRET")
 TAIPEI_TZ = pytz.timezone('Asia/Taipei')
 
 # 初始化数据库
@@ -274,60 +276,126 @@ def message_stats_api():
     
     return jsonify(stats_data)
 
-# ============ Web Booking Site ============ 
+# ============ LINE Login & Web Booking Site ============
 
-@app.route("/booking/", methods=["GET", "POST"])
+@app.route('/login')
+def login():
+    """重定向到 LINE 登入頁面"""
+    if not all([LINE_LOGIN_CHANNEL_ID, LINE_LOGIN_CHANNEL_SECRET]):
+        flash("系統未設定 LINE Login Channel，無法登入。", "danger")
+        return redirect(url_for('booking_page'))
+
+    state = str(uuid.uuid4())
+    session['oauth_state'] = state
+    redirect_uri = url_for('callback', _external=True)
+    
+    auth_url = (
+        f"https://access.line.me/oauth2/v2.1/authorize?response_type=code"
+        f"&client_id={LINE_LOGIN_CHANNEL_ID}"
+        f"&redirect_uri={redirect_uri}"
+        f"&state={state}"
+        f"&scope=profile%20openid"
+    )
+    return redirect(auth_url)
+
+@app.route('/callback')
+def callback():
+    """處理 LINE 登入後的回呼"""
+    code = request.args.get('code')
+    state = request.args.get('state')
+
+    if not state or state != session.get('oauth_state'):
+        flash("登入驗證失敗，請重試。", "danger")
+        return redirect(url_for('booking_page'))
+
+    # 換取 Access Token
+    token_url = "https://api.line.me/oauth2/v2.1/token"
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": url_for('callback', _external=True),
+        "client_id": LINE_LOGIN_CHANNEL_ID,
+        "client_secret": LINE_LOGIN_CHANNEL_SECRET,
+    }
+    response = requests.post(token_url, headers=headers, data=data)
+    if response.status_code != 200:
+        flash("無法從 LINE 獲取 Token，請稍後再試。", "danger")
+        return redirect(url_for('booking_page'))
+
+    # 獲取使用者資料
+    profile_url = "https://api.line.me/v2/profile"
+    headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+    profile_response = requests.get(profile_url, headers=headers)
+    if profile_response.status_code != 200:
+        flash("無法獲取 LINE 使用者資料。", "danger")
+        return redirect(url_for('booking_page'))
+
+    profile = profile_response.json()
+    user_id = profile['userId']
+    user_name = profile['displayName']
+    picture_url = profile.get('pictureUrl')
+
+    # 將使用者資料存入資料庫和 session
+    db.add_user(user_id, user_name, picture_url)
+    session['user'] = {
+        'user_id': user_id,
+        'name': user_name,
+        'picture_url': picture_url
+    }
+    
+    flash("登入成功！", "success")
+    return redirect(url_for('booking_page'))
+
+@app.route('/logout')
+def logout():
+    """登出"""
+    session.pop('user', None)
+    flash("您已成功登出。", "info")
+    return redirect(url_for('booking_page'))
+
+@app.route("/booking/", methods=["GET"])
 def booking_page():
-    if request.method == "POST":
-        phone = request.form.get('phone')
-        date = request.form.get('date')
-        time = request.form.get('time')
-
-        if phone is None or date is None or time is None:
-            flash("預約資料不完整，請重試。", "danger")
-            return redirect(url_for('booking_page'))
-
-        user = db.get_or_create_user_by_phone(phone)
-
-        if user is None:
-            flash("無法找到或建立用戶資料，請稍後再試。", "danger")
-            return redirect(url_for('booking_page', phone=phone))
-        
-        success = db.add_appointment(
-            user_id=user['user_id'],
-            user_name=user['name'],
-            date=date,
-            time=time
-        )
-
-        if success:
-            flash(f"恭喜！您已成功預約 {date} {time} 的時段。", "success")
-        else:
-            flash(f"抱歉，{date} {time} 的時段已被預約，請選擇其他時段。", "danger")
-        
-        return redirect(url_for('booking_page', phone=phone))
-
-    phone = request.args.get('phone', '')
+    user = session.get('user')
     schedule_data = None
 
-    if phone:
-        week_dates = get_week_dates(week_offset=0)
+    if user:
+        week_offset_str = request.args.get('week_offset', '0')
+        try:
+            week_offset = int(week_offset_str)
+        except ValueError:
+            week_offset = 0
+
+        week_dates = get_week_dates(week_offset=week_offset)
         start_date = week_dates[0]['date']
         end_date = week_dates[-1]['date']
         
-        # 一次性获取整周的预约和休诊日
         appointments_this_week = db.get_appointments_by_date_range(start_date, end_date)
         booked_slots = {(apt['date'], apt['time']) for apt in appointments_this_week if apt['status'] == 'confirmed'}
         closed_days = {day['date'] for day in db.get_all_closed_days()}
 
         schedule_data = []
-        for day in week_dates:
-            all_slots = generate_time_slots(day['weekday'])
-            available_slots = [s for s in all_slots if (day['date'], s) not in booked_slots and day['date'] not in closed_days]
-            day['slots'] = [{'time': s, 'available': s in available_slots} for s in all_slots]
-            schedule_data.append(day)
+        now = datetime.now(TAIPEI_TZ)
 
-    return render_template("booking.html", phone=phone, schedule=schedule_data)
+        for day in week_dates:
+             day['is_closed'] = day['date'] in closed_days
+             all_slots = generate_time_slots(day['weekday'])
+             day['slots'] = []
+             for slot in all_slots:
+                 is_available = (day['date'], slot) not in booked_slots and not day['is_closed']
+                 
+                 # 統一檢查時段是否已過去
+                 if is_available:
+                     try:
+                         slot_datetime = datetime.strptime(f"{day['date']} {slot}", '%Y-%m-%d %H:%M').replace(tzinfo=TAIPEI_TZ)
+                         if slot_datetime <= now:
+                             is_available = False
+                     except ValueError:
+                         pass # 忽略解析錯誤
+                 day['slots'].append({'time': slot, 'available': is_available})
+             schedule_data.append(day)
+
+    return render_template("booking.html", user=user, schedule=schedule_data, week_offset=week_offset, max_weeks=int(db.get_config('booking_window_weeks') or '2'))
 
 # ============ 用户管理 API ============ 
 
@@ -492,6 +560,32 @@ def save_appointment():
         db.add_appointment(user_id, user_name, date, time)
     
     return jsonify({"status": "success"})
+
+@app.route("/api/book_appointment", methods=["POST"])
+def api_book_appointment():
+    """API for booking from the web interface"""
+    if 'user' not in session:
+        return jsonify({"status": "error", "message": "使用者未登入"}), 401
+
+    data = request.get_json()
+    date = data.get('date')
+    time = data.get('time')
+
+    if not date or not time:
+        return jsonify({"status": "error", "message": "預約資料不完整"}), 400
+
+    user = session['user']
+    success = db.add_appointment(
+        user_id=user['user_id'],
+        user_name=user['name'],
+        date=date,
+        time=time
+    )
+
+    if success:
+        return jsonify({"status": "success", "message": f"恭喜！您已成功預約 {date} {time} 的時段。"})
+    else:
+        return jsonify({"status": "error", "message": f"抱歉，{date} {time} 的時段已被預約，請選擇其他時段。"}), 409
 
 @app.route("/send_appointment_reminders", methods=["POST"])
 def send_appointment_reminders():

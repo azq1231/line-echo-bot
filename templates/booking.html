@@ -1,82 +1,230 @@
 {% extends "base.html" %}
 {% block title %}線上預約{% endblock %}
-{% block header %}線上預約系統{% endblock %}
+{% block header %}線上預約{% endblock %}
+
 {% block content %}
 <style>
-    .slot-button {
-        width: 100%;
-        margin-bottom: 10px;
+    .login-prompt {
+        text-align: center;
+        padding: 50px 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+    }
+    .btn-line-login {
+        background-color: #00C300;
+        color: white;
+        font-weight: bold;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        transition: background-color 0.3s;
+    }
+    .btn-line-login:hover {
+        background-color: #00a000;
+        color: white;
+    }
+    .user-profile {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding: 15px;
+        background-color: #f1f3f5;
+        border-radius: 8px;
+    }
+    .user-profile img {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        margin-right: 15px;
+    }
+    .week-navigation {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .schedule-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+    }
+    .day-column {
+        background-color: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .day-header {
+        background-color: #e9ecef;
+        padding: 10px;
+        text-align: center;
+        font-weight: bold;
+    }
+    .day-header.closed {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    .time-slots {
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .time-slot {
+        padding: 8px;
+        text-align: center;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background-color 0.2s, color 0.2s;
+    }
+    .time-slot.available {
+        background-color: #e7f5ff;
+        color: #007bff;
+    }
+    .time-slot.available:hover {
+        background-color: #007bff;
+        color: white;
+    }
+    .time-slot.unavailable {
+        background-color: #f1f3f5;
+        color: #adb5bd;
+        cursor: not-allowed;
+        text-decoration: line-through;
+    }
+    #message-container {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1050;
+        width: 90%;
+        max-width: 500px;
     }
 </style>
 
-<div class="container">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+<div class="container my-4">
+    <div id="message-container"></div>
 
-    <!-- Phone Number Input Form -->
-    <div class="row justify-content-center">
-        <div class="col-lg-6 col-md-8">
-            <form method="GET" action="/booking/" class="card p-4 shadow-sm mb-5">
-                <div class="mb-3">
-                    <label for="phone" class="form-label fs-5">請輸入您的電話號碼：</label>
-                    <input type="tel" class="form-control" id="phone" name="phone" placeholder="例如：0912345678" value="{{ phone or '' }}" required>
-                </div>
-                <button type="submit" class="btn btn-primary">查詢可預約時間</button>
-            </form>
+    {% if user %}
+    <!-- 已登入 -->
+    <div class="user-profile">
+        <div class="d-flex align-items-center">
+            <img src="{{ url_for('user_avatar', user_id=user.user_id) }}" alt="User Avatar">
+            <div>
+                <h5 class="mb-0">歡迎，{{ user.name }}！</h5>
+                <small class="text-muted">請選擇您要預約的時段</small>
+            </div>
         </div>
+        <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-secondary">登出</a>
     </div>
 
-        <!-- Schedule Display -->
-        {% if schedule %}
-        <div class="schedule-container">
-            <h2 class="text-center mb-4">本週可預約時段 ({{ phone }})</h2>
-            <div class="row">
-                {% for day in schedule %}
-                <div class="col-md-4 col-lg mb-3">
-                    <div class="card h-100">
-                        <div class="card-header text-center">
-                            <strong>{{ day.day_name }}</strong><br>
-                            <small class="text-muted">{{ day.display }}</small>
-                        </div>
-                        <div class="card-body">
-                            {% if day.slots %}
-                                {% for slot in day.slots %}
-                                    {% if slot.available %}
-                                        <form method="POST" action="/booking/" class="d-grid">
-                                            <input type="hidden" name="phone" value="{{ phone }}">
-                                            <input type="hidden" name="date" value="{{ day.date }}">
-                                            <input type="hidden" name="time" value="{{ slot.time }}">
-                                            <button type="submit" class="btn btn-outline-success slot-button">{{ slot.time }}</button>
-                                        </form>
-                                    {% else %}
-                                        <button type="button" class="btn btn-secondary slot-button" disabled>{{ slot.time }}</button>
-                                    {% endif %}
-                                {% endfor %}
-                            {% else %}
-                                <p class="text-center text-muted">本日無可預約時段</p>
-                            {% endif %}
-                        </div>
+    {% if schedule %}
+    <div class="week-navigation">
+        <a href="{{ url_for('booking_page', week_offset=week_offset - 1) }}" class="btn btn-outline-primary {% if week_offset <= 0 %}disabled{% endif %}">&laquo; 上週</a>
+        <h4>{{ schedule[0].display }} - {{ schedule[-1].display }}</h4>
+        <a href="{{ url_for('booking_page', week_offset=week_offset + 1) }}" class="btn btn-outline-primary {% if week_offset + 1 >= max_weeks %}disabled{% endif %}">&raquo; 下週</a>
+    </div>
+
+    <div class="schedule-grid">
+        {% for day in schedule %}
+        <div class="day-column">
+            <div class="day-header {% if day.is_closed %}closed{% endif %}">
+                {{ day.display }} ({{ day.day_name }})
+                {% if day.is_closed %}<br><small>休診</small>{% endif %}
+            </div>
+            <div class="time-slots">
+                {% for slot in day.slots %}
+                    {% if slot.available %}
+                    <div class="time-slot available" onclick="confirmBooking('{{ day.date }}', '{{ slot.time }}')">
+                        {{ slot.time }}
                     </div>
-                </div>
+                    {% else %}
+                    <div class="time-slot unavailable">
+                        {{ slot.time }}
+                    </div>
+                    {% endif %}
                 {% endfor %}
             </div>
         </div>
-        {% elif phone %}
-            <div class="text-center">
-                <p class="fs-5">正在為您查詢時段...</p>
-            </div>
-        {% else %}
-            <div class="text-center">
-                 <p class="text-muted">請先輸入電話號碼以查詢可預約時段。</p>
-            </div>
-        {% endif %}
+        {% endfor %}
     </div>
+    {% else %}
+    <div class="alert alert-info">目前沒有可預約的時段。</div>
+    {% endif %}
+
+    {% else %}
+    <!-- 未登入 -->
+    <div class="login-prompt">
+        <h2>請先登入</h2>
+        <p class="lead text-muted">使用您的 LINE 帳號登入以進行預約。</p>
+        <a href="{{ url_for('login') }}" class="btn btn-lg btn-line-login">
+            <i class="bi bi-line"></i> 使用 LINE 登入
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function showAlert(message, type = 'info') {
+        const container = document.getElementById('message-container');
+        const alertEl = document.createElement('div');
+        alertEl.className = `alert alert-${type} alert-dismissible fade show`;
+        alertEl.role = 'alert';
+        alertEl.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        container.appendChild(alertEl);
+        setTimeout(() => {
+            const alertInstance = bootstrap.Alert.getOrCreateInstance(alertEl);
+            if (alertInstance) {
+                alertInstance.close();
+            }
+        }, 5000);
+    }
+
+    async function confirmBooking(date, time) {
+        if (!confirm(`您確定要預約 ${date} ${time} 的時段嗎？`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch("{{ url_for('api_book_appointment') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ date: date, time: time }),
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                showAlert(result.message, 'success');
+                // 預約成功後重新載入頁面以更新狀態
+                setTimeout(() => window.location.reload(), 2000);
+            } else {
+                showAlert(result.message || '預約失敗，請重試。', 'danger');
+            }
+        } catch (error) {
+            console.error('Booking error:', error);
+            showAlert('發生網路錯誤，請稍後再試。', 'danger');
+        }
+    }
+
+    // 處理 Flask flash messages
+    document.addEventListener('DOMContentLoaded', function() {
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    showAlert("{{ message }}", "{{ category }}");
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    });
+</script>
 {% endblock %}
