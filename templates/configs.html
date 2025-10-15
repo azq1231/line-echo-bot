@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}系統設定{% endblock %}
+{% block header %}⚙️ 系統設定{% endblock %}
+
+{% block content %}
+<style>
+    .config-item {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border: 1px solid #dee2e6;
+    }
+    .config-item h5 {
+        margin-bottom: 15px;
+    }
+    .form-label {
+        font-weight: 500;
+    }
+    #message-container {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1050;
+        width: 90%;
+        max-width: 500px;
+    }
+</style>
+
+<div class="container my-4">
+    <div id="message-container"></div>
+
+    <div class="config-item">
+        <h5>預約設定</h5>
+        <div class="mb-3">
+            <label for="bookingWindow" class="form-label">線上預約開放週數</label>
+            <select class="form-select" id="bookingWindow">
+                <option value="2" {% if configs.booking_window_weeks == '2' %}selected{% endif %}>2 週</option>
+                <option value="4" {% if configs.booking_window_weeks == '4' %}selected{% endif %}>4 週</option>
+            </select>
+            <div class="form-text">設定使用者在線上預約頁面，最多可以看到未來幾週的時段。</div>
+        </div>
+        <button class="btn btn-primary" onclick="saveConfig('booking_window_weeks', 'bookingWindow')">儲存設定</button>
+    </div>
+
+    <div class="config-item">
+        <h5>管理設定</h5>
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="allowDeletionSwitch" {% if configs.allow_user_deletion == 'true' %}checked{% endif %}>
+            <label class="form-check-label" for="allowDeletionSwitch">允許從管理介面刪除用戶 (危險操作)</label>
+        </div>
+        <button class="btn btn-primary" onclick="saveDeletionSetting()">儲存設定</button>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function showAlert(message, type = 'info') {
+        const container = document.getElementById('message-container');
+        const alertEl = document.createElement('div');
+        alertEl.className = `alert alert-${type} alert-dismissible fade show`;
+        alertEl.role = 'alert';
+        alertEl.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        container.appendChild(alertEl);
+        setTimeout(() => {
+            const alertInstance = bootstrap.Alert.getOrCreateInstance(alertEl);
+            if (alertInstance) {
+                alertInstance.close();
+            }
+        }, 3000);
+    }
+
+    async function saveConfig(key, elementId) {
+        const value = document.getElementById(elementId).value;
+        await updateConfig(key, value);
+    }
+
+    async function saveDeletionSetting() {
+        const isEnabled = document.getElementById('allowDeletionSwitch').checked;
+        await updateConfig('allow_user_deletion', isEnabled ? 'true' : 'false');
+    }
+
+    async function updateConfig(key, value) {
+        try {
+            const response = await fetch("{{ url_for('set_config_api') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: key, value: value })
+            });
+            const result = await response.json();
+            if (response.ok) {
+                showAlert(result.message, 'success');
+            } else {
+                showAlert(result.message || '更新失敗', 'danger');
+            }
+        } catch (error) {
+            showAlert('網路錯誤，請稍後再試。', 'danger');
+        }
+    }
+</script>
+{% endblock %}

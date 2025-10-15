@@ -202,16 +202,6 @@
     <div id="message" class="message"></div>
 
     <div class="section">
-        <h2>⚙️ 系統設定</h2>
-        <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" role="switch" id="allowDeletionSwitch" {% if allow_user_deletion %}checked{% endif %} onchange="toggleDeletionSetting(this.checked)">
-            <label class="form-check-label" for="allowDeletionSwitch">
-                允許刪除用戶 (危險)
-            </label>
-        </div>
-    </div>
-
-    <div class="section">
         <h2>➕ 新增用戶</h2>
         <div class="input-group">
             <input type="text" id="userIdInput" placeholder="輸入 LINE User ID (例如：U1234567890abcdef)">
@@ -355,26 +345,6 @@
                 showMessage(data.message || '更新失敗', 'error');
             }
         } catch (error) { showMessage('更新失敗', 'error'); }
-    }
-
-    async function toggleDeletionSetting(isEnabled) {
-        try {
-            const response = await fetch('/set_config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    key: 'allow_user_deletion',
-                    value: isEnabled ? 'true' : 'false',
-                    description: '是否允許從管理介面刪除用戶'
-                })
-            });
-            const data = await response.json();
-            if (data.status === 'success') {
-                showMessage(`✅ 設定已更新`, 'success');
-                allowUserDeletion = isEnabled; // 更新前端狀態
-                loadUsers(); // 重新載入用戶列表以應用變更
-            } else { showMessage('設定更新失敗', 'error'); }
-        } catch (error) { showMessage('設定更新失敗', 'error'); }
     }
 
     async function editUserName(userId, currentName) {

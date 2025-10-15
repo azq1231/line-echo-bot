@@ -271,6 +271,20 @@ def stats_page():
                          current_user=user_id,
                          current_type=message_type)
 
+@app.route("/configs")
+def configs_page():
+    """渲染系統設定頁面"""
+    all_configs_list = db.get_all_configs()
+    # 將列表轉換為字典以便在模板中輕鬆訪問
+    configs_dict = {c['key']: c['value'] for c in all_configs_list}
+    
+    # 為尚未設定的項目提供預設值
+    configs_dict.setdefault('booking_window_weeks', '2')
+    configs_dict.setdefault('allow_user_deletion', 'false')
+
+    return render_template("configs.html", configs=configs_dict)
+
+
 @app.route("/api/message_stats")
 def message_stats_api():
     month = request.args.get('month')
