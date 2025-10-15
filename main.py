@@ -48,7 +48,7 @@ def get_line_profile(user_id):
     url = f"https://api.line.me/v2/bot/profile/{user_id}"
     headers = {"Authorization": f"Bearer {LINE_CHANNEL_TOKEN}"}
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
             profile = response.json()
             user_info = {
@@ -89,7 +89,7 @@ def send_line_message(user_id, messages, message_type="message", target_name=Non
             message_excerpt = first_message[:100] + "..." if len(first_message) > 100 else first_message
     
     try:
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=10)
         if response.status_code == 200:
             # 記錄成功發送
             db.log_message_send(
