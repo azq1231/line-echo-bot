@@ -358,6 +358,7 @@ def logout():
 def booking_page():
     user = session.get('user')
     schedule_data = None
+    week_offset = 0 # 為 week_offset 提供預設值
 
     if user:
         week_offset_str = request.args.get('week_offset', '0')

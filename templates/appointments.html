@@ -238,21 +238,33 @@
         displayElement.dataset.userId = userId;
 
         const { date, time } = displayElement.dataset;
-        saveAppointment(date, time, userId, userName);
+        if (userId) {
+            saveAppointment(date, time, userId, userName);
+        } else {
+            // 如果 userId 為空，表示要取消預約
+            cancelAppointment(date, time);
+        }
         closeAllSelects();
     }
 
     async function saveAppointment(date, time, userId, userName) {
+        showStatus('儲存中...', 'info');
         try {
             const response = await fetch('/save_appointment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ date, time, user_id: userId, user_name: userId ? userName : '' })
+                body: JSON.stringify({ date, time, user_id: userId, user_name: userName })
             });
             if (response.ok) {
                 showStatus('✅ 預約已儲存', 'success');
             } else { showStatus('❌ 儲存失敗', 'error'); }
         } catch (error) { showStatus('❌ 儲存失敗', 'error'); }
+    }
+
+    async function cancelAppointment(date, time) {
+        // 後端 save_appointment 傳空值即可取消，前端可選擇性實作專門的取消 API
+        // 這裡我們繼續使用 save_appointment 的邏輯
+        await saveAppointment(date, time, '', '');
     }
 
     async function sendWeekReminders(event) {
