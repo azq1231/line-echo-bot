@@ -14,6 +14,9 @@ pip
 LINE_CHANNEL_TOKEN
 
 LINE_CHANNEL_SECRET
+LINE_LOGIN_CHANNEL_ID
+LINE_LOGIN_CHANNEL_SECRET
+FLASK_SECRET_KEY
 
 GEMINI_API_KEY
 
@@ -46,12 +49,16 @@ pip install -r requirements.txt
 
 2. 設定環境變數
 
-方法 A：使用 .env
+**建議方法：使用 .env 檔案**
+
+在您的專案根目錄（`/var/www/myapp`）建立一個名為 `.env` 的檔案，內容如下：
 
 LINE_CHANNEL_TOKEN=你的TOKEN
 LINE_CHANNEL_SECRET=你的SECRET
+LINE_LOGIN_CHANNEL_ID=你的LINE登入頻道ID
+LINE_LOGIN_CHANNEL_SECRET=你的LINE登入頻道密鑰
+FLASK_SECRET_KEY=你的Flask應用密鑰(一個隨機的長字串)
 GEMINI_API_KEY=你的API_KEY
-
 
 在 main.py 開頭加：
 
@@ -59,10 +66,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-方法 B：系統環境變數
+**替代方法：設定系統環境變數**
 
 export LINE_CHANNEL_TOKEN="你的TOKEN"
 export LINE_CHANNEL_SECRET="你的SECRET"
+export LINE_LOGIN_CHANNEL_ID="你的LINE登入頻道ID"
+export LINE_LOGIN_CHANNEL_SECRET="你的LINE登入頻道密鑰"
+export FLASK_SECRET_KEY="你的Flask應用密鑰(一個隨機的長字串)"
 export GEMINI_API_KEY="你的API_KEY"
 
 3. 啟動 Flask
@@ -86,19 +96,20 @@ apt install -y git python3-venv
 
 2. 下載專案
 mkdir -p /var/www/myapp
-cd /var/www/myapp
-git clone https://github.com/azq1231/line-echo-bot.git .
+cd /var/www/
+git clone https://github.com/azq1231/line-echo-bot.git myapp
 
 3. 建立虛擬環境
+cd /var/www/myapp
 python3 -m venv venv
 source venv/bin/activate
 
 4. 安裝依賴
 pip install -r requirements.txt
 
-5. 上傳 .env 與資料庫（如有）
-scp .env root@你的VPS:/var/www/myapp/
-scp appointments.db root@你的VPS:/var/www/myapp/
+5. 建立並編輯 .env 檔案
+nano .env
+# 將您在本地測試用的 .env 內容貼上
 
 6. 啟動服務
 source venv/bin/activate
@@ -111,19 +122,20 @@ python main.py
 
 7. Gunicorn + systemd（建議生產環境使用）
 
-建立 /etc/systemd/system/linebot.service：
+建立 /etc/systemd/system/mywebsite.service：
 
 [Unit]
-Description=LINE Bot Appointment System
+Description=Gunicorn instance for my website
 After=network.target
 
 [Service]
-User=你的用戶名
-WorkingDirectory=/home/你的用戶名/linebot
-Environment="LINE_CHANNEL_TOKEN=你的TOKEN"
-Environment="LINE_CHANNEL_SECRET=你的SECRET"
-Environment="GEMINI_API_KEY=你的API_KEY"
-ExecStart=/home/你的用戶名/linebot/venv/bin/gunicorn -w 4 -b 0.0.0.0:5000 main:app
+User=root # 或者您指定的非 root 使用者
+WorkingDirectory=/var/www/myapp
+# 直接指定 .env 檔案的路徑，systemd 會自動載入所有變數
+EnvironmentFile=/var/www/myapp/.env
+
+# 確保 gunicorn 從虛擬環境中執行
+ExecStart=/var/www/myapp/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:5000 main:app
 Restart=always
 
 [Install]
@@ -133,8 +145,8 @@ WantedBy=multi-user.target
 啟動服務：
 
 sudo systemctl daemon-reload
-sudo systemctl start linebot
-sudo systemctl enable linebot
+sudo systemctl start mywebsite
+sudo systemctl enable mywebsite
 
 重新啟動:(注意名稱)
 sudo systemctl restart mywebsite
@@ -147,14 +159,14 @@ http://VPS_IP:5000/closed_days   # 休診管理
 
 四、日常維護
 查看日誌
-sudo journalctl -u linebot -f
+sudo journalctl -u mywebsite -f
 
 備份資料庫
 cp appointments.db appointments_backup_$(date +%Y%m%d).db
 
 更新代碼
 git pull origin main
-sudo systemctl restart linebot
+sudo systemctl restart mywebsite
 
 五、常見問題
 

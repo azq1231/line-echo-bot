@@ -15,7 +15,12 @@ import line_flex_messages as flex
 import gemini_ai
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24) # for flash messages
+
+# 從環境變數讀取 SECRET_KEY，這對於生產環境至關重要
+app.secret_key = os.getenv("FLASK_SECRET_KEY")
+if not app.secret_key:
+    print("警告：未設定 FLASK_SECRET_KEY 環境變數，將使用隨機值。在生產環境中這會導致 session 問題。")
+    app.secret_key = os.urandom(24)
 
 LINE_CHANNEL_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
