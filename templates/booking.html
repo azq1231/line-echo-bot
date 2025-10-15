@@ -223,12 +223,16 @@
 {% block body_end_scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // 處理 Flask flash messages
+        // 透過將 Jinja2 語法包在一個變數中，可以避免編輯器產生語法錯誤。
+        const flashMessagesScript = `
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% for category, message in messages %}
                 showAlert("{{ message }}", "{{ category }}");
             {% endfor %}
         {% endwith %}
+        `;
+        // 執行由 Jinja2 產生的腳本
+        eval(flashMessagesScript);
     });
 </script>
 {% endblock %}
