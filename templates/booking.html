@@ -216,14 +216,18 @@
         }
     }
 
-    // 處理 Flask flash messages
+</script>
+{% endblock %}
+
+{# 將包含 Jinja2 語法的腳本移到 body 結尾，避免編輯器語法檢查報錯 #}
+{% block body_end_scripts %}
+<script>
     document.addEventListener('DOMContentLoaded', function() {
+        // 處理 Flask flash messages
         {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    showAlert("{{ message }}", "{{ category }}");
-                {% endfor %}
-            {% endif %}
+            {% for category, message in messages %}
+                showAlert("{{ message }}", "{{ category }}");
+            {% endfor %}
         {% endwith %}
     });
 </script>
