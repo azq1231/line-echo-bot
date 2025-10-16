@@ -184,7 +184,7 @@ def generate_time_slots(weekday):
         end = datetime.strptime(slot_setting['end_time'], '%H:%M')
         
         current = start
-        while current < end:
+        while current <= end:
             generated_slots.append(current.strftime('%H:%M'))
             current += timedelta(minutes=15)
             
