@@ -31,6 +31,17 @@ TAIPEI_TZ = pytz.timezone('Asia/Taipei')
 # 初始化数据库
 db.init_database()
 
+# ============ 全局上下文處理器 ============
+
+@app.context_processor
+def inject_feature_flags():
+    """將功能開關的狀態注入到所有模板中，以便動態顯示/隱藏導覽列項目。"""
+    return {
+        'feature_schedule_enabled': db.get_config('feature_schedule_enabled') != 'false',  # 預設為啟用
+        'feature_closed_days_enabled': db.get_config('feature_closed_days_enabled') != 'false', # 預設為啟用
+        'feature_booking_enabled': db.get_config('feature_booking_enabled') != 'false',   # 預設為啟用
+    }
+
 # ============ LINE API 辅助函数 ============ 
 
 def validate_signature(body, signature):
@@ -236,6 +247,8 @@ def home():
 
 @app.route("/schedule")
 def schedule():
+    if db.get_config('feature_schedule_enabled') == 'false':
+        return "Feature disabled", 404
     return render_template("schedule.html")
 
 @app.route("/appointments")
@@ -244,6 +257,8 @@ def appointments_page():
 
 @app.route("/closed_days")
 def closed_days_page():
+    if db.get_config('feature_closed_days_enabled') == 'false':
+        return "Feature disabled", 404
     return render_template("closed_days.html")
 
 @app.route("/stats")
@@ -281,6 +296,9 @@ def configs_page():
     # 為尚未設定的項目提供預設值
     configs_dict.setdefault('booking_window_weeks', '2')
     configs_dict.setdefault('allow_user_deletion', 'false')
+    configs_dict.setdefault('feature_schedule_enabled', 'true')
+    configs_dict.setdefault('feature_closed_days_enabled', 'true')
+    configs_dict.setdefault('feature_booking_enabled', 'true')
 
     return render_template("configs.html", configs=configs_dict)
 
@@ -375,6 +393,9 @@ def logout():
 
 @app.route("/booking/", methods=["GET"])
 def booking_page():
+    if db.get_config('feature_booking_enabled') == 'false':
+        return "Feature disabled", 404
+
     user = session.get('user')
     schedule_data = None
     week_offset = 0 # 為 week_offset 提供預設值

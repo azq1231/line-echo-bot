@@ -53,6 +53,25 @@
         <button class="btn btn-primary" onclick="saveDeletionSetting()">儲存設定</button>
     </div>
 
+    <div class="config-item">
+        <h5>功能模組開關</h5>
+        <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" role="switch" id="scheduleSwitch" {% if configs.feature_schedule_enabled == 'true' %}checked{% endif %} onchange="saveFeatureToggle('feature_schedule_enabled', this.checked)">
+            <label class="form-check-label" for="scheduleSwitch">啟用「排程管理」功能</label>
+        </div>
+        <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" role="switch" id="closedDaysSwitch" {% if configs.feature_closed_days_enabled == 'true' %}checked{% endif %} onchange="saveFeatureToggle('feature_closed_days_enabled', this.checked)">
+            <label class="form-check-label" for="closedDaysSwitch">啟用「休診管理」功能</label>
+        </div>
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="bookingSwitch" {% if configs.feature_booking_enabled == 'true' %}checked{% endif %} onchange="saveFeatureToggle('feature_booking_enabled', this.checked)">
+            <label class="form-check-label" for="bookingSwitch">啟用「線上預約」功能</label>
+        </div>
+        <div class="form-text">
+            關閉功能後，對應的管理頁面將被隱藏。
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
@@ -84,6 +103,10 @@
     async function saveDeletionSetting() {
         const isEnabled = document.getElementById('allowDeletionSwitch').checked;
         await updateConfig('allow_user_deletion', isEnabled ? 'true' : 'false');
+    }
+
+    async function saveFeatureToggle(key, isEnabled) {
+        await updateConfig(key, isEnabled ? 'true' : 'false');
     }
 
     async function updateConfig(key, value) {

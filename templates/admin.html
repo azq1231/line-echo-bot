@@ -189,7 +189,7 @@
     }
 </style>
 
-<div class="container">
+<div class="container" data-allow-user-deletion="{{ allow_user_deletion|tojson }}">
     <div class="info-box">
         <p><strong>💡 提示：</strong></p>
         <p>• 用戶加好友或發訊息時會自動加入清單。</p>
@@ -218,7 +218,10 @@
 </div>
 
 <script>
-    let allowUserDeletion = {{ allow_user_deletion|tojson }};
+    const allowUserDeletion = (function(){
+        const el = document.querySelector('.container');
+        return el ? (el.dataset.allowUserDeletion === 'true') : false;
+    })();
 
     function showMessage(text, type) {
         const msgEl = document.getElementById('message');
@@ -394,7 +397,7 @@
                 body: JSON.stringify({ 
                     user_id: userId, 
                     field: field,
-                    phone: newPhone.trim() 
+                    phone: newPhone.trim()
                 })
             });
             const data = await response.json();

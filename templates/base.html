@@ -40,10 +40,16 @@
                     <div class="collapse navbar-collapse" id="navbarNav">
                         <ul class="navbar-nav w-100 justify-content-around">
                             <li class="nav-item"><a class="nav-link" href="/">用戶管理</a></li>
+                            {% if feature_schedule_enabled %}
                             <li class="nav-item"><a class="nav-link" href="/schedule">排程管理</a></li>
+                            {% endif %}
                             <li class="nav-item"><a class="nav-link" href="/appointments">預約簿</a></li>
+                            {% if feature_closed_days_enabled %}
                             <li class="nav-item"><a class="nav-link" href="/closed_days">休診管理</a></li>
+                            {% endif %}
+                            {% if feature_booking_enabled %}
                             <li class="nav-item"><a class="nav-link" href="/booking/">線上預約</a></li>
+                            {% endif %}
                             <li class="nav-item"><a class="nav-link" href="/stats">訊息統計</a></li>
                             <li class="nav-item"><a class="nav-link" href="/configs">系統設定</a></li>
                         </ul>
