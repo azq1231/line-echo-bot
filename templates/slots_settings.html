@@ -77,8 +77,8 @@
                     {{ '啟用' if slot.active else '停用' }}
                 </div>
                 <div>
-                    <button class="btn btn-sm btn-outline-secondary btn-action" data-bs-toggle="modal" data-bs-target="#slotModal" onclick='prepareEditModal({{ slot|tojson }})'>✏️ 編輯</button>
-                    <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteSlot({{ slot.id }})">🗑️ 刪除</button>
+                    <button class="btn btn-sm btn-outline-secondary btn-action" data-bs-toggle="modal" data-bs-target="#slotModal" data-action="edit" data-slot='{{ slot|tojson }}'>✏️ 編輯</button>
+                    <button class="btn btn-sm btn-outline-danger btn-action" data-action="delete" data-slot-id="{{ slot.id }}">🗑️ 刪除</button>
                 </div>
             </div>
             {% endfor %}
@@ -259,24 +259,20 @@
 
 
     // 讓 time input 顯示 15 分鐘的間隔
-    document.addEventListener('DOMContentLoaded', function() {
-        const timeInputs = document.querySelectorAll('input[type="time"]');
-        timeInputs.forEach(input => {
-            input.addEventListener('focus', function() {
-                // 嘗試設定 picker 的間隔，但這在多數瀏覽器不支援
-                // 主要還是依賴 step="900"
-            });
-            input.addEventListener('change', function() {
-                const time = this.value.split(':');
-                const minutes = parseInt(time[1], 10);
-                const roundedMinutes = Math.round(minutes / 15) * 15;
-                if (roundedMinutes === 60) {
-                    const hours = parseInt(time[0], 10);
-                    this.value = `${String(hours + 1).padStart(2, '0')}:00`;
-                } else {
-                    this.value = `${time[0]}:${String(roundedMinutes).padStart(2, '0')}`;
-                }
-            });
+    document.addEventListener('DOMContentLoaded', function () {
+        const container = document.querySelector('.container');
+        container.addEventListener('click', function(event) {
+            const button = event.target.closest('.btn-action');
+            if (!button) return;
+
+            const action = button.dataset.action;
+            if (action === 'edit') {
+                const slotData = JSON.parse(button.dataset.slot);
+                prepareEditModal(slotData);
+            } else if (action === 'delete') {
+                const slotId = button.dataset.slotId;
+                deleteSlot(slotId);
+            }
         });
     });
 </script>
