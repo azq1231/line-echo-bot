@@ -14,6 +14,10 @@ import database as db
 import line_flex_messages as flex
 import gemini_ai
 
+# 載入 .env 檔案中的環境變數
+from dotenv import load_dotenv
+load_dotenv()
+
 app = Flask(__name__)
 
 # 從環境變數讀取 SECRET_KEY，這對於生產環境至關重要

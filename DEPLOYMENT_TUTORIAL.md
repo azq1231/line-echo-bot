@@ -140,44 +140,38 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-
+```
 
 啟動服務：
-
+```bash
 sudo systemctl daemon-reload
 sudo systemctl start mywebsite
 sudo systemctl enable mywebsite
+```
 
-重新啟動:(注意名稱)
-sudo systemctl restart mywebsite
+## 三、前台管理介面
 
-三、前台管理介面
-http://VPS_IP:5000/              # 用戶管理
-http://VPS_IP:5000/schedule      # 排程管理
-http://VPS_IP:5000/appointments  # 預約管理
-http://VPS_IP:5000/closed_days   # 休診管理
+*   `http://VPS_IP:5000/` - 用戶管理
+*   `http://VPS_IP:5000/schedule` - 排程管理
+*   `http://VPS_IP:5000/appointments` - 預約簿
+*   `http://VPS_IP:5000/closed_days` - 休診管理
+*   `http://VPS_IP:5000/stats` - 訊息統計
+*   `http://VPS_IP:5000/configs` - 系統設定
 
-四、日常維護
-查看日誌
-sudo journalctl -u mywebsite -f
+## 四、日常維護
 
-備份資料庫
-cp appointments.db appointments_backup_$(date +%Y%m%d).db
+*   **查看日誌**: `sudo journalctl -u mywebsite -f`
+*   **備份資料庫**: `cp /var/www/myapp/appointments.db /var/www/myapp/appointments_backup_$(date +%Y%m%d).db`
+*   **更新代碼**:
+    ```bash
+    cd /var/www/myapp
+    git pull origin main
+    sudo systemctl restart mywebsite
+    ```
 
-更新代碼
-git pull origin main
-sudo systemctl restart mywebsite
+## 五、常見問題
 
-五、常見問題
-
-Webhook 驗證失敗
-確認 LINE_CHANNEL_SECRET 正確，服務監聽端口開放，HTTPS 或 ngrok 設定正確。
-
-資料庫檔案位置
-appointments.db 位於專案根目錄。
-
-重置資料庫
-刪除 appointments.db 並重啟應用，自動初始化。
-
-排程器未運行
-確認 APScheduler 安裝正確，服務持續運行。
+*   **Webhook 驗證失敗**: 確認 `LINE_CHANNEL_SECRET` 正確，且伺服器的防火牆已開放 5000 連接埠。
+*   **資料庫檔案位置**: `appointments.db` 預設會建立在專案的根目錄 (`/var/www/myapp`)。
+*   **重置資料庫**: 刪除 `appointments.db` 檔案並重啟應用程式，系統會自動重新建立一個空的資料庫。
+*   **排程器未運行**: 確認 `APScheduler` 已正確安裝，並透過 `sudo journalctl -u mywebsite` 檢查服務啟動日誌是否有錯誤。
