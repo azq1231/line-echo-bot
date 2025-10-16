@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}我的預約紀錄{% endblock %}
+{% block header %}我的預約紀錄{% endblock %}
+
+{% block content %}
+<style>
+    .appointment-list {
+        list-style: none;
+        padding: 0;
+    }
+    .appointment-item {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 15px;
+    }
+    .appointment-details {
+        flex-grow: 1;
+    }
+    .appointment-date {
+        font-size: 1.2rem;
+        font-weight: 500;
+        color: #343a40;
+    }
+    .appointment-time {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #667eea;
+    }
+    .appointment-meta {
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin-top: 10px;
+    }
+    .appointment-status {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: bold;
+        white-space: nowrap;
+    }
+    .status-confirmed { background-color: #e7f5ff; color: #007bff; }
+    .status-completed { background-color: #f1f3f5; color: #6c757d; }
+    .status-cancelled { background-color: #fff5f5; color: #e53e3e; text-decoration: line-through; }
+
+    .btn-cancel {
+        background-color: #dc3545;
+        color: white;
+    }
+    .btn-cancel:hover {
+        background-color: #c82333;
+        color: white;
+    }
+    #message-container {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1050;
+        width: 90%;
+        max-width: 500px;
+    }
+    @media (max-width: 576px) {
+        .appointment-item {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .appointment-actions {
+            width: 100%;
+            margin-top: 15px;
+        }
+        .btn {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="container my-4">
+    <div id="message-container"></div>
+
+    {% if not user %}
+    <div class="alert alert-warning">請先<a href="{{ url_for('login') }}">登入</a>以查看您的預約紀錄。</div>
+    {% else %}
+        {% if future_appointments %}
+        <h4>進行中的預約</h4>
+        <ul class="appointment-list">
+            {% for apt in future_appointments %}
+            <li class="appointment-item">
+                <div class="appointment-details">
+                    <div class="appointment-date">{{ apt.formatted_date }} ({{ apt.weekday }})</div>
+                    <div class="appointment-time">{{ apt.time }}</div>
+                    <div class="appointment-meta">預約建立於: {{ apt.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+                </div>
+                <div class="appointment-actions d-flex flex-column align-items-end gap-2">
+                    <span class="appointment-status status-confirmed">已預約</span>
+                    <button class="btn btn-sm btn-cancel" onclick="cancelAppointment({{ apt.id }}, '{{ apt.formatted_date }}', '{{ apt.time }}')">取消預約</button>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        <hr class="my-4">
+        {% endif %}
+
+        <h4>歷史預約紀錄</h4>
+        {% if past_appointments %}
+        <ul class="appointment-list">
+            {% for apt in past_appointments %}
+            <li class="appointment-item">
+                <div class="appointment-details">
+                    <div class="appointment-date">{{ apt.formatted_date }} ({{ apt.weekday }})</div>
+                    <div class="appointment-time">{{ apt.time }}</div>
+                    <div class="appointment-meta">預約建立於: {{ apt.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+                </div>
+                <div class="appointment-actions">
+                    <span class="appointment-status status-completed">已完成</span>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="alert alert-info">目前沒有歷史預約紀錄。</div>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function showAlert(message, type = 'info') {
+        const container = document.getElementById('message-container');
+        const alertEl = document.createElement('div');
+        alertEl.className = `alert alert-${type} alert-dismissible fade show`;
+        alertEl.role = 'alert';
+        alertEl.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+        container.appendChild(alertEl);
+        setTimeout(() => {
+            const alertInstance = bootstrap.Alert.getOrCreateInstance(alertEl);
+            if (alertInstance) alertInstance.close();
+        }, 5000);
+    }
+
+    async function cancelAppointment(appointmentId, date, time) {
+        if (!confirm(`您確定要取消 ${date} ${time} 的預約嗎？`)) return;
+
+        try {
+            const response = await fetch("{{ url_for('api_cancel_my_appointment') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ appointment_id: appointmentId }),
+            });
+            const result = await response.json();
+            if (response.ok) {
+                showAlert(result.message, 'success');
+                setTimeout(() => window.location.reload(), 2000);
+            } else {
+                showAlert(result.message || '取消失敗，請重試。', 'danger');
+            }
+        } catch (error) {
+            showAlert('發生網路錯誤，請稍後再試。', 'danger');
+        }
+    }
+</script>
+{% endblock %}

@@ -438,6 +438,51 @@ def booking_page():
 
     return render_template("booking.html", user=user, schedule=schedule_data, week_offset=week_offset, max_weeks=int(db.get_config('booking_window_weeks') or '2'))
 
+@app.route("/booking/history", methods=["GET"])
+def booking_history_page():
+    """使用者預約歷史頁面"""
+    user = session.get('user')
+    if not user:
+        # 如果未登入，可以選擇渲染一個提示登入的頁面或重定向
+        return render_template("booking_history.html", user=None)
+
+    user_id = user['user_id']
+    all_appointments = db.get_appointments_by_user(user_id)
+
+    now = datetime.now(TAIPEI_TZ)
+    weekday_names = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
+
+    future_appointments = []
+    past_appointments = []
+
+    for apt in all_appointments:
+        try:
+            # 將資料庫中的字串時間轉換為有時區的 datetime 物件
+            apt_datetime = datetime.strptime(f"{apt['date']} {apt['time']}", '%Y-%m-%d %H:%M').replace(tzinfo=TAIPEI_TZ)
+            apt['created_at'] = datetime.strptime(apt['created_at'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=pytz.utc).astimezone(TAIPEI_TZ)
+            apt['formatted_date'] = apt_datetime.strftime('%Y/%m/%d')
+            apt['weekday'] = weekday_names[apt_datetime.weekday()]
+
+            if apt_datetime > now and apt['status'] == 'confirmed':
+                future_appointments.append(apt)
+            else:
+                past_appointments.append(apt)
+        except (ValueError, TypeError):
+            # 忽略格式錯誤的舊資料
+            continue
+    
+    # 排序，讓最近的在最前面
+    future_appointments.sort(key=lambda x: (x['date'], x['time']))
+    past_appointments.sort(key=lambda x: (x['date'], x['time']), reverse=True)
+
+    return render_template(
+        "booking_history.html",
+        user=user,
+        future_appointments=future_appointments,
+        past_appointments=past_appointments
+    )
+
+
 # ============ 用户管理 API ============ 
 
 @app.route("/list_users")
@@ -627,6 +672,34 @@ def api_book_appointment():
         return jsonify({"status": "success", "message": f"恭喜！您已成功預約 {date} {time} 的時段。"})
     else:
         return jsonify({"status": "error", "message": f"抱歉，{date} {time} 的時段已被預約，請選擇其他時段。"}), 409
+
+@app.route("/api/cancel_my_appointment", methods=["POST"])
+def api_cancel_my_appointment():
+    """API for user to cancel their own appointment from the web."""
+    if 'user' not in session:
+        return jsonify({"status": "error", "message": "使用者未登入"}), 401
+
+    data = request.get_json()
+    appointment_id = data.get('appointment_id')
+    if not appointment_id:
+        return jsonify({"status": "error", "message": "缺少預約 ID"}), 400
+
+    user = session['user']
+    user_id = user['user_id']
+
+    # 在取消前先獲取預約資訊，以便發送通知
+    apt_to_cancel = db.get_appointment_by_id(appointment_id)
+    if not apt_to_cancel or apt_to_cancel['user_id'] != user_id:
+        return jsonify({"status": "error", "message": "找不到此預約或權限不足"}), 404
+
+    success = db.cancel_user_appointment(appointment_id, user_id)
+
+    if success:
+        # 已移除 LINE 取消成功通知
+        # send_line_message(...)
+        return jsonify({"status": "success", "message": "預約已成功取消。"})
+    else:
+        return jsonify({"status": "error", "message": "取消失敗，請稍後再試。"}), 500
 
 @app.route("/send_appointment_reminders", methods=["POST"])
 def send_appointment_reminders():

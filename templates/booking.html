@@ -116,7 +116,10 @@
                 <small class="text-muted">請選擇您要預約的時段</small>
             </div>
         </div>
-        <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-secondary">登出</a>
+        <div>
+            <a href="{{ url_for('booking_history_page') }}" class="btn btn-sm btn-info text-white">我的預約</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-secondary">登出</a>
+        </div>
     </div>
 
     {% if schedule %}

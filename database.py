@@ -382,6 +382,16 @@ def get_appointments_by_date_range(start_date: str, end_date: str) -> List[Dict]
     conn.close()
     return appointments
 
+def get_appointment_by_id(appointment_id: int) -> Optional[Dict]:
+    """透過 ID 獲取單筆預約"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM appointments WHERE id = ?', (appointment_id,))
+    appointment = cursor.fetchone()
+    conn.close()
+    return dict(appointment) if appointment else None
+
+
 def get_appointments_by_user(user_id: str) -> List[Dict]:
     """获取指定用户的所有预约"""
     conn = get_db()
@@ -398,6 +408,17 @@ def cancel_appointment(date: str, time: str) -> bool:
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM appointments WHERE date = ? AND time = ?", (date, time))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+def cancel_user_appointment(appointment_id: int, user_id: str) -> bool:
+    """安全地取消指定用戶的預約（透過 ID）"""
+    conn = get_db()
+    cursor = conn.cursor()
+    # 確保只有本人可以刪除自己的預約
+    cursor.execute("DELETE FROM appointments WHERE id = ? AND user_id = ?", (appointment_id, user_id))
     deleted = cursor.rowcount > 0
     conn.commit()
     conn.close()
