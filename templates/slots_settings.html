@@ -258,20 +258,21 @@
     }
 
 
-    // 讓 time input 顯示 15 分鐘的間隔
     document.addEventListener('DOMContentLoaded', function () {
+        // 1. 使用事件委派處理所有按鈕點擊
         const container = document.querySelector('.container');
         container.addEventListener('click', function(event) {
-            const button = event.target.closest('.btn-action');
-            if (!button) return;
-
-            const action = button.dataset.action;
-            if (action === 'edit') {
-                const slotData = JSON.parse(button.dataset.slot);
+            const target = event.target;
+            if (target.matches('.btn-action[data-action="edit"]')) {
+                const slotData = JSON.parse(target.dataset.slot);
                 prepareEditModal(slotData);
-            } else if (action === 'delete') {
-                const slotId = button.dataset.slotId;
+            } else if (target.matches('.btn-action[data-action="delete"]')) {
+                const slotId = target.dataset.slotId;
                 deleteSlot(slotId);
+            } else if (target.matches('button[onclick="copyTuesdaySlots()"]')) {
+                copyTuesdaySlots();
+            } else if (target.matches('button[onclick="prepareAddModal()"]')) {
+                prepareAddModal();
             }
         });
     });
