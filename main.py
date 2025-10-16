@@ -808,6 +808,27 @@ def set_config_api():
         return jsonify({"status": "error", "message": "预约窗口只能设置为2周或4周"}), 400
     
     if db.set_config(key, value, description):
+        # 如果更新的是排程時間，動態更新排程器
+        if key.startswith('auto_reminder_'):
+            try:
+                # 移除現有排程
+                scheduler.remove_job('daily_reminder_job')
+                scheduler.remove_job('weekly_reminder_job')
+                
+                # 重新讀取所有相關設定並新增排程
+                daily_time_str = db.get_config('auto_reminder_daily_time', '09:00') or '09:00'
+                daily_time = daily_time_str.split(':')
+                scheduler.add_job(func=send_daily_reminders_job, trigger="cron", id='daily_reminder_job', hour=int(daily_time[0]), minute=int(daily_time[1]), timezone=TAIPEI_TZ, replace_existing=True)
+
+                weekly_day = db.get_config('auto_reminder_weekly_day', 'sun') or 'sun'
+                weekly_time_str = db.get_config('auto_reminder_weekly_time', '21:00') or '21:00'
+                weekly_time = weekly_time_str.split(':')
+                scheduler.add_job(func=send_weekly_reminders_job, trigger="cron", id='weekly_reminder_job', day_of_week=weekly_day, hour=int(weekly_time[0]), minute=int(weekly_time[1]), timezone=TAIPEI_TZ, replace_existing=True)
+                
+                print("排程器任務已動態更新。")
+            except Exception as e:
+                print(f"動態更新排程器失敗: {e}")
+
         return jsonify({"status": "success", "message": "配置已更新"})
     else:
         return jsonify({"status": "error", "message": "更新失败"}), 500
@@ -1048,13 +1069,13 @@ scheduler = BackgroundScheduler()
 # 每日提醒，從設定檔讀取時間
 daily_time_str = db.get_config('auto_reminder_daily_time', '09:00') or '09:00'
 daily_time = daily_time_str.split(':')
-scheduler.add_job(func=send_daily_reminders_job, trigger="cron", hour=int(daily_time[0]), minute=int(daily_time[1]), timezone=TAIPEI_TZ)
+scheduler.add_job(func=send_daily_reminders_job, trigger="cron", id='daily_reminder_job', hour=int(daily_time[0]), minute=int(daily_time[1]), timezone=TAIPEI_TZ)
 
 # 每週提醒，從設定檔讀取星期與時間
 weekly_day = db.get_config('auto_reminder_weekly_day', 'sun') or 'sun'
 weekly_time_str = db.get_config('auto_reminder_weekly_time', '21:00') or '21:00'
 weekly_time = weekly_time_str.split(':')
-scheduler.add_job(func=send_weekly_reminders_job, trigger="cron", day_of_week=weekly_day, hour=int(weekly_time[0]), minute=int(weekly_time[1]), timezone=TAIPEI_TZ)
+scheduler.add_job(func=send_weekly_reminders_job, trigger="cron", id='weekly_reminder_job', day_of_week=weekly_day, hour=int(weekly_time[0]), minute=int(weekly_time[1]), timezone=TAIPEI_TZ)
 
 scheduler.start()
 print("排程器已啟動。每日與每週提醒任務已設定。")
