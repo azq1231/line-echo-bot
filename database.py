@@ -527,14 +527,14 @@ def get_all_configs() -> List[Dict]:
     conn.close()
     return configs
 
-def get_config(key: str) -> Optional[str]:
+def get_config(key: str, default: Optional[str] = None) -> Optional[str]:
     """获取单个系统配置值"""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('SELECT value FROM configs WHERE key = ?', (key,))
     row = cursor.fetchone()
     conn.close()
-    return row['value'] if row else None
+    return row['value'] if row else default
 
 def set_config(key: str, value: str, description: Optional[str] = None) -> bool:
     """设置或更新系统配置"""

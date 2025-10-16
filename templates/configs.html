@@ -72,6 +72,43 @@
         </div>
     </div>
 
+    <div class="config-item">
+        <h5>自動提醒設定</h5>
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="autoReminderSwitch" {% if configs.auto_reminder_enabled == 'true' %}checked{% endif %} onchange="saveFeatureToggle('auto_reminder_enabled', this.checked)">
+            <label class="form-check-label" for="autoReminderSwitch">啟用自動預約提醒</label>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="dailyTime" class="form-label">本日提醒時間</label>
+                <select class="form-select" id="dailyTime" onchange="saveConfig('auto_reminder_daily_time', 'dailyTime')">
+                    {% for i in range(7, 13) %}
+                    <option value="{{ '%02d:00'|format(i) }}" {% if configs.auto_reminder_daily_time == '%02d:00'|format(i) %}selected{% endif %}>{{ '%02d:00'|format(i) }}</option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">每日自動發送「當天」的預約提醒。</div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="weeklyDay" class="form-label">本週提醒時間</label>
+                <div class="input-group">
+                    <select class="form-select" id="weeklyDay" onchange="saveConfig('auto_reminder_weekly_day', 'weeklyDay')">
+                        <option value="sun" {% if configs.auto_reminder_weekly_day == 'sun' %}selected{% endif %}>每週日</option>
+                        <option value="sat" {% if configs.auto_reminder_weekly_day == 'sat' %}selected{% endif %}>每週六</option>
+                    </select>
+                    <select class="form-select" id="weeklyTime" onchange="saveConfig('auto_reminder_weekly_time', 'weeklyTime')">
+                        {% for i in range(18, 23) %}
+                        <option value="{{ '%02d:00'|format(i) }}" {% if configs.auto_reminder_weekly_time == '%02d:00'|format(i) %}selected{% endif %}>{{ '%02d:00'|format(i) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-text">每週自動發送「下週」的預約提醒。</div>
+            </div>
+        </div>
+        <div class="alert alert-warning small p-2">
+            <strong>注意：</strong> 修改提醒時間後，需重新啟動應用程式才會生效。
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 

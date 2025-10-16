@@ -37,9 +37,9 @@ db.init_database()
 def inject_feature_flags():
     """將功能開關的狀態注入到所有模板中，以便動態顯示/隱藏導覽列項目。"""
     return {
-        'feature_schedule_enabled': db.get_config('feature_schedule_enabled') != 'false',  # 預設為啟用
-        'feature_closed_days_enabled': db.get_config('feature_closed_days_enabled') != 'false', # 預設為啟用
-        'feature_booking_enabled': db.get_config('feature_booking_enabled') != 'false',   # 預設為啟用
+        'feature_schedule_enabled': db.get_config('feature_schedule_enabled', 'true') != 'false',
+        'feature_closed_days_enabled': db.get_config('feature_closed_days_enabled', 'true') != 'false',
+        'feature_booking_enabled': db.get_config('feature_booking_enabled', 'true') != 'false',
     }
 
 # ============ LINE API 辅助函数 ============ 
@@ -299,6 +299,10 @@ def configs_page():
     configs_dict.setdefault('feature_schedule_enabled', 'true')
     configs_dict.setdefault('feature_closed_days_enabled', 'true')
     configs_dict.setdefault('feature_booking_enabled', 'true')
+    configs_dict.setdefault('auto_reminder_enabled', 'false')
+    configs_dict.setdefault('auto_reminder_daily_time', '09:00')
+    configs_dict.setdefault('auto_reminder_weekly_day', 'sun')
+    configs_dict.setdefault('auto_reminder_weekly_time', '21:00')
 
     return render_template("configs.html", configs=configs_dict)
 
@@ -412,7 +416,7 @@ def booking_page():
         end_date = week_dates[-1]['date']
         
         appointments_this_week = db.get_appointments_by_date_range(start_date, end_date)
-        booked_slots = {(apt['date'], apt['time']) for apt in appointments_this_week if apt['status'] == 'confirmed'}
+        booked_slots = {(apt['date'], apt['time']): apt['user_name'] for apt in appointments_this_week if apt['status'] == 'confirmed'}
         closed_days = {day['date'] for day in db.get_all_closed_days()}
 
         schedule_data = []
@@ -423,7 +427,7 @@ def booking_page():
              all_slots = generate_time_slots(day['weekday'])
              day['slots'] = []
              for slot in all_slots:
-                 is_available = (day['date'], slot) not in booked_slots and not day['is_closed']
+                 is_available = (day['date'], slot) not in booked_slots.keys() and not day['is_closed']
                  
                  # 統一檢查時段是否已過去
                  if is_available:
@@ -433,7 +437,7 @@ def booking_page():
                              is_available = False
                      except ValueError:
                          pass # 忽略解析錯誤
-                 day['slots'].append({'time': slot, 'available': is_available})
+                 day['slots'].append({'time': slot, 'available': is_available, 'user_name': booked_slots.get((day['date'], slot))})
              schedule_data.append(day)
 
     return render_template("booking.html", user=user, schedule=schedule_data, week_offset=week_offset, max_weeks=int(db.get_config('booking_window_weeks') or '2'))
@@ -701,6 +705,31 @@ def api_cancel_my_appointment():
     else:
         return jsonify({"status": "error", "message": "取消失敗，請稍後再試。"}), 500
 
+def _do_send_reminders(appointments: list) -> tuple[int, int]:
+    """發送提醒的核心邏輯"""
+    sent_count = 0
+    failed_count = 0
+    
+    for apt in appointments:
+        if apt.get('user_id'):
+            date_obj = datetime.strptime(apt['date'], '%Y-%m-%d')
+            weekday_names = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
+            weekday_name = weekday_names[date_obj.weekday()]
+            
+            message = f"提醒您，您的預約時間是 {date_obj.month}月{date_obj.day}日 {weekday_name} {apt['time']}，謝謝。"
+            
+            success = send_line_message(
+                user_id=apt['user_id'],
+                messages=[{"type": "text", "text": message}],
+                message_type='reminder',
+                target_name=apt['user_name']
+            )
+            if success:
+                sent_count += 1
+            else:
+                failed_count += 1
+    return sent_count, failed_count
+
 @app.route("/send_appointment_reminders", methods=["POST"])
 def send_appointment_reminders():
     data = request.get_json()
@@ -717,29 +746,7 @@ def send_appointment_reminders():
     
     appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
     
-    sent_count = 0
-    failed_count = 0
-    
-    for apt in appointments:
-        if apt.get('user_id'):
-            date_obj = datetime.strptime(apt['date'], '%Y-%m-%d')
-            weekday_names = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
-            weekday_name = weekday_names[date_obj.weekday()]
-            
-            message = f"您預約的時間是{date_obj.month}月{date_obj.day}日 {weekday_name} {apt['time']}，謝謝"
-            
-            success = reply_message(apt['user_id'], message)
-            db.log_message_send(
-                user_id=apt['user_id'],
-                target_name=apt['user_name'],
-                message_type='reminder',
-                status='success' if success else 'failed',
-                message_excerpt=message
-            )
-            if success:
-                sent_count += 1
-            else:
-                failed_count += 1
+    sent_count, failed_count = _do_send_reminders(appointments)
     
     return jsonify({
         "status": "success",
@@ -984,10 +991,34 @@ def handle_cancel_booking(user_id):
         msg = f"✅ 已取消預約\n\n日期：{date_obj.month}月{date_obj.day}日 ({weekday_name})\n時間：{apt['time']}"
         send_line_message(user_id, [{"type": "text", "text": msg}], message_type="cancel_booking_success")
 
-def check_and_send_schedules():
-    """此函式用於檢查並發送資料庫中的排程訊息，目前為空。"""
-    # 未來可以實作從資料庫讀取排程並發送的邏輯
-    pass
+def send_daily_reminders_job():
+    """每日提醒的排程任務"""
+    if db.get_config('auto_reminder_enabled', 'false') == 'true':
+        print(f"[{datetime.now(TAIPEI_TZ)}] 執行每日自動提醒...")
+        today_str = datetime.now(TAIPEI_TZ).strftime('%Y-%m-%d')
+        appointments = db.get_appointments_by_date_range(today_str, today_str)
+        appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
+        if appointments:
+            sent, failed = _do_send_reminders(appointments)
+            print(f"每日提醒發送完成: {sent} 成功, {failed} 失敗。")
+        else:
+            print("今日無預約，不執行提醒。")
+
+def send_weekly_reminders_job():
+    """每週提醒的排程任務"""
+    if db.get_config('auto_reminder_enabled', 'false') == 'true':
+        print(f"[{datetime.now(TAIPEI_TZ)}] 執行每週自動提醒...")
+        # 預設為下週的預約
+        week_dates = get_week_dates(week_offset=1)
+        start_date = week_dates[0]['date']
+        end_date = week_dates[-1]['date']
+        appointments = db.get_appointments_by_date_range(start_date, end_date)
+        appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
+        if appointments:
+            sent, failed = _do_send_reminders(appointments)
+            print(f"每週提醒發送完成: {sent} 成功, {failed} 失敗。")
+        else:
+            print("下週無預約，不執行提醒。")
 
 @app.route("/add_schedule", methods=["POST"])
 def add_schedule_route():
@@ -1014,9 +1045,19 @@ def delete_schedule_route(schedule_id):
 
 # 初始化排程器
 scheduler = BackgroundScheduler()
-scheduler.add_job(func=check_and_send_schedules, trigger="interval", seconds=30)
+# 每日提醒，從設定檔讀取時間
+daily_time_str = db.get_config('auto_reminder_daily_time', '09:00') or '09:00'
+daily_time = daily_time_str.split(':')
+scheduler.add_job(func=send_daily_reminders_job, trigger="cron", hour=int(daily_time[0]), minute=int(daily_time[1]), timezone=TAIPEI_TZ)
+
+# 每週提醒，從設定檔讀取星期與時間
+weekly_day = db.get_config('auto_reminder_weekly_day', 'sun') or 'sun'
+weekly_time_str = db.get_config('auto_reminder_weekly_time', '21:00') or '21:00'
+weekly_time = weekly_time_str.split(':')
+scheduler.add_job(func=send_weekly_reminders_job, trigger="cron", day_of_week=weekly_day, hour=int(weekly_time[0]), minute=int(weekly_time[1]), timezone=TAIPEI_TZ)
+
 scheduler.start()
-print("Scheduler started. Checking for messages to send every 30 seconds.")
+print("排程器已啟動。每日與每週提醒任務已設定。")
 
 if __name__ == "__main__":
     try:
