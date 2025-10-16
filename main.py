@@ -176,22 +176,20 @@ def get_week_dates(week_offset=0):
 
 def generate_time_slots(weekday):
     """根据星期生成时间段"""
-    slots = []
-    if weekday in [1, 3]:
-        for hour in range(14, 18):
-            for minute in [0, 15, 30, 45]:
-                slots.append(f"{hour:02d}:{minute:02d}")
-        slots.append("18:00")
-    elif weekday == 5:
-        for hour in range(10, 18):
-            for minute in [0, 15, 30, 45]:
-                slots.append(f"{hour:02d}:{minute:02d}")
-        slots.append("18:00")
-    elif weekday in [2, 4]:
-        for hour in range(18, 21):
-            for minute in [0, 15, 30, 45]:
-                slots.append(f"{hour:02d}:{minute:02d}")
-        slots.append("21:00")
+    active_slots = db.get_active_slots_by_weekday(weekday)
+    
+    generated_slots = []
+    for slot_setting in active_slots:
+        start = datetime.strptime(slot_setting['start_time'], '%H:%M')
+        end = datetime.strptime(slot_setting['end_time'], '%H:%M')
+        
+        current = start
+        while current < end:
+            generated_slots.append(current.strftime('%H:%M'))
+            current += timedelta(minutes=15)
+            
+    # 去重並排序
+    slots = sorted(list(set(generated_slots)))
     return slots
 
 def get_available_slots(date, weekday):
@@ -310,6 +308,19 @@ def configs_page():
     configs_dict.setdefault('auto_reminder_weekly_time', '21:00')
 
     return render_template("configs.html", configs=configs_dict)
+
+@app.route("/settings/slots")
+def slots_settings_page():
+    """渲染可預約時段設定頁面"""
+    all_slots = db.get_all_available_slots()
+    
+    # 按星期分組
+    slots_by_weekday = {i: [] for i in range(1, 6)} # 週二到週六
+    for slot in all_slots:
+        if slot['weekday'] in slots_by_weekday:
+            slots_by_weekday[slot['weekday']].append(slot)
+            
+    return render_template("slots_settings.html", slots_by_weekday=slots_by_weekday)
 
 
 @app.route("/api/message_stats")
@@ -791,6 +802,46 @@ def remove_closed_day():
         return jsonify({"status": "success", "message": "已移除休診設定"})
     else:
         return jsonify({"status": "error", "message": "未找到休診記錄"}), 404
+
+# ============ 可用時段 API ============
+
+@app.route("/api/slots", methods=["POST"])
+def api_add_slot():
+    data = request.get_json()
+    if db.add_available_slot(data['weekday'], data['start_time'], data['end_time'], data.get('note')):
+        return jsonify({"status": "success", "message": "時段已新增"})
+    else:
+        return jsonify({"status": "error", "message": "新增失敗，該時段可能已存在"}), 409
+
+@app.route("/api/slots/<int:slot_id>", methods=["PUT"])
+def api_update_slot(slot_id):
+    data = request.get_json()
+    if db.update_available_slot(
+        slot_id,
+        data['weekday'],
+        data['start_time'],
+        data['end_time'],
+        data['active'],
+        data.get('note')
+    ):
+        return jsonify({"status": "success", "message": "時段已更新"})
+    else:
+        return jsonify({"status": "error", "message": "更新失敗"}), 500
+
+@app.route("/api/slots/<int:slot_id>", methods=["DELETE"])
+def api_delete_slot(slot_id):
+    if db.delete_available_slot(slot_id):
+        return jsonify({"status": "success", "message": "時段已刪除"})
+    else:
+        return jsonify({"status": "error", "message": "刪除失敗"}), 500
+
+@app.route("/api/slots/copy_tuesday", methods=["POST"])
+def api_copy_tuesday_slots():
+    inserted_count, _ = db.copy_tuesday_slots_to_others()
+    if inserted_count > 0:
+        return jsonify({"status": "success", "message": f"已成功複製週二設定，共新增 {inserted_count} 個時段。"})
+    else:
+        return jsonify({"status": "error", "message": "複製失敗，請先確認週二已有設定時段。"}), 400
 
 # ============ 系统配置 API ============ 
 

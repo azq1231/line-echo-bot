@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}時段設定{% endblock %}
+{% block header %}⚙️ 可預約時段設定{% endblock %}
+
+{% block content %}
+<style>
+    .weekday-group {
+        margin-bottom: 30px;
+    }
+    .weekday-header {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #667eea;
+        margin-bottom: 15px;
+        border-bottom: 2px solid #e0e0e0;
+        padding-bottom: 10px;
+    }
+    .slot-item {
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+        margin-bottom: 8px;
+        gap: 15px;
+    }
+    .slot-time {
+        font-weight: 500;
+        min-width: 120px;
+    }
+    .slot-note {
+        color: #6c757d;
+        flex-grow: 1;
+    }
+    .slot-status {
+        font-weight: bold;
+    }
+    .status-active { color: #28a745; }
+    .status-inactive { color: #dc3545; }
+    .btn-action {
+        padding: 4px 8px;
+        font-size: 12px;
+    }
+    #message-container {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1050;
+        width: 90%;
+        max-width: 500px;
+    }
+</style>
+
+<div class="container my-4">
+    <div id="message-container"></div>
+
+    <div class="d-flex justify-content-end align-items-center mb-4 gap-2">
+        <button class="btn btn-outline-secondary" onclick="copyTuesdaySlots()">
+            <i class="bi bi-files"></i> 複製週二設定
+        </button>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#slotModal" onclick="prepareAddModal()">
+            <i class="bi bi-plus-circle"></i> 新增時段
+        </button>
+    </div>
+
+    {% set weekday_names = {1: '週二', 2: '週三', 3: '週四', 4: '週五', 5: '週六'} %}
+    {% for weekday, slots in slots_by_weekday.items() %}
+    <div class="weekday-group">
+        <div class="weekday-header">{{ weekday_names[weekday] }}</div>
+        {% if slots %}
+            {% for slot in slots %}
+            <div class="slot-item">
+                <div class="slot-time">{{ slot.start_time }} - {{ slot.end_time }}</div>
+                <div class="slot-note">{{ slot.note or '' }}</div>
+                <div class="slot-status {{ 'status-active' if slot.active else 'status-inactive' }}">
+                    {{ '啟用' if slot.active else '停用' }}
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-outline-secondary btn-action" data-bs-toggle="modal" data-bs-target="#slotModal" onclick='prepareEditModal({{ slot|tojson }})'>✏️ 編輯</button>
+                    <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteSlot({{ slot.id }})">🗑️ 刪除</button>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="text-muted">本日無設定時段</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="slotModal" tabindex="-1" aria-labelledby="slotModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="slotModalLabel">新增/編輯時段</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="slotForm">
+                    <input type="hidden" id="slotId">
+                    <div class="mb-3">
+                        <label for="weekday" class="form-label">星期</label>
+                        <select class="form-select" id="weekday" required>
+                            <option value="1">週二</option>
+                            <option value="2">週三</option>
+                            <option value="3">週四</option>
+                            <option value="4">週五</option>
+                            <option value="5">週六</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col">
+                            <label for="startTime" class="form-label">開始時間</label>
+                            <input type="time" class="form-control" id="startTime" step="900" list="time-options" required>
+                        </div>
+                        <div class="col">
+                            <label for="endTime" class="form-label">結束時間</label>
+                            <input type="time" class="form-control" id="endTime" step="900" list="time-options" required>
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-3">
+                        <label for="note" class="form-label">備註 (選填)</label>
+                        <input type="text" class="form-control" id="note" placeholder="例如：午休">
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="active" checked>
+                        <label class="form-check-label" for="active">啟用此時段</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+                <button type="button" class="btn btn-primary" onclick="saveSlot()">儲存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<datalist id="time-options">
+    {% for h in range(24) %}
+        {% for m in [0, 15, 30, 45] %}
+            <option value="{{ '%02d:%02d'|format(h, m) }}">
+        {% endfor %}
+    {% endfor %}
+</datalist>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function showAlert(message, type = 'info') {
+        const container = document.getElementById('message-container');
+        const alertEl = document.createElement('div');
+        alertEl.className = `alert alert-${type} alert-dismissible fade show`;
+        alertEl.role = 'alert';
+        alertEl.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+        container.appendChild(alertEl);
+        setTimeout(() => {
+            const alertInstance = bootstrap.Alert.getOrCreateInstance(alertEl);
+            if (alertInstance) alertInstance.close();
+        }, 3000);
+    }
+
+    function prepareAddModal() {
+        document.getElementById('slotForm').reset();
+        document.getElementById('slotId').value = '';
+        document.getElementById('slotModalLabel').textContent = '新增時段';
+        document.getElementById('active').checked = true;
+    }
+
+    function prepareEditModal(slot) {
+        document.getElementById('slotForm').reset();
+        document.getElementById('slotId').value = slot.id;
+        document.getElementById('weekday').value = slot.weekday;
+        document.getElementById('startTime').value = slot.start_time;
+        document.getElementById('endTime').value = slot.end_time;
+        document.getElementById('note').value = slot.note || '';
+        document.getElementById('active').checked = slot.active;
+        document.getElementById('slotModalLabel').textContent = '編輯時段';
+    }
+
+    async function saveSlot() {
+        const slotId = document.getElementById('slotId').value;
+        const data = {
+            weekday: document.getElementById('weekday').value,
+            start_time: document.getElementById('startTime').value,
+            end_time: document.getElementById('endTime').value,
+            note: document.getElementById('note').value,
+            active: document.getElementById('active').checked,
+        };
+
+        if (data.start_time >= data.end_time) {
+            showAlert('結束時間必須晚於開始時間', 'danger');
+            return;
+        }
+
+        const url = slotId ? `/api/slots/${slotId}` : '/api/slots';
+        const method = slotId ? 'PUT' : 'POST';
+
+        try {
+            const response = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+            if (response.ok) {
+                showAlert(result.message, 'success');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('slotModal'));
+                modal.hide();
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                showAlert(result.message || '儲存失敗', 'danger');
+            }
+        } catch (error) {
+            showAlert('網路錯誤', 'danger');
+        }
+    }
+
+    async function deleteSlot(slotId) {
+        if (!confirm('您確定要刪除這個時段設定嗎？')) return;
+
+        try {
+            const response = await fetch(`/api/slots/${slotId}`, {
+                method: 'DELETE'
+            });
+            const result = await response.json();
+            if (response.ok) {
+                showAlert(result.message, 'success');
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                showAlert(result.message || '刪除失敗', 'danger');
+            }
+        } catch (error) {
+            showAlert('網路錯誤', 'danger');
+        }
+    }
+
+    async function copyTuesdaySlots() {
+        if (!confirm('您確定要將「週二」的時段設定複製到「週三至週六」嗎？\n\n這將會覆蓋掉週三至週六現有的所有設定。')) return;
+
+        try {
+            const response = await fetch('/api/slots/copy_tuesday', {
+                method: 'POST'
+            });
+            const result = await response.json();
+            if (response.ok) {
+                showAlert(result.message, 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                showAlert(result.message || '複製失敗', 'danger');
+            }
+        } catch (error) {
+            showAlert('網路錯誤', 'danger');
+        }
+    }
+
+
+    // 讓 time input 顯示 15 分鐘的間隔
+    document.addEventListener('DOMContentLoaded', function() {
+        const timeInputs = document.querySelectorAll('input[type="time"]');
+        timeInputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                // 嘗試設定 picker 的間隔，但這在多數瀏覽器不支援
+                // 主要還是依賴 step="900"
+            });
+            input.addEventListener('change', function() {
+                const time = this.value.split(':');
+                const minutes = parseInt(time[1], 10);
+                const roundedMinutes = Math.round(minutes / 15) * 15;
+                if (roundedMinutes === 60) {
+                    const hours = parseInt(time[0], 10);
+                    this.value = `${String(hours + 1).padStart(2, '0')}:00`;
+                } else {
+                    this.value = `${time[0]}:${String(roundedMinutes).padStart(2, '0')}`;
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

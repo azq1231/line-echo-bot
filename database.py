@@ -91,6 +91,21 @@ def init_database():
         )
     ''')
 
+    # 可用時段表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS available_slots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            weekday INTEGER NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            active BOOLEAN DEFAULT TRUE,
+            note TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(weekday, start_time)
+        )
+    ''')
+
     # 系统配置表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS configs (
@@ -465,6 +480,103 @@ def remove_closed_day(date: str) -> bool:
     conn.commit()
     conn.close()
     return removed
+
+# ==================== 可用時段管理 ====================
+
+def get_all_available_slots() -> List[Dict]:
+    """獲取所有可預約時段設定"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM available_slots ORDER BY weekday, start_time')
+    slots = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return slots
+
+def get_active_slots_by_weekday(weekday: int) -> List[Dict]:
+    """根據星期獲取所有啟用的時段"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM available_slots 
+        WHERE weekday = ? AND active = TRUE 
+        ORDER BY start_time
+    ''', (weekday,))
+    slots = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return slots
+
+def add_available_slot(weekday: int, start_time: str, end_time: str, note: Optional[str] = None) -> bool:
+    """新增一個可預約時段"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO available_slots (weekday, start_time, end_time, note)
+            VALUES (?, ?, ?, ?)
+        ''', (weekday, start_time, end_time, note))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False # 時段已存在
+    finally:
+        conn.close()
+
+def update_available_slot(slot_id: int, weekday: int, start_time: str, end_time: str, active: bool, note: Optional[str]) -> bool:
+    """更新一個可預約時段"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE available_slots SET weekday=?, start_time=?, end_time=?, active=?, note=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=?
+    ''', (weekday, start_time, end_time, active, note, slot_id))
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
+def delete_available_slot(slot_id: int) -> bool:
+    """刪除一個可預約時段"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM available_slots WHERE id=?', (slot_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+def copy_tuesday_slots_to_others() -> tuple[int, int]:
+    """複製週二的時段設定到週三至週六，並回傳新增的數量"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        # 1. 獲取週二的所有時段
+        cursor.execute('SELECT start_time, end_time, active, note FROM available_slots WHERE weekday = 1')
+        tuesday_slots = cursor.fetchall()
+        
+        if not tuesday_slots:
+            return 0, 0 # 沒有可複製的時段
+
+        # 2. 刪除週三到週六的所有時段
+        target_weekdays = [2, 3, 4, 5]
+        cursor.execute(f'DELETE FROM available_slots WHERE weekday IN ({",".join("?" for _ in target_weekdays)})', target_weekdays)
+        deleted_count = cursor.rowcount
+
+        # 3. 準備要插入的新時段
+        slots_to_insert = []
+        for slot in tuesday_slots:
+            for weekday in target_weekdays:
+                slots_to_insert.append((weekday, slot['start_time'], slot['end_time'], slot['active'], slot['note']))
+        
+        cursor.executemany('INSERT INTO available_slots (weekday, start_time, end_time, active, note) VALUES (?, ?, ?, ?, ?)', slots_to_insert)
+        inserted_count = cursor.rowcount
+        conn.commit()
+        return inserted_count, deleted_count
+    except Exception as e:
+        conn.rollback()
+        print(f"複製週二時段時發生錯誤: {e}")
+        return 0, 0
+    finally:
+        conn.close()
 
 # ==================== 杂项功能 ====================
 
