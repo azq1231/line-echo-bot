@@ -220,10 +220,27 @@
         setTimeSelectors('end', slot.end_time);
     }
 
+    function getCombinedTime(prefix) {
+        const period = document.getElementById(`${prefix}Period`).value;
+        const hour = parseInt(document.getElementById(`${prefix}Hour`).value, 10);
+        const minute = document.getElementById(`${prefix}Minute`).value;
+
+        let h24 = hour;
+        if (period === 'pm' && hour !== 12) {
+            h24 = hour + 12;
+        } else if (period === 'am' && hour === 12) { // 12 AM is 00:xx
+            h24 = 0;
+        }
+        
+        return `${String(h24).padStart(2, '0')}:${minute}`;
+    }
+
     function setTimeSelectors(prefix, timeStr) {
         const [hour, minute] = timeStr.split(':').map(Number);
         const period = hour < 12 ? 'am' : 'pm';
-        const displayHour = period === 'am' ? hour : (hour === 12 ? 12 : hour - 12);
+        let displayHour = hour;
+        if (period === 'pm' && hour > 12) displayHour = hour - 12;
+        if (period === 'am' && hour === 0) displayHour = 12; // 00:xx is 12 AM
 
         document.getElementById(`${prefix}Period`).value = period;
         updateHourOptions(prefix, period); // 更新小時選項
@@ -235,7 +252,8 @@
         const slotId = document.getElementById('slotId').value;
         const data = {
             weekday: document.getElementById('weekday').value,
-            start_time: document.getElementById('startTime').value,
+            start_time: getCombinedTime('start'),
+            end_time: getCombinedTime('end'),
             note: document.getElementById('note').value,
             active: document.getElementById('active').checked,
         };
@@ -321,15 +339,14 @@
     function updateHourOptions(prefix, period) {
         const hourSelect = document.getElementById(`${prefix}Hour`);
         hourSelect.innerHTML = '';
-        const hours = (period === 'am') ? 
-            [...Array(12).keys()] :  // 0-11
-            [...Array(12).keys()].map(i => i + 12); // 12-23
+        const hours = (period === 'am') ?
+            [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : // AM hours
+            [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];  // PM hours
 
         hours.forEach(h => {
             const option = document.createElement('option');
-            const displayHour = (period === 'am') ? h : (h === 12 ? 12 : h - 12);
-            option.value = displayHour;
-            option.textContent = String(displayHour).padStart(2, '0');
+            option.value = h;
+            option.textContent = String(h).padStart(2, '0');
             hourSelect.appendChild(option);
         });
     }
