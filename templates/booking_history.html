@@ -167,5 +167,20 @@
             showAlert('發生網路錯誤，請稍後再試。', 'danger');
         }
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const appointmentLists = document.querySelectorAll('.appointment-list');
+        appointmentLists.forEach(list => {
+            list.addEventListener('click', function(event) {
+                const button = event.target.closest('.btn-cancel');
+                if (button) {
+                    const appointmentId = button.dataset.appointmentId;
+                    const date = button.dataset.appointmentDate;
+                    const time = button.dataset.appointmentTime;
+                    cancelAppointment(appointmentId, date, time);
+                }
+            });
+        });
+    });
 </script>
 {% endblock %}
