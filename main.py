@@ -835,13 +835,20 @@ def api_delete_slot(slot_id):
     else:
         return jsonify({"status": "error", "message": "刪除失敗"}), 500
 
-@app.route("/api/slots/copy_tuesday", methods=["POST"])
-def api_copy_tuesday_slots():
-    inserted_count, _ = db.copy_tuesday_slots_to_others()
+@app.route("/api/slots/copy", methods=["POST"])
+def api_copy_slots():
+    data = request.get_json()
+    source_weekday = data.get('source_weekday')
+    target_weekdays = data.get('target_weekdays')
+
+    if not source_weekday or not target_weekdays:
+        return jsonify({"status": "error", "message": "來源或目標星期未選擇"}), 400
+
+    inserted_count, _ = db.copy_slots(int(source_weekday), target_weekdays)
     if inserted_count > 0:
-        return jsonify({"status": "success", "message": f"已成功複製週二設定，共新增 {inserted_count} 個時段。"})
+        return jsonify({"status": "success", "message": f"已成功複製設定，共新增 {inserted_count} 個時段。"})
     else:
-        return jsonify({"status": "error", "message": "複製失敗，請先確認週二已有設定時段。"}), 400
+        return jsonify({"status": "error", "message": "複製失敗，請確認來源星期有設定時段。"}), 400
 
 # ============ 系统配置 API ============ 
 

@@ -544,36 +544,35 @@ def delete_available_slot(slot_id: int) -> bool:
     conn.close()
     return deleted
 
-def copy_tuesday_slots_to_others() -> tuple[int, int]:
-    """複製週二的時段設定到週三至週六，並回傳新增的數量"""
+def copy_slots(source_weekday: int, target_weekdays: List[int]) -> tuple[int, int]:
+    """將指定來源星期的時段設定複製到多個目標星期"""
     conn = get_db()
     cursor = conn.cursor()
     try:
-        # 1. 獲取週二的所有時段
-        cursor.execute('SELECT start_time, end_time, active, note FROM available_slots WHERE weekday = 1')
-        tuesday_slots = cursor.fetchall()
+        # 1. 獲取來源星期的所有時段
+        cursor.execute('SELECT start_time, end_time, active, note FROM available_slots WHERE weekday = ?', (source_weekday,))
+        source_slots = cursor.fetchall()
         
-        if not tuesday_slots:
+        if not source_slots:
             return 0, 0 # 沒有可複製的時段
 
-        # 2. 刪除週三到週六的所有時段
-        target_weekdays = [2, 3, 4, 5]
+        # 2. 刪除目標星期的所有時段
         cursor.execute(f'DELETE FROM available_slots WHERE weekday IN ({",".join("?" for _ in target_weekdays)})', target_weekdays)
         deleted_count = cursor.rowcount
 
         # 3. 準備要插入的新時段
         slots_to_insert = []
-        for slot in tuesday_slots:
+        for slot in source_slots:
             for weekday in target_weekdays:
                 slots_to_insert.append((weekday, slot['start_time'], slot['end_time'], slot['active'], slot['note']))
         
         cursor.executemany('INSERT INTO available_slots (weekday, start_time, end_time, active, note) VALUES (?, ?, ?, ?, ?)', slots_to_insert)
         inserted_count = cursor.rowcount
         conn.commit()
-        return inserted_count, deleted_count
+        return inserted_count, deleted_count # 回傳新增數量和刪除數量
     except Exception as e:
         conn.rollback()
-        print(f"複製週二時段時發生錯誤: {e}")
+        print(f"複製時段時發生錯誤: {e}")
         return 0, 0
     finally:
         conn.close()

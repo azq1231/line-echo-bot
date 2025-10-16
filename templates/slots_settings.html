@@ -55,11 +55,11 @@
 <div class="container my-4">
     <div id="message-container"></div>
 
-    <div class="d-flex justify-content-end align-items-center mb-4 gap-2">
-        <button class="btn btn-outline-secondary" onclick="copyTuesdaySlots()">
+    <div class="d-flex justify-content-end align-items-center mb-4 gap-2" id="page-actions">
+        <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#copyModal">
             <i class="bi bi-files"></i> 複製週二設定
         </button>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#slotModal" onclick="prepareAddModal()">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#slotModal">
             <i class="bi bi-plus-circle"></i> 新增時段
         </button>
     </div>
@@ -113,11 +113,23 @@
                     <div class="row">
                         <div class="col">
                             <label for="startTime" class="form-label">開始時間</label>
-                            <input type="time" class="form-control" id="startTime" step="900" list="time-options" required>
+                            <div class="input-group">
+                                <select class="form-select" id="startPeriod"><option value="am">上午</option><option value="pm">下午</option></select>
+                                <select class="form-select" id="startHour"></select>
+                                <select class="form-select" id="startMinute">
+                                    <option value="00">00</option><option value="15">15</option><option value="30">30</option><option value="45">45</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="col">
                             <label for="endTime" class="form-label">結束時間</label>
-                            <input type="time" class="form-control" id="endTime" step="900" list="time-options" required>
+                            <div class="input-group">
+                                <select class="form-select" id="endPeriod"><option value="am">上午</option><option value="pm">下午</option></select>
+                                <select class="form-select" id="endHour"></select>
+                                <select class="form-select" id="endMinute">
+                                    <option value="00">00</option><option value="15">15</option><option value="30">30</option><option value="45">45</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     <div class="mb-3 mt-3">
@@ -138,13 +150,39 @@
     </div>
 </div>
 
-<datalist id="time-options">
-    {% for h in range(24) %}
-        {% for m in [0, 15, 30, 45] %}
-            <option value="{{ '%02d:%02d'|format(h, m) }}">
-        {% endfor %}
-    {% endfor %}
-</datalist>
+<!-- Copy Modal -->
+<div class="modal fade" id="copyModal" tabindex="-1" aria-labelledby="copyModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="copyModalLabel">批次複製時段設定</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="sourceWeekday" class="form-label">從哪個星期複製？</label>
+                    <select class="form-select" id="sourceWeekday">
+                        <option value="1">週二</option><option value="2">週三</option><option value="3">週四</option><option value="4">週五</option><option value="5">週六</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">複製到哪些星期？ (將會覆蓋)</label>
+                    <div id="targetWeekdays">
+                        <div class="form-check"><input class="form-check-input" type="checkbox" value="1" id="target-1"><label class="form-check-label" for="target-1">週二</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" value="2" id="target-2"><label class="form-check-label" for="target-2">週三</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" value="3" id="target-3"><label class="form-check-label" for="target-3">週四</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" value="4" id="target-4"><label class="form-check-label" for="target-4">週五</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" value="5" id="target-5"><label class="form-check-label" for="target-5">週六</label></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="executeCopy()">確認複製</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
 
@@ -173,12 +211,24 @@
     function prepareEditModal(slot) {
         document.getElementById('slotForm').reset();
         document.getElementById('slotId').value = slot.id;
-        document.getElementById('weekday').value = slot.weekday;
-        document.getElementById('startTime').value = slot.start_time;
-        document.getElementById('endTime').value = slot.end_time;
+        document.getElementById('weekday').value = slot.weekday;        
         document.getElementById('note').value = slot.note || '';
         document.getElementById('active').checked = slot.active;
         document.getElementById('slotModalLabel').textContent = '編輯時段';
+        
+        setTimeSelectors('start', slot.start_time);
+        setTimeSelectors('end', slot.end_time);
+    }
+
+    function setTimeSelectors(prefix, timeStr) {
+        const [hour, minute] = timeStr.split(':').map(Number);
+        const period = hour < 12 ? 'am' : 'pm';
+        const displayHour = period === 'am' ? hour : (hour === 12 ? 12 : hour - 12);
+
+        document.getElementById(`${prefix}Period`).value = period;
+        updateHourOptions(prefix, period); // 更新小時選項
+        document.getElementById(`${prefix}Hour`).value = displayHour;
+        document.getElementById(`${prefix}Minute`).value = String(minute).padStart(2, '0');
     }
 
     async function saveSlot() {
@@ -186,7 +236,6 @@
         const data = {
             weekday: document.getElementById('weekday').value,
             start_time: document.getElementById('startTime').value,
-            end_time: document.getElementById('endTime').value,
             note: document.getElementById('note').value,
             active: document.getElementById('active').checked,
         };
@@ -238,16 +287,28 @@
         }
     }
 
-    async function copyTuesdaySlots() {
-        if (!confirm('您確定要將「週二」的時段設定複製到「週三至週六」嗎？\n\n這將會覆蓋掉週三至週六現有的所有設定。')) return;
+    async function executeCopy() {
+        const sourceWeekday = document.getElementById('sourceWeekday').value;
+        const targetWeekdays = Array.from(document.querySelectorAll('#targetWeekdays input:checked')).map(el => el.value);
+
+        if (targetWeekdays.length === 0) {
+            showAlert('請至少選擇一個目標星期', 'warning');
+            return;
+        }
+
+        if (!confirm('確定要執行複製嗎？\n目標星期的現有設定將被覆蓋。')) return;
 
         try {
-            const response = await fetch('/api/slots/copy_tuesday', {
-                method: 'POST'
+            const response = await fetch('/api/slots/copy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ source_weekday: sourceWeekday, target_weekdays: targetWeekdays })
             });
             const result = await response.json();
             if (response.ok) {
                 showAlert(result.message, 'success');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('copyModal'));
+                modal.hide();
                 setTimeout(() => window.location.reload(), 1500);
             } else {
                 showAlert(result.message || '複製失敗', 'danger');
@@ -257,9 +318,31 @@
         }
     }
 
+    function updateHourOptions(prefix, period) {
+        const hourSelect = document.getElementById(`${prefix}Hour`);
+        hourSelect.innerHTML = '';
+        const hours = (period === 'am') ? 
+            [...Array(12).keys()] :  // 0-11
+            [...Array(12).keys()].map(i => i + 12); // 12-23
+
+        hours.forEach(h => {
+            const option = document.createElement('option');
+            const displayHour = (period === 'am') ? h : (h === 12 ? 12 : h - 12);
+            option.value = displayHour;
+            option.textContent = String(displayHour).padStart(2, '0');
+            hourSelect.appendChild(option);
+        });
+    }
 
     document.addEventListener('DOMContentLoaded', function () {
-        // 1. 使用事件委派處理所有按鈕點擊
+        // 初始化時間選擇器
+        ['start', 'end'].forEach(prefix => {
+            const periodSelect = document.getElementById(`${prefix}Period`);
+            updateHourOptions(prefix, periodSelect.value);
+            periodSelect.addEventListener('change', () => updateHourOptions(prefix, periodSelect.value));
+        });
+
+        // 事件委派
         const container = document.querySelector('.container');
         container.addEventListener('click', function(event) {
             const target = event.target;
@@ -269,9 +352,13 @@
             } else if (target.matches('.btn-action[data-action="delete"]')) {
                 const slotId = target.dataset.slotId;
                 deleteSlot(slotId);
-            } else if (target.matches('button[onclick="copyTuesdaySlots()"]')) {
-                copyTuesdaySlots();
-            } else if (target.matches('button[onclick="prepareAddModal()"]')) {
+            }
+        });
+
+        document.getElementById('page-actions').addEventListener('click', function(event) {
+            const target = event.target.closest('button');
+            if (!target) return;
+            if (target.dataset.bsTarget === '#slotModal') {
                 prepareAddModal();
             }
         });
