@@ -98,7 +98,10 @@
                 </div>
                 <div class="appointment-actions d-flex flex-column align-items-end gap-2">
                     <span class="appointment-status status-confirmed">已預約</span>
-                    <button class="btn btn-sm btn-cancel" onclick="cancelAppointment({{ apt.id }}, '{{ apt.formatted_date }}', '{{ apt.time }}')">取消預約</button>
+                    <button class="btn btn-sm btn-cancel" 
+                            data-appointment-id="{{ apt.id }}" 
+                            data-appointment-date="{{ apt.formatted_date }}" 
+                            data-appointment-time="{{ apt.time }}">取消預約</button>
                 </div>
             </li>
             {% endfor %}
