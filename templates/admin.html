@@ -211,6 +211,10 @@
 
     <div class="section">
         <h2>📋 允許的用戶清單 (<span id="userCount">0</span>)</h2>
+        <div class="input-group">
+            <input type="text" id="searchInput" placeholder="按姓名或注音搜尋用戶..." style="margin-bottom: 0;">
+            <span class="input-group-text" style="border-radius: 8px; background-color: #e9ecef;"><i class="bi bi-search"></i></span>
+        </div>
         <ul id="userList" class="user-list">
             <li class="empty-state">載入中...</li>
         </ul>
@@ -268,7 +272,7 @@
 
 
                     return `
-                    <li class="user-item">
+                    <li class="user-item" data-name="${userName.toLowerCase()}" data-zhuyin="${(zhuyin || '').toLowerCase()}">
                         <img src="/user_avatar/${userId}" alt="avatar" class="user-avatar" data-avatar-id="${userId}" onerror="this.src='https://via.placeholder.com/40'; this.onerror=null;">
                         <div class="user-info-wrapper">
                             <div style="font-weight: 600; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;">
@@ -452,6 +456,22 @@
 
     document.getElementById('userIdInput').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') addUser();
+    });
+
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase().trim();
+        const userItems = document.querySelectorAll('#userList .user-item');
+        let visibleCount = 0;
+
+        userItems.forEach(item => {
+            const name = item.dataset.name || '';
+            const zhuyin = item.dataset.zhuyin || '';
+
+            const isVisible = name.includes(searchTerm) || zhuyin.includes(searchTerm);
+            item.style.display = isVisible ? 'flex' : 'none';
+            if (isVisible) visibleCount++;
+        });
+        document.getElementById('userCount').textContent = `${visibleCount} / ${userItems.length}`;
     });
 </script>
 {% endblock %}
