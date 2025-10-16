@@ -303,8 +303,9 @@ def configs_page():
     configs_dict.setdefault('feature_schedule_enabled', 'true')
     configs_dict.setdefault('feature_closed_days_enabled', 'true')
     configs_dict.setdefault('feature_booking_enabled', 'true')
-    configs_dict.setdefault('auto_reminder_enabled', 'false')
+    configs_dict.setdefault('auto_reminder_daily_enabled', 'false')
     configs_dict.setdefault('auto_reminder_daily_time', '09:00')
+    configs_dict.setdefault('auto_reminder_weekly_enabled', 'false')
     configs_dict.setdefault('auto_reminder_weekly_day', 'sun')
     configs_dict.setdefault('auto_reminder_weekly_time', '21:00')
 
@@ -1018,7 +1019,7 @@ def handle_cancel_booking(user_id):
 
 def send_daily_reminders_job():
     """每日提醒的排程任務"""
-    if db.get_config('auto_reminder_enabled', 'false') == 'true':
+    if db.get_config('auto_reminder_daily_enabled', 'false') == 'true':
         print(f"[{datetime.now(TAIPEI_TZ)}] 執行每日自動提醒...")
         today_str = datetime.now(TAIPEI_TZ).strftime('%Y-%m-%d')
         appointments = db.get_appointments_by_date_range(today_str, today_str)
@@ -1031,7 +1032,7 @@ def send_daily_reminders_job():
 
 def send_weekly_reminders_job():
     """每週提醒的排程任務"""
-    if db.get_config('auto_reminder_enabled', 'false') == 'true':
+    if db.get_config('auto_reminder_weekly_enabled', 'false') == 'true':
         print(f"[{datetime.now(TAIPEI_TZ)}] 執行每週自動提醒...")
         # 預設為下週的預約
         week_dates = get_week_dates(week_offset=1)
