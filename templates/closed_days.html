@@ -139,7 +139,7 @@
 <script>
     async function loadClosedDays() {
         try {
-            const response = await fetch('/get_closed_days');
+            const response = await fetch('/api/admin/closed_days');
             const data = await response.json();
             const closedDays = data.closed_days || [];
             const listDiv = document.getElementById('closedDaysList');
