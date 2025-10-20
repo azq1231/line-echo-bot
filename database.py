@@ -108,6 +108,62 @@ def init_database():
         )
     ''')
 
+    # 排程訊息表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            user_name TEXT NOT NULL,
+            send_time TIMESTAMP NOT NULL,
+            message TEXT NOT NULL,
+            status TEXT DEFAULT 'pending', -- pending, sent, failed
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+    ''')
+    # 安全地為 schedules 表添加欄位，處理舊資料庫結構
+    cursor.execute("PRAGMA table_info(schedules)")
+    schedule_columns = [column[1] for column in cursor.fetchall()]
+    if 'id' not in schedule_columns:
+        # 這是個比較複雜的操作，因為舊的 PRIMARY KEY 可能不存在
+        print("警告：偵測到舊的 'schedules' 表結構，正在嘗試升級。建議備份 appointments.db 檔案。")
+        # 重新命名舊表
+        cursor.execute("ALTER TABLE schedules RENAME TO schedules_old")
+        # 建立新表
+        cursor.execute('''
+            CREATE TABLE schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                user_name TEXT NOT NULL,
+                send_time TIMESTAMP NOT NULL,
+                message TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        ''')
+        # 智慧地將舊資料複製到新表
+        # 1. 獲取舊表的實際欄位
+        cursor.execute("PRAGMA table_info(schedules_old)")
+        old_columns = [column[1] for column in cursor.fetchall()]
+        
+        # 2. 建立要複製的欄位列表 (排除 id)
+        columns_to_copy = [col for col in old_columns if col != 'id']
+        columns_str = ", ".join(columns_to_copy)
+
+        # 3. 執行複製操作，只選擇舊表中存在的欄位
+        #    新表中多出來的欄位 (如 updated_at) 會自動使用預設值
+        print(f"正在從舊表複製欄位: {columns_str}")
+        cursor.execute('''
+            INSERT INTO schedules ({columns_str})
+            SELECT {columns_str} FROM schedules_old
+        ''')
+        # 刪除舊表
+        cursor.execute("DROP TABLE schedules_old")
+        print("已成功將 'schedules' 表升級到新結構。")
+
     # 系统配置表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS configs (
@@ -367,6 +423,60 @@ def delete_user(user_id: str) -> bool:
     conn.close()
     return deleted
 
+def add_schedule(user_id: str, user_name: str, send_time: str, message: str) -> bool:
+    """新增一個排程訊息"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO schedules (user_id, user_name, send_time, message)
+            VALUES (?, ?, ?, ?)
+        ''', (user_id, user_name, send_time, message))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"新增排程失敗: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_all_schedules() -> List[Dict]:
+    """獲取所有排程訊息"""
+    conn = get_db()
+    cursor = conn.cursor()
+    # 明確指定所有欄位，並使用 'AS' 確保主鍵永遠被命名為 'id'
+    # 這可以避免任何潛在的欄位名稱衝突或不明確性
+    cursor.execute('''
+        SELECT id, user_id, user_name, send_time, message, status, created_at, updated_at 
+        FROM schedules 
+        ORDER BY send_time DESC
+    ''')
+    schedules = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return schedules
+
+def delete_schedule(schedule_id: int) -> bool:
+    """刪除一個排程訊息"""
+    conn = get_db()
+    cursor = conn.cursor()
+    # 使用列表 [schedule_id] 作為參數，確保在所有環境下都能正確傳遞
+    # 即使 (schedule_id,) 通常是正確的，但列表更為穩健
+    cursor.execute('DELETE FROM schedules WHERE id = ?', [schedule_id])
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+def get_pending_schedules_to_send() -> List[Dict]:
+    """獲取所有待發送且時間已到的排程"""
+    conn = get_db()
+    cursor = conn.cursor()
+    # 使用 CURRENT_TIMESTAMP 來獲取 UTC 時間
+    cursor.execute("SELECT * FROM schedules WHERE status = 'pending' AND send_time <= CURRENT_TIMESTAMP")
+    schedules = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return schedules
+
 # ==================== 预约管理 ====================
 
 def add_appointment(user_id: str, user_name: str, date: str, time: str, notes: Optional[str] = None) -> bool:
@@ -608,6 +718,16 @@ def update_user_address(user_id: str, address: str) -> bool:
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('UPDATE users SET address = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?', (address, user_id))
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
+def update_schedule_status(schedule_id: int, status: str) -> bool:
+    """更新排程的狀態"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE schedules SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', (status, schedule_id))
     updated = cursor.rowcount > 0
     conn.commit()
     conn.close()

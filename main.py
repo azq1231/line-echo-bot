@@ -1119,6 +1119,26 @@ def send_weekly_reminders_job():
         else:
             print("下週無預約，不執行提醒。")
 
+def send_custom_schedules_job():
+    """處理自訂排程訊息的背景任務"""
+    with app.app_context():
+        schedules_to_send = db.get_pending_schedules_to_send()
+        if not schedules_to_send:
+            return
+
+        print(f"[{datetime.now(TAIPEI_TZ)}] 發現 {len(schedules_to_send)} 個待發送的排程...")
+        for schedule in schedules_to_send:
+            success = send_line_message(
+                user_id=schedule['user_id'],
+                messages=[{"type": "text", "text": schedule['message']}],
+                message_type='custom_schedule',
+                target_name=schedule['user_name']
+            )
+            
+            new_status = 'sent' if success else 'failed'
+            db.update_schedule_status(schedule['id'], new_status)
+            print(f"  - 排程 {schedule['id']} 發送給 {schedule['user_name']}，狀態: {new_status}")
+
 @app.route("/admin/add_schedule", methods=["POST"])
 def add_schedule_route():
     import json
@@ -1131,16 +1151,26 @@ def add_schedule_route():
     if not all([user_id, send_time, message]):
         return jsonify({"status": "error", "message": "缺少必要欄位"}), 400
     
-    # 這裡應改為寫入資料庫的邏輯
-    return jsonify({"status": "error", "message": "此功能尚未與資料庫整合"}), 501
+    if db.add_schedule(user_id, user_name, send_time, message):
+        return jsonify({"status": "success", "message": "排程已新增"})
+    else:
+        return jsonify({"status": "error", "message": "新增排程失敗"}), 500
 
 @app.route("/admin/list_schedules")
 def list_schedules():
-    return jsonify({"schedules": [], "count": 0})
+    schedules = db.get_all_schedules()
+    return jsonify({"schedules": schedules, "count": len(schedules)})
 
-@app.route("/admin/delete_schedule/<schedule_id>")
+@app.route("/admin/delete_schedule/<schedule_id>", methods=["DELETE"])
 def delete_schedule_route(schedule_id):
-    return jsonify({"status": "error", "message": "此功能尚未與資料庫整合"}), 501
+    try:
+        schedule_id = int(schedule_id)
+    except (ValueError, TypeError):
+        return jsonify({"status": "error", "message": "無效的 ID 格式"}), 400
+    if db.delete_schedule(schedule_id):
+        return jsonify({"status": "success", "message": "排程已刪除"})
+    else:
+        return jsonify({"status": "error", "message": "刪除失敗，找不到該排程"}), 404
 
 # 初始化排程器
 scheduler = BackgroundScheduler()
@@ -1155,8 +1185,11 @@ weekly_time_str = db.get_config('auto_reminder_weekly_time', '21:00') or '21:00'
 weekly_time = weekly_time_str.split(':')
 scheduler.add_job(func=send_weekly_reminders_job, trigger="cron", id='weekly_reminder_job', day_of_week=weekly_day, hour=int(weekly_time[0]), minute=int(weekly_time[1]), timezone=TAIPEI_TZ)
 
+# 每分鐘檢查一次自訂排程
+scheduler.add_job(func=send_custom_schedules_job, trigger='interval', minutes=1, id='custom_schedule_job')
+
 scheduler.start()
-print("排程器已啟動。每日與每週提醒任務已設定。")
+print("排程器已啟動。每日、每週及自訂排程任務已設定。")
 
 if __name__ == "__main__":
     try:

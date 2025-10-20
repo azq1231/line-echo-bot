@@ -218,28 +218,47 @@
             if (data.schedules && data.schedules.length > 0) {
                 listEl.innerHTML = '';
                 data.schedules.forEach(schedule => {
-                    const li = document.createElement('li');
-                    li.className = 'schedule-item';
-                    let statusClass, statusText;
-                    if (schedule.status === 'sent') {
-                        statusClass = 'status-sent';
-                        statusText = '已發送';
-                    } else if (schedule.status === 'failed') {
-                        statusClass = 'status-failed';
-                        statusText = '發送失敗';
-                    } else {
-                        statusClass = 'status-pending';
-                        statusText = '待發送';
-                    }
-                    li.innerHTML = `
-                        <div class="schedule-info">
-                            <div class="schedule-user">${schedule.user_name}</div>
-                            <div class="schedule-time">⏰ ${schedule.send_time}</div>
-                            <div class="schedule-message">${schedule.message}</div>
-                            <span class="schedule-status ${statusClass}">${statusText}</span>
-                        </div>
-                        ${schedule.status === 'pending' ? `<button class="delete-btn" onclick="deleteSchedule('${schedule.id}')">刪除</button>` : ''}
+                    // 偵錯：在瀏覽器控制台印出從後端收到的 schedule 物件
+                    console.log('Processing schedule object:', schedule);
+
+                    const li = document.createElement('li'); // 建立 li 元素
+                    li.className = 'schedule-item'; // 設定 class
+
+                    // 建立 schedule-info div
+                    const infoDiv = document.createElement('div');
+                    infoDiv.className = 'schedule-info';
+
+                    // 決定狀態的 class 和文字
+                    const statusMap = {
+                        'sent': { class: 'status-sent', text: '已發送' },
+                        'failed': { class: 'status-failed', text: '發送失敗' },
+                        'pending': { class: 'status-pending', text: '待發送' }
+                    };
+                    const statusInfo = statusMap[schedule.status] || statusMap['pending'];
+
+                    // 使用 innerHTML 填充 infoDiv 的內容
+                    infoDiv.innerHTML = `
+                        <div class="schedule-user">${schedule.user_name}</div>
+                        <div class="schedule-time">⏰ ${schedule.send_time}</div>
+                        <div class="schedule-message">${schedule.message}</div>
+                        <span class="schedule-status ${statusInfo.class}">${statusInfo.text}</span>
                     `;
+
+                    // 將 infoDiv 加入 li
+                    li.appendChild(infoDiv);
+
+                    // 如果狀態是 pending，才建立並加入刪除按鈕
+                    if (schedule.status === 'pending') {
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'delete-btn';
+                        deleteBtn.textContent = '刪除';
+                        // 終極手段：直接將 ID 寫入 onclick 事件
+                        deleteBtn.setAttribute('onclick', `deleteSchedule(${schedule.id})`);
+                        // 將按鈕加入 li
+                        li.appendChild(deleteBtn);
+                    }
+
+                    // 最後將完整的 li 加入列表
                     listEl.appendChild(li);
                 });
             } else {
@@ -302,7 +321,9 @@
             return;
         }
         try {
-            const response = await fetch(`/admin/delete_schedule/${scheduleId}`);
+            const response = await fetch(`/admin/delete_schedule/${scheduleId}`, {
+                method: 'DELETE'
+            });
             const data = await response.json();
             if (data.status === 'success') {
                 showMessage('排程已刪除', 'success');
@@ -315,6 +336,17 @@
             showMessage('刪除失敗，請稍後再試', 'error');
         }
     }
+
+    // 由於 onclick 已直接呼叫 deleteSchedule，這個事件監聽器不再需要處理刪除邏輯
+    document.getElementById('scheduleList').addEventListener('click', function(event) {
+        // 確保點擊的是刪除按鈕
+        if (event.target.classList.contains('delete-btn')) {
+            // const scheduleId = event.target.getAttribute('data-schedule-id');
+            // if (scheduleId) {
+            //     deleteSchedule(scheduleId);
+            // }
+        }
+    });
 
     loadUsers();
     loadSchedules();
