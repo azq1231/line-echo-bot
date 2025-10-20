@@ -22,6 +22,10 @@
     .day-header h3 { font-size: 16px; margin-bottom: 5px; }
     .day-header p { font-size: 14px; opacity: 0.9; }
     .time-slots { flex-grow: 1; }
+    .closed-day-overlay {
+        text-align: center; color: #e53e3e; font-weight: bold; padding: 20px;
+        background-color: rgba(255, 245, 245, 0.8); border-radius: 5px;
+    }
     .time-slot { display: flex; align-items: center; gap: 8px; padding: 5px 6px; margin-bottom: 4px; }
     .time-label { min-width: 50px; font-weight: 500; color: #4a5568; font-size: 13px; }
     .custom-select-container { flex: 1; position: relative; }
@@ -96,7 +100,7 @@
 
     async function loadUsers() {
         try {
-            const response = await fetch('/list_users');
+            const response = await fetch('/admin/list_users');
             const data = await response.json();
             allUsers = data.allowed_users || [];
             groupedUsers = groupUsersByZhuyin(allUsers);
@@ -117,8 +121,9 @@
 
     async function loadSchedule() {
         try {
-            const response = await fetch(`/get_week_appointments?offset=${currentWeekOffset}`);
+            const response = await fetch(`/api/admin/get_week_appointments?offset=${currentWeekOffset}`);
             const data = await response.json();
+            console.log("Received schedule data:", data); // 用於調試
             weekSchedule = data.week_schedule || {};
             updateWeekTitle();
             renderSchedule();
@@ -156,22 +161,27 @@
             dayCard.className = 'day-card';
             const { date_info, appointments } = dayData;
 
-            let timeSlotsHtml = Object.entries(appointments).map(([time, apt]) => {
-                const user = allUsers.find(u => u.user_id === apt.user_id);
-                return `
-                    <div class="time-slot">
-                        <span class="time-label">${time}</span>
-                        <div class="custom-select-container">
-                            ${generateCustomSelect(date_info.date, time, user)}
+            let timeSlotsHtml;
+            if (dayData.is_closed) {
+                timeSlotsHtml = `<div class="closed-day-overlay">😴<br>本日休診</div>`;
+            } else {
+                timeSlotsHtml = Object.entries(appointments).map(([time, apt]) => {
+                    const user = allUsers.find(u => u.user_id === apt.user_id);
+                    return `
+                        <div class="time-slot">
+                            <span class="time-label">${time}</span>
+                            <div class="custom-select-container">
+                                ${generateCustomSelect(date_info.date, time, user)}
+                            </div>
                         </div>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                }).join('');
+            }
 
             dayCard.innerHTML = `
                 <div class="day-header"><h3>${date_info.day_name}</h3><p>${date_info.display}</p></div>
                 <div class="time-slots">${timeSlotsHtml}</div>
-                <button class="send-day-btn" onclick="sendDayReminders(event, '${date_info.date}', '${date_info.day_name}')">📤 發送 ${date_info.day_name} 提醒</button>   
+                ${!dayData.is_closed ? `<button class="send-day-btn" onclick="sendDayReminders(event, '${date_info.date}', '${date_info.day_name}')">📤 發送 ${date_info.day_name} 提醒</button>` : ''}
             `;
             scheduleDiv.appendChild(dayCard);
         }
@@ -250,7 +260,7 @@
     async function saveAppointment(date, time, userId, userName) {
         showStatus('儲存中...', 'info');
         try {
-            const response = await fetch('/save_appointment', {
+            const response = await fetch('/api/admin/save_appointment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ date, time, user_id: userId, user_name: userName })
@@ -273,7 +283,7 @@
         btn.disabled = true;
         btn.textContent = '發送中...';
         try {
-            const response = await fetch('/send_appointment_reminders', {
+            const response = await fetch('/api/admin/send_appointment_reminders', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ type: 'week' })
@@ -294,7 +304,7 @@
         btn.disabled = true;
         btn.textContent = '發送中...';
         try {
-            const response = await fetch('/send_appointment_reminders', {
+            const response = await fetch('/api/admin/send_appointment_reminders', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ type: 'day', date: date })

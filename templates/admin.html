@@ -237,7 +237,7 @@
 
     async function loadUsers() {
         try {
-            const response = await fetch('/list_users');
+            const response = await fetch('/admin/list_users');
             const data = await response.json();
             const userList = document.getElementById('userList');
             const userCount = document.getElementById('userCount');
@@ -253,6 +253,7 @@
                     const zhuyin = user.zhuyin || '';
                     const phone1 = user.phone || '';
                     const phone2 = user.phone2 || '';
+                    const address = user.address || '';
 
                     const zhuyinDisplay = zhuyin 
                         ? `<span class="editable-name" data-userid="${userId}" data-current-zhuyin="${zhuyin}" title="點擊編輯注音">${zhuyin}</span>`
@@ -289,6 +290,9 @@
                             <div class="info-container">
                                 <span class="info-label">手機:</span> ${phone2Display}
                             </div>
+                            <div class="info-container">
+                                <span class="info-label">地址:</span> <span class="editable-name" data-userid="${userId}" data-field="address" data-current-address="${address}" title="點擊編輯地址">${address || '未設定'}</span>
+                            </div>
                             <span class="user-id">${userId}</span>
                         </div>
                         <div class="action-btn-group">
@@ -311,7 +315,7 @@
         if (!userId) { showMessage('請輸入用戶 ID', 'error'); return; }
         
         try {
-            const response = await fetch(`/add_user/${userId}`);
+            const response = await fetch(`/admin/add_user/${userId}`);
             const data = await response.json();
             if (data.status === 'success') {
                 showMessage(data.message, 'success');
@@ -325,7 +329,7 @@
         if (!confirm(`確定要刪除用戶「${userName}」嗎？\n\n此操作無法復原。`)) return;
 
         try {
-            const response = await fetch(`/delete_user/${userId}`);
+            const response = await fetch(`/admin/delete_user/${userId}`);
             const data = await response.json();
             if (data.status === 'success') {
                 showMessage('✅ 用戶已刪除', 'success');
@@ -339,7 +343,7 @@
     async function refreshUserProfile(userId) {
         showMessage('正在從 LINE 更新資料...', 'info');
         try {
-            const response = await fetch(`/refresh_user_profile/${userId}`, { method: 'POST' });
+            const response = await fetch(`/admin/refresh_user_profile/${userId}`, { method: 'POST' });
             const data = await response.json();
             if (data.status === 'success') {
                 showMessage('✅ 用戶資料已更新', 'success');
@@ -359,7 +363,7 @@
         if (newName === null || newName.trim() === '' || newName === currentName) return;
         
         try {
-            const response = await fetch('/update_user_name', {
+            const response = await fetch('/admin/update_user_name', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId, name: newName.trim() })
@@ -377,7 +381,7 @@
         if (newZhuyin === null || newZhuyin === currentZhuyin) return;
 
         try {
-            const response = await fetch('/update_user_zhuyin', {
+            const response = await fetch('/admin/update_user_zhuyin', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId, zhuyin: newZhuyin.trim() })
@@ -395,7 +399,7 @@
         if (newPhone === null || newPhone.trim() === currentPhone) return;
 
         try {
-            const response = await fetch('/update_user_phone', {
+            const response = await fetch('/admin/update_user_phone', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
@@ -414,13 +418,31 @@
 
     async function generateZhuyin(userId) {
         try {
-            const response = await fetch(`/generate_zhuyin/${userId}`, { method: 'POST' });
+            const response = await fetch(`/admin/generate_zhuyin/${userId}`, { method: 'POST' });
             const data = await response.json();
             if (data.status === 'success') {
                 showMessage('✅ 注音已產生', 'success');
                 loadUsers();
             } else { showMessage('產生失敗', 'error'); }
         } catch (error) { showMessage('產生失敗', 'error'); }
+    }
+
+    async function editUserAddress(userId, currentAddress) {
+        const newAddress = prompt('修改用戶地址：', currentAddress || '');
+        if (newAddress === null || newAddress.trim() === currentAddress) return;
+
+        try {
+            const response = await fetch('/admin/update_user_address', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, address: newAddress.trim() })
+            });
+            const data = await response.json();
+            if (data.status === 'success') {
+                showMessage('✅ 地址已更新', 'success');
+                loadUsers();
+            } else { showMessage('更新失敗', 'error'); }
+        } catch (error) { showMessage('更新失敗', 'error'); }
     }
 
     window.onload = () => {
@@ -448,7 +470,9 @@
                 editUserName(userId, target.dataset.username);
             } else if (target.dataset.currentZhuyin !== undefined) { // 編輯注音
                 editZhuyin(userId, target.dataset.currentZhuyin);
-            } else if (target.dataset.field) { // 編輯電話 (市話或手機)
+            } else if (target.dataset.field === 'address') { // 編輯地址
+                editUserAddress(userId, target.dataset.currentAddress);
+            } else if (target.dataset.field) { // 編輯電話 (市話或手機)，這個判斷要放在最後
                 editUserPhone(userId, target.dataset.field, target.dataset.currentPhone);
             }
         });

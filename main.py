@@ -241,29 +241,29 @@ def get_week_schedule_for_booking(week_offset=0):
 
 # ============ WEB 路由 ============ 
 
-@app.route("/")
+@app.route("/admin/")
 def home():
     # 從資料庫讀取刪除功能的開關狀態，預設為關閉 (False)
     allow_deletion = db.get_config('allow_user_deletion') == 'true'
     return render_template("admin.html", allow_user_deletion=allow_deletion)
 
-@app.route("/schedule")
+@app.route("/admin/schedule")
 def schedule():
     if db.get_config('feature_schedule_enabled') == 'false':
         return "Feature disabled", 404
     return render_template("schedule.html")
 
-@app.route("/appointments")
+@app.route("/admin/appointments")
 def appointments_page():
     return render_template("appointments.html")
 
-@app.route("/closed_days")
+@app.route("/admin/closed_days")
 def closed_days_page():
     if db.get_config('feature_closed_days_enabled') == 'false':
         return "Feature disabled", 404
     return render_template("closed_days.html")
 
-@app.route("/stats")
+@app.route("/admin/stats")
 def stats_page():
     # 獲取月份參數，預設為當前月份
     current_month = request.args.get('month', datetime.now(TAIPEI_TZ).strftime('%Y-%m'))
@@ -288,7 +288,7 @@ def stats_page():
                          current_user=user_id,
                          current_type=message_type)
 
-@app.route("/configs")
+@app.route("/admin/configs")
 def configs_page():
     """渲染系統設定頁面"""
     all_configs_list = db.get_all_configs()
@@ -309,7 +309,7 @@ def configs_page():
 
     return render_template("configs.html", configs=configs_dict)
 
-@app.route("/settings/slots")
+@app.route("/admin/settings/slots")
 def slots_settings_page():
     """渲染可預約時段設定頁面"""
     all_slots = db.get_all_available_slots()
@@ -323,7 +323,7 @@ def slots_settings_page():
     return render_template("slots_settings.html", slots_by_weekday=slots_by_weekday)
 
 
-@app.route("/api/message_stats")
+@app.route("/api/admin/message_stats")
 def message_stats_api():
     month = request.args.get('month')
     message_type = request.args.get('type')
@@ -394,7 +394,7 @@ def callback():
     picture_url = profile.get('pictureUrl')
 
     # 將使用者資料存入資料庫和 session
-    db.add_user(user_id, user_name, picture_url)
+    db.add_user(user_id, user_name, picture_url, address=None)
     session['user'] = {
         'user_id': user_id,
         'name': user_name,
@@ -411,7 +411,7 @@ def logout():
     flash("您已成功登出。", "info")
     return redirect(url_for('booking_page'))
 
-@app.route("/booking/", methods=["GET"])
+@app.route("/", methods=["GET"])
 def booking_page():
     if db.get_config('feature_booking_enabled') == 'false':
         return "Feature disabled", 404
@@ -458,7 +458,7 @@ def booking_page():
 
     return render_template("booking.html", user=user, schedule=schedule_data, week_offset=week_offset, max_weeks=int(db.get_config('booking_window_weeks') or '2'))
 
-@app.route("/booking/history", methods=["GET"])
+@app.route("/history", methods=["GET"])
 def booking_history_page():
     """使用者預約歷史頁面"""
     user = session.get('user')
@@ -505,35 +505,35 @@ def booking_history_page():
 
 # ============ 用户管理 API ============ 
 
-@app.route("/list_users")
+@app.route("/admin/list_users")
 def list_users():
     users = db.get_all_users()
     return jsonify({"allowed_users": users, "count": len(users)})
 
-@app.route("/add_user/<user_id>")
+@app.route("/admin/add_user/<user_id>")
 def add_user(user_id):
     # 從 LINE 獲取用戶資料
     user_info = get_line_profile(user_id)
     # 將完整資料存入資料庫
-    db.add_user(user_id, user_info['name'], user_info['picture_url']) 
+    db.add_user(user_id, user_info['name'], user_info['picture_url'], address=None) 
     db.update_user_name(user_id, user_info['name']) # 標記為手動（或至少是管理員介入）
     
     return jsonify({"status": "success", "message": f"已新增使用者：{user_id}"})
 
-@app.route("/delete_user/<user_id>")
+@app.route("/admin/delete_user/<user_id>")
 def delete_user(user_id):
     if db.delete_user(user_id):
         return jsonify({"status": "success", "message": f"已刪除使用者：{user_id}"})
     else:
         return jsonify({"status": "error", "message": "使用者不存在"})
 
-@app.route("/refresh_user_profile/<user_id>", methods=["POST"])
+@app.route("/admin/refresh_user_profile/<user_id>", methods=["POST"])
 def refresh_user_profile(user_id):
     """手動從 LINE 更新用戶的個人資料（特別是頭像）"""
     user_info = get_line_profile(user_id)
     if user_info and user_info['name'] != '未知':
         # add_user 包含智能更新邏輯：如果名稱被手動修改過，則只更新頭像
-        db.add_user(user_id, user_info['name'], user_info['picture_url'])
+        db.add_user(user_id, user_info['name'], user_info['picture_url'], address=None)
         return jsonify({"status": "success", "message": "用戶資料已從 LINE 更新。"})
     else:
         return jsonify({"status": "error", "message": "從 LINE 獲取資料失敗。"}), 404
@@ -560,7 +560,7 @@ def user_avatar(user_id):
         print(f"下載頭像失敗 for user {user_id}: {e}")
         return redirect('https://via.placeholder.com/40')
 
-@app.route("/update_user_name", methods=["POST"])
+@app.route("/admin/update_user_name", methods=["POST"])
 def update_user_name():
     data = request.get_json()
     user_id = data.get("user_id")
@@ -574,7 +574,7 @@ def update_user_name():
     else:
         return jsonify({"status": "error", "message": "找不到用戶"}), 404
 
-@app.route("/update_user_zhuyin", methods=["POST"])
+@app.route("/admin/update_user_zhuyin", methods=["POST"])
 def update_user_zhuyin_route():
     data = request.get_json()
     user_id = data.get("user_id")
@@ -588,7 +588,7 @@ def update_user_zhuyin_route():
     else:
         return jsonify({"status": "error", "message": "更新失败"}), 500
 
-@app.route("/update_user_phone", methods=["POST"])
+@app.route("/admin/update_user_phone", methods=["POST"])
 def update_user_phone_route():
     data = request.get_json()
     user_id = data.get("user_id")
@@ -603,7 +603,22 @@ def update_user_phone_route():
     else:
         return jsonify({"status": "error", "message": "更新失敗"}), 500
 
-@app.route("/generate_zhuyin/<user_id>", methods=["POST"])
+@app.route("/admin/update_user_address", methods=["POST"])
+def update_user_address_route():
+    """更新用戶地址"""
+    data = request.get_json()
+    user_id = data.get("user_id")
+    address = data.get("address")
+
+    if not user_id or address is None:
+        return jsonify({"status": "error", "message": "缺少使用者 ID 或地址"}), 400
+
+    if db.update_user_address(user_id, address):
+        return jsonify({"status": "success", "message": "地址已更新"})
+    else:
+        return jsonify({"status": "error", "message": "更新失敗"}), 500
+
+@app.route("/admin/generate_zhuyin/<user_id>", methods=["POST"])
 def generate_zhuyin_route(user_id):
     new_zhuyin = db.generate_and_save_zhuyin(user_id)
     if new_zhuyin is not None:
@@ -613,7 +628,7 @@ def generate_zhuyin_route(user_id):
 
 # ============ 预约管理 API ============ 
 
-@app.route("/get_week_appointments")
+@app.route("/api/admin/get_week_appointments")
 def get_week_appointments():
     week_offset = int(request.args.get('offset', 0))
     print(f"get_week_appointments: offset={week_offset}")  # Add log
@@ -626,7 +641,7 @@ def get_week_appointments():
     for date_info in week_dates:
         date_str = date_info['date']
         weekday = date_info['weekday']
-        time_slots = generate_time_slots(weekday)  # Corrected variable name
+        time_slots = generate_time_slots(weekday)
         
         appointments = db.get_appointments_by_date_range(date_str, date_str)
         appointments_map = {apt['time']: apt for apt in appointments if apt['status'] == 'confirmed'}
@@ -652,7 +667,7 @@ def get_week_appointments():
     
     print(f"get_week_appointments: response={response_data}")  # Add log
     return jsonify(response_data)
-@app.route("/save_appointment", methods=["POST"])
+@app.route("/api/admin/save_appointment", methods=["POST"])
 def save_appointment():
     data = request.get_json()
     date = data.get('date')
@@ -746,7 +761,7 @@ def _do_send_reminders(appointments: list) -> tuple[int, int]:
                 failed_count += 1
     return sent_count, failed_count
 
-@app.route("/send_appointment_reminders", methods=["POST"])
+@app.route("/api/admin/send_appointment_reminders", methods=["POST"])
 def send_appointment_reminders():
     data = request.get_json()
     send_type = data.get('type', 'week')
@@ -772,12 +787,12 @@ def send_appointment_reminders():
 
 # ============ 休诊管理 API ============ 
 
-@app.route("/get_closed_days")
+@app.route("/api/admin/closed_days")
 def get_closed_days():
     closed_days = db.get_all_closed_days()
     return jsonify({"closed_days": closed_days})
 
-@app.route("/set_closed_day", methods=["POST"])
+@app.route("/api/admin/set_closed_day", methods=["POST"])
 def set_closed_day():
     data = request.get_json()
     date = data.get('date')
@@ -793,7 +808,7 @@ def set_closed_day():
         "message": f"已設定休診，取消了 {cancelled_count} 個預約"
     })
 
-@app.route("/remove_closed_day", methods=["POST"])
+@app.route("/api/admin/remove_closed_day", methods=["POST"])
 def remove_closed_day():
     data = request.get_json()
     date = data.get('date')
@@ -805,7 +820,7 @@ def remove_closed_day():
 
 # ============ 可用時段 API ============
 
-@app.route("/api/slots", methods=["POST"])
+@app.route("/api/admin/slots", methods=["POST"])
 def api_add_slot():
     data = request.get_json()
     if db.add_available_slot(data['weekday'], data['start_time'], data['end_time'], data.get('note')):
@@ -813,7 +828,7 @@ def api_add_slot():
     else:
         return jsonify({"status": "error", "message": "新增失敗，該時段可能已存在"}), 409
 
-@app.route("/api/slots/<int:slot_id>", methods=["PUT"])
+@app.route("/api/admin/slots/<int:slot_id>", methods=["PUT"])
 def api_update_slot(slot_id):
     data = request.get_json()
     if db.update_available_slot(
@@ -828,14 +843,14 @@ def api_update_slot(slot_id):
     else:
         return jsonify({"status": "error", "message": "更新失敗"}), 500
 
-@app.route("/api/slots/<int:slot_id>", methods=["DELETE"])
+@app.route("/api/admin/slots/<int:slot_id>", methods=["DELETE"])
 def api_delete_slot(slot_id):
     if db.delete_available_slot(slot_id):
         return jsonify({"status": "success", "message": "時段已刪除"})
     else:
         return jsonify({"status": "error", "message": "刪除失敗"}), 500
 
-@app.route("/api/slots/copy", methods=["POST"])
+@app.route("/api/admin/slots/copy", methods=["POST"])
 def api_copy_slots():
     data = request.get_json()
     source_weekday = data.get('source_weekday')
@@ -852,12 +867,12 @@ def api_copy_slots():
 
 # ============ 系统配置 API ============ 
 
-@app.route("/get_config")
+@app.route("/api/admin/configs")
 def get_config_api():
     configs = db.get_all_configs()
     return jsonify({"configs": configs})
 
-@app.route("/set_config", methods=["POST"])
+@app.route("/api/admin/set_config", methods=["POST"])
 def set_config_api():
     data = request.get_json()
     key = data.get('key')
@@ -924,7 +939,7 @@ def webhook():
             
             # 每次收到訊息都嘗試更新用戶資料，db.add_user 會處理衝突
             user_info = get_line_profile(user_id)
-            db.add_user(user_id, user_info['name'], user_info['picture_url'])
+            db.add_user(user_id, user_info['name'], user_info['picture_url'], address=None)
             
             # 如果是文字訊息，才進一步處理內容
             if message_type == "text":
@@ -1104,7 +1119,7 @@ def send_weekly_reminders_job():
         else:
             print("下週無預約，不執行提醒。")
 
-@app.route("/add_schedule", methods=["POST"])
+@app.route("/admin/add_schedule", methods=["POST"])
 def add_schedule_route():
     import json
     data = request.get_json()
@@ -1119,11 +1134,11 @@ def add_schedule_route():
     # 這裡應改為寫入資料庫的邏輯
     return jsonify({"status": "error", "message": "此功能尚未與資料庫整合"}), 501
 
-@app.route("/list_schedules")
+@app.route("/admin/list_schedules")
 def list_schedules():
     return jsonify({"schedules": [], "count": 0})
 
-@app.route("/delete_schedule/<schedule_id>")
+@app.route("/admin/delete_schedule/<schedule_id>")
 def delete_schedule_route(schedule_id):
     return jsonify({"status": "error", "message": "此功能尚未與資料庫整合"}), 501
 

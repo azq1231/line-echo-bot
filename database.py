@@ -50,7 +50,9 @@ def init_database():
     # 安全地為 users 表添加 manual_update 字段，用於標記手動更新
     if 'manual_update' not in columns:
         cursor.execute("ALTER TABLE users ADD COLUMN manual_update BOOLEAN DEFAULT FALSE")
-
+    # 安全地為 users 表添加 address 字段
+    if 'address' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN address TEXT")
 
 
     # 预约表
@@ -301,7 +303,7 @@ def get_user_by_id(user_id: str) -> Optional[Dict]:
     conn.close()
     return dict(user) if user else None
 
-def add_user(user_id: str, name: str, picture_url: Optional[str] = None, phone: Optional[str] = None, phone2: Optional[str] = None) -> None:
+def add_user(user_id: str, name: str, picture_url: Optional[str] = None, phone: Optional[str] = None, phone2: Optional[str] = None, address: Optional[str] = None) -> None:
     """新增或更新用户，如果用户已存在，则更新姓名"""
     conn = get_db()
     cursor = conn.cursor()
@@ -332,9 +334,9 @@ def add_user(user_id: str, name: str, picture_url: Optional[str] = None, phone: 
     else:
         # 新增用户
         cursor.execute('''
-            INSERT INTO users (user_id, name, picture_url, phone, phone2, zhuyin)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, name, picture_url, phone, phone2, zhuyin))
+            INSERT INTO users (user_id, name, picture_url, phone, phone2, zhuyin, address)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, name, picture_url, phone, phone2, zhuyin, address))
         print(f"Added new user: {name} ({user_id})")
         
     conn.commit()
@@ -600,6 +602,17 @@ def update_user_phone_field(user_id: str, field: str, phone: str) -> bool:
     conn.commit()
     conn.close()
     return updated
+
+def update_user_address(user_id: str, address: str) -> bool:
+    """更新用戶地址"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('UPDATE users SET address = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?', (address, user_id))
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
 
 def generate_and_save_zhuyin(user_id: str) -> Optional[str]:
     """为用户生成并保存注音"""
