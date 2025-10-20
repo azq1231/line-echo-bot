@@ -6,6 +6,7 @@
 
 # Python cache
 __pycache__/
+venv/
 
 # SQLite database
 *.db
