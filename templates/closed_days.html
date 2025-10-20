@@ -172,7 +172,7 @@
             return;
         }
         try {
-            const response = await fetch('/set_closed_day', {
+            const response = await fetch('/api/admin/set_closed_day', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ date, reason })
@@ -197,7 +197,7 @@
             return;
         }
         try {
-            const response = await fetch('/remove_closed_day', {
+            const response = await fetch('/api/admin/remove_closed_day', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ date })

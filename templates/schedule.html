@@ -188,7 +188,7 @@
 
     async function loadUsers() {
         try {
-            const response = await fetch('/list_users');
+            const response = await fetch('/admin/list_users');
             const data = await response.json();
             const select = document.getElementById('userSelect');
             if (data.allowed_users && data.allowed_users.length > 0) {
@@ -210,7 +210,7 @@
 
     async function loadSchedules() {
         try {
-            const response = await fetch('/list_schedules');
+            const response = await fetch('/admin/list_schedules');
             const data = await response.json();
             const listEl = document.getElementById('scheduleList');
             const countEl = document.getElementById('scheduleCount');
@@ -270,7 +270,7 @@
         }
         const formattedTime = sendTime.replace('T', ' ');
         try {
-            const response = await fetch('/add_schedule', {
+            const response = await fetch('/admin/add_schedule', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -302,7 +302,7 @@
             return;
         }
         try {
-            const response = await fetch(`/delete_schedule/${scheduleId}`);
+            const response = await fetch(`/admin/delete_schedule/${scheduleId}`);
             const data = await response.json();
             if (data.status === 'success') {
                 showMessage('排程已刪除', 'success');

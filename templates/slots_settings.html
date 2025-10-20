@@ -263,7 +263,7 @@
             return;
         }
 
-        const url = slotId ? `/api/slots/${slotId}` : '/api/slots';
+        const url = slotId ? `/api/admin/slots/${slotId}` : '/api/admin/slots';
         const method = slotId ? 'PUT' : 'POST';
 
         try {
@@ -290,7 +290,7 @@
         if (!confirm('您確定要刪除這個時段設定嗎？')) return;
 
         try {
-            const response = await fetch(`/api/slots/${slotId}`, {
+            const response = await fetch(`/api/admin/slots/${slotId}`, {
                 method: 'DELETE'
             });
             const result = await response.json();
@@ -317,7 +317,7 @@
         if (!confirm('確定要執行複製嗎？\n目標星期的現有設定將被覆蓋。')) return;
 
         try {
-            const response = await fetch('/api/slots/copy', {
+            const response = await fetch('/api/admin/slots/copy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ source_weekday: sourceWeekday, target_weekdays: targetWeekdays })
