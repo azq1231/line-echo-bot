@@ -53,6 +53,9 @@ def init_database():
     # 安全地為 users 表添加 address 字段
     if 'address' not in columns:
         cursor.execute("ALTER TABLE users ADD COLUMN address TEXT")
+    # 安全地為 users 表添加 is_admin 字段
+    if 'is_admin' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
 
 
     # 预约表
@@ -422,6 +425,21 @@ def delete_user(user_id: str) -> bool:
     conn.commit()
     conn.close()
     return deleted
+
+def update_user_admin_status(user_id: str, is_admin: bool) -> bool:
+    """更新指定用戶的管理員狀態"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('UPDATE users SET is_admin = ? WHERE user_id = ?', (is_admin, user_id))
+        updated = cursor.rowcount > 0
+        conn.commit()
+        return updated
+    except Exception as e:
+        print(f"更新管理員狀態時發生錯誤: {e}")
+        return False
+    finally:
+        conn.close()
 
 def add_schedule(user_id: str, user_name: str, send_time: str, message: str) -> bool:
     """新增一個排程訊息"""

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}用戶管理{% endblock %}
+
+{% block header %}👥 用戶管理{% endblock %}
+
+{% block content %}
+<style>
+    .user-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .user-table th, .user-table td {
+        padding: 12px 15px;
+        border-bottom: 1px solid #e0e0e0;
+        text-align: left;
+        vertical-align: middle;
+    }
+    .user-table th {
+        background-color: #f7fafc;
+        font-weight: 600;
+    }
+    .user-table tbody tr:hover {
+        background-color: #f1f3f5;
+    }
+    .user-name {
+        font-weight: 500;
+    }
+    .line-id {
+        font-family: monospace;
+        font-size: 0.9em;
+        color: #718096;
+    }
+    /* Toggle Switch 樣式 */
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 34px;
+    }
+    .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 34px;
+    }
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+    input:checked + .slider {
+        background-color: #667eea;
+    }
+    input:disabled + .slider {
+        cursor: not-allowed;
+        background-color: #e9ecef;
+    }
+    input:checked + .slider:before {
+        transform: translateX(26px);
+    }
+    .status-message {
+        position: fixed; top: 20px; right: 20px; padding: 15px 20px;
+        background: white; border-radius: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        display: none; z-index: 1000;
+    }
+    .status-message.show { display: block; }
+</style>
+
+<div class="card p-0">
+    <div class="table-responsive">
+        <table class="user-table">
+            <thead>
+                <tr>
+                    <th>使用者名稱</th>
+                    <th>LINE User ID</th>
+                    <th class="text-center">管理員權限</th>
+                </tr>
+            </thead>
+            <tbody id="userListBody">
+                <!-- 使用者列表將由 JavaScript 動態載入 -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="statusMessage" class="status-message"></div>
+
+<script>
+    let currentAdminId = null;
+
+    async function loadUsers() {
+        const response = await fetch('/api/admin/users');
+        const data = await response.json();
+        currentAdminId = data.current_admin_id;
+        const userListBody = document.getElementById('userListBody');
+        userListBody.innerHTML = data.users.map(user => `
+            <tr>
+                <td><div class="user-name">${user.name}</div></td>
+                <td><div class="line-id">${user.line_user_id}</div></td>
+                <td class="text-center">
+                    <label class="switch">
+                        <input type="checkbox" ${user.is_admin ? 'checked' : ''} 
+                               onchange="toggleAdmin(${user.id})" 
+                               ${user.id === currentAdminId ? 'disabled' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async function toggleAdmin(userId) {
+        const response = await fetch(`/api/admin/users/${userId}/toggle_admin`, { method: 'POST' });
+        const result = await response.json();
+        showStatus(result.message);
+        // 重新載入以確保狀態正確，或者可以只更新該行的 checkbox 狀態
+        loadUsers();
+    }
+
+    function showStatus(message, type = 'success') {
+        const statusDiv = document.getElementById('statusMessage');
+        statusDiv.textContent = message;
+        statusDiv.className = 'status-message show';
+        setTimeout(() => {
+            statusDiv.className = 'status-message';
+        }, 3000);
+    }
+
+    document.addEventListener('DOMContentLoaded', loadUsers);
+</script>
+{% endblock %}

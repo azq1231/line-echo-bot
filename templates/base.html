@@ -54,6 +54,19 @@
                             <li class="nav-item"><a class="nav-link" href="/admin/configs">系統設定</a></li>
                             <li class="nav-item"><a class="nav-link" href="/admin/settings/slots">時段設定</a></li>
                         </ul>
+                        {% if user %}
+                        <ul class="navbar-nav ms-auto"> <!-- ms-auto 將此部分推到右側 -->
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <img src="{{ url_for('user_avatar', user_id=user.user_id) }}" alt="User Avatar" class="rounded-circle me-2" style="width: 24px; height: 24px;">
+                                    {{ user.name }}
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                                    <li><a class="dropdown-item" href="{{ url_for('logout') }}">登出</a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                        {% endif %}
                     </div>
                 </div>
             </nav>

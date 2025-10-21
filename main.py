@@ -7,6 +7,7 @@ import pytz
 import uuid
 import hmac
 import hashlib
+from functools import wraps
 import base64
 
 # 导入数据库和 Flex Message 模块
@@ -23,8 +24,8 @@ app = Flask(__name__)
 # 從環境變數讀取 SECRET_KEY，這對於生產環境至關重要
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
 if not app.secret_key:
-    print("警告：未設定 FLASK_SECRET_KEY 環境變數，將使用隨機值。在生產環境中這會導致 session 問題。")
-    app.secret_key = os.urandom(24)
+    # 在生產環境中，FLASK_SECRET_KEY 必須被設定，否則會導致 session 失效
+    raise ValueError("FLASK_SECRET_KEY 環境變數未設定。請在 .env 或環境中設定一個安全的隨機字串。")
 
 LINE_CHANNEL_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
@@ -45,6 +46,38 @@ def inject_feature_flags():
         'feature_closed_days_enabled': db.get_config('feature_closed_days_enabled', 'true') != 'false',
         'feature_booking_enabled': db.get_config('feature_booking_enabled', 'true') != 'false',
     }
+
+# ============ 權限驗證裝飾器 ============
+
+def admin_required(f):
+    """
+    一個裝飾器，用來驗證使用者是否為登入的管理員。
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # 1. 檢查使用者是否登入
+        if 'user' not in session or 'user_id' not in session['user']:
+            flash('請先登入以存取此頁面。', 'warning')
+            # 登入後將使用者導回原本想去的頁面
+            return redirect(url_for('login', next=request.url))
+
+        # 2. 檢查使用者是否具備管理員權限
+        user_data = db.get_user_by_id(session['user']['user_id'])
+        is_admin_in_db = user_data and user_data.get('is_admin')
+
+        # 3. 如果資料庫中的權限與 session 不符，更新 session
+        if 'is_admin' not in session['user'] or session['user']['is_admin'] != is_admin_in_db:
+            session['user'] = db.get_user_by_id(session['user']['user_id']) # 直接用最新的資料庫物件覆蓋
+            session.modified = True # 標記 session 已被修改
+
+        # 4. 最終權限檢查
+        if not is_admin_in_db:
+            flash('您沒有權限存取此頁面。', 'danger')
+            return redirect(url_for('booking_page')) # 導向首頁或沒有權限的頁面
+
+        # 5. 如果驗證通過，執行原本的函式
+        return f(*args, **kwargs)
+    return decorated_function
 
 # ============ LINE API 辅助函数 ============ 
 
@@ -240,36 +273,53 @@ def get_week_schedule_for_booking(week_offset=0):
     return schedule_data
 
 # ============ WEB 路由 ============ 
+# 為了保護所有 /admin 路徑，建議將 admin_required 應用到所有相關路由
 
-@app.route("/admin/")
-def home():
-    # 從資料庫讀取刪除功能的開關狀態，預設為關閉 (False)
-    allow_deletion = db.get_config('allow_user_deletion') == 'true'
-    return render_template("admin.html", allow_user_deletion=allow_deletion)
+@app.route("/admin/") # 後台首頁
+@admin_required
+def admin_home():
+    user = session.get('user')  # 從 session 中獲取已登入的使用者資訊
+    # 從資料庫讀取設定，決定是否允許刪除用戶，預設為 'false'
+    allow_deletion = db.get_config('allow_user_deletion', 'false') == 'true'
+    return render_template("admin.html", user=user, allow_user_deletion=allow_deletion)
 
 @app.route("/admin/schedule")
+@admin_required
 def schedule():
+    user = session.get('user')
     if db.get_config('feature_schedule_enabled') == 'false':
         return "Feature disabled", 404
-    return render_template("schedule.html")
+    return render_template("schedule.html", user=user)
 
 @app.route("/admin/appointments")
+@admin_required
 def appointments_page():
-    return render_template("appointments.html")
+    user = session.get('user')
+    return render_template("appointments.html", user=user)
 
 @app.route("/admin/closed_days")
+@admin_required
 def closed_days_page():
+    user = session.get('user')
     if db.get_config('feature_closed_days_enabled') == 'false':
         return "Feature disabled", 404
-    return render_template("closed_days.html")
+    return render_template("closed_days.html", user=user)
+
+@app.route("/admin/users") # 新增：使用者管理頁面
+@admin_required
+def users_management_page():
+    """渲染使用者管理頁面。"""
+    return render_template('admin_users.html')
 
 @app.route("/admin/stats")
+@admin_required
 def stats_page():
+    user = session.get('user')
     # 獲取月份參數，預設為當前月份
     current_month = request.args.get('month', datetime.now(TAIPEI_TZ).strftime('%Y-%m'))
     # 獲取其他篩選參數
-    message_type = request.args.get('type')
-    user_id = request.args.get('user')
+    message_type = request.args.get('type', '')
+    user_id = request.args.get('user', '')
 
     # 獲取所有用戶以供篩選
     all_users = db.get_all_users()
@@ -277,11 +327,12 @@ def stats_page():
     # 獲取統計數據
     stats_data = db.get_message_stats(
         month=current_month,
-        message_type=message_type if message_type else None,
-        user_id=user_id if user_id else None
+        message_type=message_type or None, # 如果是空字串，傳遞 None 給資料庫查詢
+        user_id=user_id or None
     )
     
     return render_template('stats.html', 
+                         user=user,
                          stats=stats_data,
                          current_month=current_month,
                          all_users=all_users,
@@ -289,7 +340,9 @@ def stats_page():
                          current_type=message_type)
 
 @app.route("/admin/configs")
+@admin_required
 def configs_page():
+    user = session.get('user')
     """渲染系統設定頁面"""
     all_configs_list = db.get_all_configs()
     # 將列表轉換為字典以便在模板中輕鬆訪問
@@ -307,10 +360,12 @@ def configs_page():
     configs_dict.setdefault('auto_reminder_weekly_day', 'sun')
     configs_dict.setdefault('auto_reminder_weekly_time', '21:00')
 
-    return render_template("configs.html", configs=configs_dict)
+    return render_template("configs.html", user=user, configs=configs_dict)
 
 @app.route("/admin/settings/slots")
+@admin_required
 def slots_settings_page():
+    user = session.get('user')
     """渲染可預約時段設定頁面"""
     all_slots = db.get_all_available_slots()
     
@@ -320,9 +375,10 @@ def slots_settings_page():
         if slot['weekday'] in slots_by_weekday:
             slots_by_weekday[slot['weekday']].append(slot)
             
-    return render_template("slots_settings.html", slots_by_weekday=slots_by_weekday)
+    return render_template("slots_settings.html", user=user, slots_by_weekday=slots_by_weekday)
 
 
+# ============ 後台 API (需要 admin_required 保護) ============
 @app.route("/api/admin/message_stats")
 def message_stats_api():
     month = request.args.get('month')
@@ -345,6 +401,11 @@ def login():
     state = str(uuid.uuid4())
     session['oauth_state'] = state
     redirect_uri = url_for('callback', _external=True)
+
+    # 如果有 'next' 參數，儲存到 session 中，以便 callback 處理
+    next_param = request.args.get('next')
+    if next_param:
+        session['next_url'] = next_param
     
     auth_url = (
         f"https://access.line.me/oauth2/v2.1/authorize?response_type=code"
@@ -393,16 +454,32 @@ def callback():
     user_name = profile['displayName']
     picture_url = profile.get('pictureUrl')
 
-    # 將使用者資料存入資料庫和 session
+    # 將使用者資料存入資料庫 (db.add_user 會處理新增或更新)
     db.add_user(user_id, user_name, picture_url, address=None)
+
+    # 從資料庫獲取完整的用戶資訊，包括 is_admin
+    user_data_from_db = db.get_user_by_id(user_id)
+    if not user_data_from_db:
+        flash("登入失敗：無法獲取用戶資料。", "danger")
+        return redirect(url_for('booking_page'))
+
+    # 將完整的用戶資訊存入 session
     session['user'] = {
-        'user_id': user_id,
-        'name': user_name,
-        'picture_url': picture_url
+        'user_id': user_data_from_db['user_id'],
+        'name': user_data_from_db['name'],
+        'picture_url': user_data_from_db.get('picture_url'),
+        'is_admin': user_data_from_db.get('is_admin', False) # 確保有 is_admin 屬性
     }
     
     flash("登入成功！", "success")
-    return redirect(url_for('booking_page'))
+
+    # 處理登入後的重定向
+    next_url = session.pop('next_url', None)
+    # 如果使用者是管理員，優先導向後台首頁或指定的後台頁面
+    if session.get('user', {}).get('is_admin'):
+        return redirect(next_url or url_for('admin_home'))
+    # 否則，導向指定的公開頁面或預設的預約頁面
+    return redirect(next_url or url_for('booking_page'))
 
 @app.route('/logout')
 def logout():
@@ -416,11 +493,20 @@ def booking_page():
     if db.get_config('feature_booking_enabled') == 'false':
         return "Feature disabled", 404
 
-    user = session.get('user')
+    user_session = session.get('user') # 從 session 獲取用戶資訊
     schedule_data = None
     week_offset = 0 # 為 week_offset 提供預設值
 
-    if user:
+    # 提前定義 max_weeks，避免未登入時出錯
+    try:
+        # 從資料庫獲取設定，如果不存在、為空或格式錯誤，則使用預設值 2
+        max_weeks = int(db.get_config('booking_window_weeks', '2') or '2')
+    except (ValueError, TypeError):
+        max_weeks = 2  # 如果設定值無效（例如 'abc'），則使用預設值
+
+    if user_session:
+        # user_session 已經在 callback 或上次 booking_page 訪問時被完整填充，包含 is_admin
+        user = user_session # 直接使用 session 中的完整 user 物件
         week_offset_str = request.args.get('week_offset', '0')
         try:
             week_offset = int(week_offset_str)
@@ -455,8 +541,10 @@ def booking_page():
                          pass # 忽略解析錯誤
                  day['slots'].append({'time': slot, 'available': is_available, 'user_name': booked_slots.get((day['date'], slot))})
              schedule_data.append(day)
+    else:
+        user = None # 確保未登入時 user 為 None
 
-    return render_template("booking.html", user=user, schedule=schedule_data, week_offset=week_offset, max_weeks=int(db.get_config('booking_window_weeks') or '2'))
+    return render_template("booking.html", user=user, schedule=schedule_data, week_offset=week_offset, max_weeks=max_weeks) # 這裡的 user 已經是完整的了
 
 @app.route("/history", methods=["GET"])
 def booking_history_page():
@@ -503,29 +591,66 @@ def booking_history_page():
     )
 
 
-# ============ 用户管理 API ============ 
+# ============ 後台使用者管理 API (需要 admin_required 保護) ============ 
 
-@app.route("/admin/list_users")
+@app.route('/api/admin/users', methods=['GET']) # 新增：獲取所有使用者列表
+@admin_required
+def api_get_users():
+    """
+    提供所有使用者的列表 API。
+    """
+    users = db.get_all_users() # 假設 db.get_all_users() 返回一個字典列表
+    
+    # 取得當前登入的管理員 ID，避免在前端讓他自己移除自己的權限
+    current_admin_id = session['user']['user_id'] if 'user' in session else None
+    
+    users_data = [
+        {
+            "id": user['user_id'], # 假設 'user_id' 是字典中的鍵
+            "name": user['name'],
+            "line_user_id": user['user_id'], # LINE user ID 在此作為主要 ID
+            "is_admin": user.get('is_admin', False) # 預設為 False 如果未設定
+        } for user in users
+    ]
+    return jsonify({
+        "users": users_data,
+        "current_admin_id": current_admin_id
+    })
+
+@app.route('/api/admin/users/<string:user_id>/toggle_admin', methods=['POST']) # 新增：切換管理員狀態
+@admin_required
+def api_toggle_admin(user_id):
+    """
+    切換指定使用者的管理員狀態。
+    """
+    # 安全性檢查：不能修改自己的權限
+    if user_id == (session['user']['user_id'] if 'user' in session else None):
+        return jsonify({"message": "無法修改自己的管理員權限。"}), 403
+
+    user_to_modify = db.get_user_by_id(user_id)
+    if not user_to_modify:
+        return jsonify({"message": "找不到該使用者。"}), 404
+
+    # 切換 is_admin 狀態
+    new_admin_status = not user_to_modify.get('is_admin', False)
+    
+    # 假設 db.update_user_admin_status 存在於 database.py
+    success = db.update_user_admin_status(user_id, new_admin_status)
+
+    if success:
+        action = "授予" if new_admin_status else "移除"
+        return jsonify({
+            "message": f"已成功為使用者 {user_to_modify['name']} {action}管理員權限。",
+            "new_status": new_admin_status
+        })
+    else:
+        return jsonify({"message": "更新管理員權限失敗。"}), 500
+
+@app.route("/admin/list_users") # 舊的 API，建議整合到 /api/admin/users
+@admin_required
 def list_users():
     users = db.get_all_users()
     return jsonify({"allowed_users": users, "count": len(users)})
-
-@app.route("/admin/add_user/<user_id>")
-def add_user(user_id):
-    # 從 LINE 獲取用戶資料
-    user_info = get_line_profile(user_id)
-    # 將完整資料存入資料庫
-    db.add_user(user_id, user_info['name'], user_info['picture_url'], address=None) 
-    db.update_user_name(user_id, user_info['name']) # 標記為手動（或至少是管理員介入）
-    
-    return jsonify({"status": "success", "message": f"已新增使用者：{user_id}"})
-
-@app.route("/admin/delete_user/<user_id>")
-def delete_user(user_id):
-    if db.delete_user(user_id):
-        return jsonify({"status": "success", "message": f"已刪除使用者：{user_id}"})
-    else:
-        return jsonify({"status": "error", "message": "使用者不存在"})
 
 @app.route("/admin/refresh_user_profile/<user_id>", methods=["POST"])
 def refresh_user_profile(user_id):
@@ -538,6 +663,7 @@ def refresh_user_profile(user_id):
     else:
         return jsonify({"status": "error", "message": "從 LINE 獲取資料失敗。"}), 404
 
+# 為了保持一致性，將這些 API 也加上 admin_required 裝飾器
 @app.route('/user_avatar/<user_id>')
 def user_avatar(user_id):
     """作為用戶頭像的代理，以實現瀏覽器快取"""
@@ -560,6 +686,7 @@ def user_avatar(user_id):
         print(f"下載頭像失敗 for user {user_id}: {e}")
         return redirect('https://via.placeholder.com/40')
 
+@admin_required
 @app.route("/admin/update_user_name", methods=["POST"])
 def update_user_name():
     data = request.get_json()
@@ -574,6 +701,7 @@ def update_user_name():
     else:
         return jsonify({"status": "error", "message": "找不到用戶"}), 404
 
+@admin_required
 @app.route("/admin/update_user_zhuyin", methods=["POST"])
 def update_user_zhuyin_route():
     data = request.get_json()
@@ -588,6 +716,7 @@ def update_user_zhuyin_route():
     else:
         return jsonify({"status": "error", "message": "更新失败"}), 500
 
+@admin_required
 @app.route("/admin/update_user_phone", methods=["POST"])
 def update_user_phone_route():
     data = request.get_json()
@@ -603,6 +732,7 @@ def update_user_phone_route():
     else:
         return jsonify({"status": "error", "message": "更新失敗"}), 500
 
+@admin_required
 @app.route("/admin/update_user_address", methods=["POST"])
 def update_user_address_route():
     """更新用戶地址"""
@@ -618,6 +748,7 @@ def update_user_address_route():
     else:
         return jsonify({"status": "error", "message": "更新失敗"}), 500
 
+@admin_required
 @app.route("/admin/generate_zhuyin/<user_id>", methods=["POST"])
 def generate_zhuyin_route(user_id):
     new_zhuyin = db.generate_and_save_zhuyin(user_id)
@@ -668,6 +799,7 @@ def get_week_appointments():
     print(f"get_week_appointments: response={response_data}")  # Add log
     return jsonify(response_data)
 @app.route("/api/admin/save_appointment", methods=["POST"])
+@admin_required
 def save_appointment():
     data = request.get_json()
     date = data.get('date')
@@ -786,6 +918,7 @@ def send_appointment_reminders():
     })
 
 # ============ 休诊管理 API ============ 
+@admin_required
 
 @app.route("/api/admin/closed_days")
 def get_closed_days():
@@ -793,6 +926,7 @@ def get_closed_days():
     return jsonify({"closed_days": closed_days})
 
 @app.route("/api/admin/set_closed_day", methods=["POST"])
+@admin_required
 def set_closed_day():
     data = request.get_json()
     date = data.get('date')
@@ -809,6 +943,7 @@ def set_closed_day():
     })
 
 @app.route("/api/admin/remove_closed_day", methods=["POST"])
+@admin_required
 def remove_closed_day():
     data = request.get_json()
     date = data.get('date')
@@ -819,6 +954,7 @@ def remove_closed_day():
         return jsonify({"status": "error", "message": "未找到休診記錄"}), 404
 
 # ============ 可用時段 API ============
+@admin_required
 
 @app.route("/api/admin/slots", methods=["POST"])
 def api_add_slot():
@@ -828,6 +964,7 @@ def api_add_slot():
     else:
         return jsonify({"status": "error", "message": "新增失敗，該時段可能已存在"}), 409
 
+@admin_required
 @app.route("/api/admin/slots/<int:slot_id>", methods=["PUT"])
 def api_update_slot(slot_id):
     data = request.get_json()
@@ -843,6 +980,7 @@ def api_update_slot(slot_id):
     else:
         return jsonify({"status": "error", "message": "更新失敗"}), 500
 
+@admin_required
 @app.route("/api/admin/slots/<int:slot_id>", methods=["DELETE"])
 def api_delete_slot(slot_id):
     if db.delete_available_slot(slot_id):
@@ -850,6 +988,7 @@ def api_delete_slot(slot_id):
     else:
         return jsonify({"status": "error", "message": "刪除失敗"}), 500
 
+@admin_required
 @app.route("/api/admin/slots/copy", methods=["POST"])
 def api_copy_slots():
     data = request.get_json()
@@ -866,6 +1005,7 @@ def api_copy_slots():
         return jsonify({"status": "error", "message": "複製失敗，請確認來源星期有設定時段。"}), 400
 
 # ============ 系统配置 API ============ 
+@admin_required
 
 @app.route("/api/admin/configs")
 def get_config_api():
@@ -873,6 +1013,7 @@ def get_config_api():
     return jsonify({"configs": configs})
 
 @app.route("/api/admin/set_config", methods=["POST"])
+@admin_required
 def set_config_api():
     data = request.get_json()
     key = data.get('key')
@@ -1140,6 +1281,7 @@ def send_custom_schedules_job():
             print(f"  - 排程 {schedule['id']} 發送給 {schedule['user_name']}，狀態: {new_status}")
 
 @app.route("/admin/add_schedule", methods=["POST"])
+@admin_required
 def add_schedule_route():
     import json
     data = request.get_json()
@@ -1157,11 +1299,13 @@ def add_schedule_route():
         return jsonify({"status": "error", "message": "新增排程失敗"}), 500
 
 @app.route("/admin/list_schedules")
+@admin_required
 def list_schedules():
     schedules = db.get_all_schedules()
     return jsonify({"schedules": schedules, "count": len(schedules)})
 
 @app.route("/admin/delete_schedule/<schedule_id>", methods=["DELETE"])
+@admin_required
 def delete_schedule_route(schedule_id):
     try:
         schedule_id = int(schedule_id)
@@ -1171,6 +1315,32 @@ def delete_schedule_route(schedule_id):
         return jsonify({"status": "success", "message": "排程已刪除"})
     else:
         return jsonify({"status": "error", "message": "刪除失敗，找不到該排程"}), 404
+
+# ============ Flask CLI 指令 ============
+
+@app.cli.command("set-admin")
+def set_admin_command():
+    """互動式設定管理員指令"""
+    print("--- 設定管理員 ---")
+    users = db.get_all_users()
+    if not users:
+        print("資料庫中沒有任何使用者。請先至少讓一位使用者登入系統。")
+        return
+
+    for i, user in enumerate(users):
+        admin_tag = "[管理員]" if user.get('is_admin') else ""
+        print(f"{i + 1}: {user['name']} ({user['user_id']}) {admin_tag}")
+    
+    try:
+        choice = int(input("請輸入要設為管理員的使用者編號: ")) - 1
+        if 0 <= choice < len(users):
+            user_to_set = users[choice]
+            db.update_user_admin_status(user_to_set['user_id'], True)
+            print(f"✅ 已成功將 '{user_to_set['name']}' 設為管理員。")
+        else:
+            print("❌ 無效的選擇。")
+    except ValueError:
+        print("❌ 請輸入數字。")
 
 # 初始化排程器
 scheduler = BackgroundScheduler()
