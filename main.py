@@ -638,10 +638,11 @@ def api_get_users():
     
     users_data = [
         {
-            "id": user['user_id'], # 假設 'user_id' 是字典中的鍵
+            "id": user['user_id'],
             "name": user['name'],
-            "line_user_id": user['user_id'], # LINE user ID 在此作為主要 ID
-            "is_admin": user.get('is_admin', False) # 預設為 False 如果未設定
+            "line_user_id": user['user_id'],
+            "is_admin": user.get('is_admin', False),
+            "zhuyin": user.get('zhuyin', '')
         } for user in users
     ]
     return jsonify({
@@ -862,7 +863,6 @@ def get_week_appointments():
         'week_offset': week_offset
     }
     
-    print(f"get_week_appointments: response={response_data}")  # Add log
     return jsonify(response_data)
 @app.route("/api/admin/save_appointment", methods=["POST"])
 @admin_required

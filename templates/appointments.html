@@ -100,9 +100,9 @@
 
     async function loadUsers() {
         try {
-            const response = await fetch('/admin/list_users');
+            const response = await fetch('/api/admin/users');
             const data = await response.json();
-            allUsers = data.allowed_users || [];
+            allUsers = data.users || [];
             groupedUsers = groupUsersByZhuyin(allUsers);
         } catch (error) {
             showStatus('❌ 用戶載入失敗', 'error');
@@ -166,7 +166,7 @@
                 timeSlotsHtml = `<div class="closed-day-overlay">😴<br>本日休診</div>`;
             } else {
                 timeSlotsHtml = Object.entries(appointments).map(([time, apt]) => {
-                    const user = allUsers.find(u => u.user_id === apt.user_id);
+                    const user = allUsers.find(u => u.id === apt.user_id);
                     return `
                         <div class="time-slot">
                             <span class="time-label">${time}</span>
