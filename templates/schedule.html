@@ -188,15 +188,15 @@
 
     async function loadUsers() {
         try {
-            const response = await fetch('/admin/list_users');
+            const response = await fetch('/api/admin/users');
             const data = await response.json();
             const select = document.getElementById('userSelect');
-            if (data.allowed_users && data.allowed_users.length > 0) {
+            if (data.users && data.users.length > 0) {
                 select.innerHTML = '<option value="">請選擇用戶</option>';
-                data.allowed_users.forEach(user => {
+                data.users.forEach(user => {
                     const option = document.createElement('option');
-                    option.value = user.user_id;
-                    option.textContent = `${user.name} (${user.user_id})`;
+                    option.value = user.id;
+                    option.textContent = `${user.name} (${user.line_user_id})`;
                     option.dataset.name = user.name;
                     select.appendChild(option);
                 });
