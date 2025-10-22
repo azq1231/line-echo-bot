@@ -642,7 +642,9 @@ def api_get_users():
             "name": user['name'],
             "line_user_id": user['user_id'],
             "is_admin": user.get('is_admin', False),
-            "zhuyin": user.get('zhuyin', '')
+            "zhuyin": user.get('zhuyin', ''),
+            "phone": user.get('phone', ''),
+            "phone2": user.get('phone2', '')
         } for user in users
     ]
     return jsonify({

@@ -317,11 +317,23 @@
                     ` : '';
 
                     return `
-                    <li class="user-item" data-name="${userName.toLowerCase()}">
+                    <li class="user-item" data-name="${userName.toLowerCase()}" data-zhuyin="${user.zhuyin || ''}">
                         <img src="/user_avatar/${userId}" alt="avatar" class="user-avatar" onerror="this.src='https://via.placeholder.com/40'; this.onerror=null;">
                         <div class="user-info-wrapper">
                             <div style="font-weight: 600; margin-bottom: 4px;">
-                                ${userName}
+                                <span class="editable-field" data-field="name" data-user-id="${userId}">${userName}</span>
+                            </div>
+                            <div class="info-container">
+                                <span class="info-label">注音:</span>
+                                <span class="editable-field" data-field="zhuyin" data-user-id="${userId}">${user.zhuyin || '[點擊新增]'}</span>
+                            </div>
+                            <div class="info-container">
+                                <span class="info-label">市話:</span>
+                                <span class="editable-field" data-field="phone" data-user-id="${userId}">${user.phone || '[點擊新增]'}</span>
+                            </div>
+                            <div class="info-container">
+                                <span class="info-label">手機:</span>
+                                <span class="editable-field" data-field="phone2" data-user-id="${userId}">${user.phone2 || '[點擊新增]'}</span>
                             </div>
                             <span class="user-id ${isManual ? 'manual' : ''}">${userId}</span>
                         </div>
@@ -337,6 +349,46 @@
         } catch (error) {
             showMessage(error.message, 'danger');
             console.error('Error loading users:', error);
+        }
+    }
+
+    async function updateUserField(userId, field, currentValue) {
+        const fieldNameMap = { name: '姓名', zhuyin: '注音', phone: '市話', phone2: '手機' };
+        const promptMessage = `請輸入新的${fieldNameMap[field] || '資料'}：`;
+        const newValue = prompt(promptMessage, currentValue);
+
+        if (newValue === null || newValue.trim() === currentValue) {
+            return; // User cancelled or didn't change the value
+        }
+
+        const endpointMap = {
+            name: '/admin/update_user_name',
+            zhuyin: '/admin/update_user_zhuyin',
+            phone: '/admin/update_user_phone',
+            phone2: '/admin/update_user_phone'
+        };
+
+        let body = { user_id: userId };
+        if (field === 'phone' || field === 'phone2') {
+            body.phone = newValue.trim();
+            body.field = field; // Pass the correct field name ('phone' or 'phone2')
+        } else {
+            body[field] = newValue.trim();
+        }
+
+        try {
+            const response = await fetch(endpointMap[field], {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || '更新失敗');
+            
+            showMessage(result.message, 'success');
+            await loadUsers(); // Reload the list to show the change
+        } catch (error) {
+            showMessage(error.message, 'danger');
         }
     }
 
@@ -453,15 +505,15 @@
         const webhookUrl = `${window.location.origin}/webhook`;
         document.getElementById('webhookUrl').textContent = webhookUrl;
 
-        // Simplified event listener
+        // Event listener for editable fields and buttons
         document.getElementById('userList').addEventListener('click', (e) => {
-            const button = e.target.closest('button');
-            if (button && button.dataset.userid) {
-                const userId = button.dataset.userid;
-                if (button.textContent.includes('刪除')) {
-                    deleteUser(userId, button.dataset.username);
-                } else if (button.textContent.includes('更新')) {
-                    refreshUserProfile(userId);
+            const target = e.target;
+            if (target.matches('.editable-field')) {
+                const userId = target.dataset.userId;
+                const field = target.dataset.field;
+                const currentValue = target.textContent;
+                if (userId && field) {
+                    updateUserField(userId, field, currentValue.startsWith('[') ? '' : currentValue);
                 }
             }
         });
@@ -473,7 +525,8 @@
 
             userItems.forEach(item => {
                 const name = item.dataset.name || '';
-                const isVisible = name.includes(searchTerm);
+                const zhuyin = item.dataset.zhuyin || '';
+                const isVisible = name.includes(searchTerm) || zhuyin.includes(searchTerm);
                 item.style.display = isVisible ? 'flex' : 'none';
                 if (isVisible) visibleCount++;
             });
