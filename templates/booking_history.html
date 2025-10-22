@@ -3,7 +3,82 @@
 {% block header %}我的預約紀錄{% endblock %}
 
 {% block content %}
+<style>
+    .appointment-list {
+        list-style: none;
+        padding: 0;
+    }
+    .appointment-item {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 15px;
+    }
+    .appointment-details {
+        flex-grow: 1;
+    }
+    .appointment-date {
+        font-size: 1.2rem;
+        font-weight: 500;
+        color: #343a40;
+    }
+    .appointment-time {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #667eea;
+    }
+    .appointment-meta {
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin-top: 10px;
+    }
+    .appointment-status {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: bold;
+        white-space: nowrap;
+    }
+    .status-confirmed { background-color: #e7f5ff; color: #007bff; }
+    .status-completed { background-color: #f1f3f5; color: #6c757d; }
+    .status-cancelled { background-color: #fff5f5; color: #e53e3e; text-decoration: line-through; }
 
+    .btn-cancel {
+        background-color: #dc3545;
+        color: white;
+    }
+    .btn-cancel:hover {
+        background-color: #c82333;
+        color: white;
+    }
+    #message-container {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1050;
+        width: 90%;
+        max-width: 500px;
+    }
+    @media (max-width: 576px) {
+        .appointment-item {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .appointment-actions {
+            width: 100%;
+            margin-top: 15px;
+        }
+        .btn {
+            width: 100%;
+        }
+    }
+</style>
 
 <div class="container my-4">
     <div id="message-container"></div>

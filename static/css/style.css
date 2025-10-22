@@ -276,91 +276,14 @@ button:hover, .action-btn:hover {
     text-decoration: line-through;
 }
 
-/* Styles from appointments.html */
-:root { --primary-color: #667eea; --secondary-color: #764ba2; }
-.page-header { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-.header-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
-.schedule-grid { display: flex; justify-content: space-between; gap: 1%; }
-.day-card { flex-basis: 19%; min-width: 0; background: white; border-radius: 10px; padding: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-.day-header { background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%); color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px; text-align: center; }
-.day-header h3 { font-size: 16px; margin-bottom: 5px; }
-.day-header p { font-size: 14px; opacity: 0.9; }
-.time-slots { flex-grow: 1; }
-.closed-day-overlay { text-align: center; color: #e53e3e; font-weight: bold; padding: 20px; background-color: rgba(255, 245, 245, 0.8); border-radius: 5px; }
-.time-slot { display: flex; align-items: center; gap: 8px; padding: 5px 6px; margin-bottom: 4px; }
-.time-label { min-width: 50px; font-weight: 500; color: #4a5568; font-size: 13px; }
-.custom-select-container { flex: 1; position: relative; }
-.custom-select-display { width: 100%; padding: 5px; border: 1px solid #cbd5e0; font-size: 13px; border-radius: 4px; background: white; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; display: flex; justify-content: space-between; align-items: center; }
-.custom-select-display.empty { color: #888; }
-.custom-select-display::after { content: '\25bc'; font-size: 10px; }
-.custom-select-options { display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #cbd5e0; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-.custom-select-options.show { display: block; }
-.custom-option { padding: 8px 10px; cursor: pointer; font-size: 13px; }
-.custom-option:hover { background: #f0f0f0; }
-.custom-option.back-option { color: var(--secondary-color); font-weight: bold; border-bottom: 1px solid #eee; }
-.send-day-btn { margin-top: 10px; width: 100%; padding: 8px; background: #48bb78; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }
-.send-day-btn:hover { background: #38a169; }
-.status-message { position: fixed; top: 20px; right: 20px; padding: 15px 20px; background: #2d3748; color: white; border-radius: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); display: none; z-index: 1000; opacity: 0; transition: opacity 0.3s; }
-.status-message.show { display: block; opacity: 1; }
-
-/* Styles from booking_history.html */
-.appointment-list { list-style: none; padding: 0; }
-.appointment-item { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; gap: 15px; }
-.appointment-details { flex-grow: 1; }
-.appointment-date { font-size: 1.2rem; font-weight: 500; color: #343a40; }
-.appointment-time { font-size: 1.5rem; font-weight: bold; color: #667eea; }
-.appointment-meta { font-size: 0.9rem; color: #6c757d; margin-top: 10px; }
-.appointment-status { padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; white-space: nowrap; }
-.status-confirmed { background-color: #e7f5ff; color: #007bff; }
-.status-completed { background-color: #f1f3f5; color: #6c757d; }
-.status-cancelled { background-color: #fff5f5; color: #e53e3e; text-decoration: line-through; }
-.btn-cancel { background-color: #dc3545; color: white; }
-.btn-cancel:hover { background-color: #c82333; color: white; }
-
-/* Styles from closed_days.html */
-.card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
-.closed-days-list { margin-top: 20px; }
-.closed-day-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f7fafc; border-radius: 5px; margin-bottom: 10px; border-left: 4px solid #f56565; }
-.closed-day-info { flex: 1; }
-.closed-day-date { font-weight: 600; color: #2d3748; margin-bottom: 5px; }
-.closed-day-reason { color: #718096; font-size: 14px; }
-
-/* Styles from schedule.html */
-.schedule-list { list-style: none; }
-.schedule-item { background: #f9f9f9; border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: start; transition: background-color 0.2s; }
-.schedule-item:hover { background: #f0f0f0; }
-.schedule-info { flex: 1; }
-.schedule-user { font-weight: 600; color: #333; margin-bottom: 8px; }
-.schedule-time { color: #667eea; font-size: 14px; margin-bottom: 8px; }
-.schedule-message { color: #666; font-size: 14px; line-height: 1.5; }
-.schedule-status { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; margin-top: 8px; }
-.status-pending { background: #fff3cd; color: #856404; }
-.status-sent { background: #d4edda; color: #155724; }
-.status-failed { background: #f8d7da; color: #721c24; }
-.delete-btn { background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; transition: background 0.3s; }
-.delete-btn:hover { background: #c82333; }
-
-/* Styles from slots_settings.html */
-.weekday-group { margin-bottom: 30px; }
-.weekday-header { font-size: 1.5rem; font-weight: bold; color: #667eea; margin-bottom: 15px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
-.slot-item { display: flex; align-items: center; padding: 12px; border-radius: 8px; background-color: #f8f9fa; margin-bottom: 8px; gap: 15px; }
-.slot-time { font-weight: 500; min-width: 120px; }
-.slot-note { color: #6c757d; flex-grow: 1; }
-.slot-status { font-weight: bold; }
-.status-active { color: #28a745; }
-.status-inactive { color: #dc3545; }
-
 /* Media Queries */
 @media (max-width: 768px) {
     .content { padding: 20px 15px; }
     .section h2 { font-size: 18px; }
     .input-group { flex-direction: column; }
     button, .action-btn { width: 100%; padding: 14px; }
-    .user-item, .closed-day-item, .schedule-item { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .user-item { flex-direction: column; align-items: flex-start; gap: 10px; }
     .user-id { word-break: break-all; }
     .info-box { font-size: 14px; }
     .webhook-url { font-size: 12px; }
-    .day-card { flex-basis: 100%; } /* 1欄佈局 */
-    .appointment-item { flex-direction: column; align-items: flex-start; }
-    .btn { width: 100%; }
 }
