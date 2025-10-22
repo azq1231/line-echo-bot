@@ -2,7 +2,185 @@
 {% block title %}LINE Bot 用戶管理{% endblock %}
 {% block header %}👥 用戶管理{% endblock %}
 {% block content %}
+<style>
+    .section {
+        margin-bottom: 40px;
+    }
+    .section h2 {
+        color: #667eea;
+        margin-bottom: 20px;
+        font-size: 20px;
+    }
+    .input-group {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    input[type="text"] {
+        flex: 1;
+        padding: 12px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 16px;
+        transition: border-color 0.3s;
+    }
+    input[type="text"]:focus {
+        outline: none;
+        border-color: #667eea;
+    }
+    button, .action-btn {
+        padding: 12px 24px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background 0.3s;
+        text-align: center;
+        display: inline-block;
+        text-decoration: none;
+    }
+    .action-btn-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    button:hover, .action-btn:hover {
+        background: #5568d3;
+    }
+    .action-btn {
+        padding: 4px 8px;
+        font-size: 12px;
+        margin-left: 8px;
+    }
+    .btn-secondary {
+        background: #a0aec0;
+    }
+    .btn-secondary:hover {
+        background: #718096;
+    }
+    .btn-danger {
+        background: #e53e3e;
+    }
+    .btn-danger:hover {
+        background: #c53030;
+    }
+    .user-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .user-item {
+        background: #f5f5f5;
+        padding: 15px;
+        margin-bottom: 10px;
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 15px;
+    }
+    .user-info-wrapper {
+        flex-grow: 1;
+        min-width: 0; /* Prevents flex item from overflowing */
+    }
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+    }
+    .user-id {
+        font-family: 'Courier New', monospace;
+        color: #555;
+        font-size: 12px;
+        word-break: break-all;
+    }
+    .user-id.manual {
+        color: #c53030;
+        font-style: italic;
+        font-weight: bold;
+    }
+    .form-check-input:checked {
+        background-color: #e53e3e;
+        border-color: #e53e3e;
+    }
+    .form-switch .form-check-input {
+        width: 3em;
+        height: 1.5em;
+    }
+    .form-check-label {
+        font-weight: 500;
+        color: #c53030;
+    }
 
+    .editable-name {
+        display: inline-block;
+        cursor: pointer;
+        padding: 2px 8px;
+        border-radius: 4px;
+        transition: background 0.2s;
+    }
+    .editable-name:hover {
+        background: #e0e0e0;
+    }
+    .info-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+        color: #777;
+        font-size: 14px;
+    }
+    .info-label {
+        font-weight: 500;
+        min-width: 40px;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: #999;
+    }
+    #message-container {
+        position: fixed;
+        top: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1060;
+        width: 90%;
+        max-width: 500px;
+    }
+    .info-box {
+        background: #e7f3ff;
+        border-left: 4px solid #2196F3;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+    }
+    .info-box p {
+        margin: 5px 0;
+        color: #1976D2;
+    }
+    .webhook-url {
+        background: #f5f5f5;
+        padding: 12px;
+        border-radius: 6px;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        word-break: break-all;
+        margin-top: 10px;
+    }
+    @media (max-width: 768px) {
+        .content { padding: 20px 15px; }
+        .section h2 { font-size: 18px; }
+        .input-group { flex-direction: column; }
+        button, .action-btn { width: 100%; padding: 14px; }
+        .user-item { flex-direction: column; align-items: flex-start; gap: 10px; }
+        .user-id { word-break: break-all; }
+        .info-box { font-size: 14px; }
+        .webhook-url { font-size: 12px; }
+    }
+</style>
 
 <div class="container" data-allow-user-deletion="{{ allow_user_deletion|tojson }}">
     <div id="message-container"></div>

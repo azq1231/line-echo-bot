@@ -3,7 +3,30 @@
 {% block header %}⚙️ 系統設定{% endblock %}
 
 {% block content %}
-
+<style>
+    .config-item {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border: 1px solid #dee2e6;
+    }
+    .config-item h5 {
+        margin-bottom: 15px;
+    }
+    .form-label {
+        font-weight: 500;
+    }
+    #message-container {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1050;
+        width: 90%;
+        max-width: 500px;
+    }
+</style>
 
 <div class="container my-4">
     <div id="message-container"></div>

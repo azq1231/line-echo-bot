@@ -3,7 +3,105 @@
 {% block header %}線上預約{% endblock %}
 
 {% block content %}
-
+<style>
+    .login-prompt {
+        text-align: center;
+        padding: 50px 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+    }
+    .btn-line-login {
+        background-color: #00C300;
+        color: white;
+        font-weight: bold;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        transition: background-color 0.3s;
+    }
+    .btn-line-login:hover {
+        background-color: #00a000;
+        color: white;
+    }
+    .user-profile {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding: 15px;
+        background-color: #f1f3f5;
+        border-radius: 8px;
+    }
+    .user-profile img {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        margin-right: 15px;
+    }
+    .week-navigation {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .schedule-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+    }
+    .day-column {
+        background-color: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .day-header {
+        background-color: #e9ecef;
+        padding: 10px;
+        text-align: center;
+        font-weight: bold;
+    }
+    .day-header.closed {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    .time-slots {
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .time-slot {
+        padding: 8px;
+        text-align: center;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background-color 0.2s, color 0.2s;
+    }
+    .time-slot.available {
+        background-color: #e7f5ff;
+        color: #007bff;
+    }
+    .time-slot.available:hover {
+        background-color: #007bff;
+        color: white;
+    }
+    .time-slot.unavailable {
+        background-color: #f1f3f5;
+        color: #adb5bd;
+        cursor: not-allowed;
+        text-decoration: line-through;
+    }
+    #message-container {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1050;
+        width: 90%;
+        max-width: 500px;
+    }
+</style>
 
 <div class="container my-4">
     <div id="message-container"></div>
