@@ -118,6 +118,67 @@
         </div>
     </div>
 
+    <div class="config-item">
+        <h5>訊息範本設定</h5>
+        <div class="mb-3">
+            <label for="message_template_reminder" class="form-label"><strong>預約提醒訊息</strong></label>
+            <textarea class="form-control" id="message_template_reminder" rows="4">{{ configs.message_template_reminder }}</textarea>
+            <div class="form-text">
+                <p class="mb-1">這是發送預約提醒時的訊息內容。可用的變數：</p>
+                <ul>
+                    <li><code>{user_name}</code>: 顧客姓名 (例如：林小明)</li>
+                    <li><code>{date}</code>: 預約日期 (例如：10月27日)</li>
+                    <li><code>{weekday}</code>: 星期幾 (例如：星期一)</li>
+                    <li><code>{time}</code>: 預約時間 (例如：14:30)</li>
+                </ul>
+                <p class="mb-0"><strong>範例：</strong><br>
+                如果範本設為 <code>Hi {user_name}，提醒您預約在 {date} ({weekday}) {time}。</code><br>
+                系統將發送：<code>Hi 林小明，提醒您預約在 10月27日 (星期一) 14:30。</code></p>
+            </div>
+        </div>
+        <button class="btn btn-primary" onclick="saveConfig('message_template_reminder', 'message_template_reminder')">儲存訊息範本</button>
+    </div>
+
+    <div class="config-item">
+        <h5>管理員設定</h5>
+        <div class="mb-3">
+            <label class="form-label">目前管理員</label>
+            {% if admins %}
+                <ul class="list-group">
+                    {% for admin in admins %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>
+                                <img src="{{ url_for('user_avatar', user_id=admin.user_id) }}" class="rounded-circle me-2" width="30" height="30" alt="Avatar">
+                                {{ admin.name }}
+                            </span>
+                            <small class="text-muted">{{ admin.user_id }}</small>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-muted">目前沒有任何管理員。</p>
+            {% endif %}
+        </div>
+
+        <hr>
+
+        <form action="{{ url_for('set_admin_status') }}" method="POST">
+            <div class="mb-3">
+                <label for="userIdInput" class="form-label">LINE User ID</label>
+                <input type="text" class="form-control" id="userIdInput" name="user_id" placeholder="請輸入要變更權限的 LINE User ID" required>
+                <div class="form-text">請確保該用戶至少與您的 LINE 官方帳號互動過一次。</div>
+            </div>
+            <div class="mb-3">
+                <label for="actionSelect" class="form-label">操作</label>
+                <select class="form-select" id="actionSelect" name="action">
+                    <option value="add">新增為管理員</option>
+                    <option value="remove">移除管理員權限</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">執行變更</button>
+        </form>
+    </div>
+
 </div>
 {% endblock %}
 

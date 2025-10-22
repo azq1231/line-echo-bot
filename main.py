@@ -343,7 +343,7 @@ def stats_page():
 @admin_required
 def configs_page():
     user = session.get('user')
-    """渲染系統設定頁面"""
+    """渲染系統設定頁面，並加入管理員列表"""
     all_configs_list = db.get_all_configs()
     # 將列表轉換為字典以便在模板中輕鬆訪問
     configs_dict = {c['key']: c['value'] for c in all_configs_list}
@@ -359,8 +359,45 @@ def configs_page():
     configs_dict.setdefault('auto_reminder_weekly_enabled', 'false')
     configs_dict.setdefault('auto_reminder_weekly_day', 'sun')
     configs_dict.setdefault('auto_reminder_weekly_time', '21:00')
+    configs_dict.setdefault('message_template_reminder', '提醒您，{user_name}，您的預約時間是 {date} {weekday} {time}，謝謝。')
 
-    return render_template("configs.html", user=user, configs=configs_dict)
+    # 獲取所有管理員列表
+    admins = [u for u in db.get_all_users() if u.get('is_admin')]
+
+    return render_template("configs.html", user=user, configs=configs_dict, admins=admins)
+
+@app.route('/admin/set_admin_status', methods=['POST'])
+@admin_required
+def set_admin_status():
+    """手動新增或移除管理員"""
+    user_id_to_change = request.form.get('user_id')
+    action = request.form.get('action')
+
+    if not user_id_to_change or not action:
+        flash('缺少 User ID 或操作類型。', 'danger')
+        return redirect(url_for('configs_page'))
+
+    # 安全性檢查：不能修改自己的權限
+    current_user_id = session.get('user', {}).get('user_id')
+    if user_id_to_change == current_user_id:
+        flash('無法修改自己的管理員權限。', 'warning')
+        return redirect(url_for('configs_page'))
+
+    # 檢查用戶是否存在
+    user_to_modify = db.get_user_by_id(user_id_to_change)
+    if not user_to_modify:
+        flash(f'找不到 User ID 為 "{user_id_to_change}" 的使用者。請確認該使用者至少與機器人互動過一次。', 'danger')
+        return redirect(url_for('configs_page'))
+
+    is_admin = action == 'add'
+    
+    if db.update_user_admin_status(user_id_to_change, is_admin):
+        action_text = "新增" if is_admin else "移除"
+        flash(f'成功{action_text}使用者 {user_to_modify["name"]} 的管理員權限。', 'success')
+    else:
+        flash('更新權限時發生錯誤。', 'danger')
+
+    return redirect(url_for('configs_page'))
 
 @app.route("/admin/settings/slots")
 @admin_required
@@ -872,6 +909,10 @@ def _do_send_reminders(appointments: list) -> tuple[int, int]:
     """發送提醒的核心邏輯"""
     sent_count = 0
     failed_count = 0
+
+    # 從資料庫讀取訊息範本，若無則使用預設值
+    default_template = '提醒您，{user_name}，您的預約時間是 {date} {weekday} {time}，謝謝。'
+    template = db.get_config('message_template_reminder', default_template) or default_template
     
     for apt in appointments:
         if apt.get('user_id'):
@@ -879,7 +920,13 @@ def _do_send_reminders(appointments: list) -> tuple[int, int]:
             weekday_names = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
             weekday_name = weekday_names[date_obj.weekday()]
             
-            message = f"提醒您，您的預約時間是 {date_obj.month}月{date_obj.day}日 {weekday_name} {apt['time']}，謝謝。"
+            # 準備用於範本的變數
+            message = template.format(
+                user_name=apt['user_name'],
+                date=f"{date_obj.month}月{date_obj.day}日",
+                weekday=weekday_name,
+                time=apt['time']
+            )
             
             success = send_line_message(
                 user_id=apt['user_id'],
