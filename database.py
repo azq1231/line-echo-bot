@@ -426,6 +426,79 @@ def delete_user(user_id: str) -> bool:
     conn.close()
     return deleted
 
+def add_manual_user(user_id: str, name: str) -> Optional[Dict]:
+    """專門用於新增手動建立的臨時用戶"""
+    conn = get_db()
+    cursor = conn.cursor()
+    zhuyin = _name_to_zhuyin(name)
+    try:
+        cursor.execute("""
+            INSERT INTO users (user_id, name, zhuyin, manual_update, is_admin)
+            VALUES (?, ?, ?, TRUE, FALSE)
+        """, (user_id, name, zhuyin))
+        conn.commit()
+        print(f"Added new manual user: {name} ({user_id})")
+        # 查詢並返回剛剛新增的使用者
+        cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+        new_user = cursor.fetchone()
+        return dict(new_user) if new_user else None
+    except sqlite3.IntegrityError:
+        print(f"Error: Manual user with ID {user_id} already exists.")
+        return None
+    finally:
+        conn.close()
+
+def merge_users(source_user_id: str, target_user_id: str) -> bool:
+    """將 source_user 的資料合併到 target_user，然後刪除 source_user"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        # 0. 安全性檢查
+        source_user = get_user_by_id(source_user_id)
+        target_user = get_user_by_id(target_user_id)
+        if not source_user or not target_user:
+            print("Error: Source or target user not found.")
+            return False
+        if not source_user_id.startswith('manual_'):
+            print("Error: Source user is not a manual user.")
+            return False
+        if not target_user_id.startswith('U'):
+            print("Error: Target user is not a real LINE user.")
+            return False
+
+        target_user_name = target_user['name']
+
+        # 1. 更新 appointments 表
+        cursor.execute("""
+            UPDATE appointments SET user_id = ?, user_name = ? WHERE user_id = ?
+        """, (target_user_id, target_user_name, source_user_id))
+        print(f"Updated {cursor.rowcount} appointments from {source_user_id} to {target_user_id}")
+
+        # 2. 更新 message_log 表
+        cursor.execute("""
+            UPDATE message_log SET user_id = ?, target_name = ? WHERE user_id = ?
+        """, (target_user_id, target_user_name, source_user_id))
+        print(f"Updated {cursor.rowcount} message logs from {source_user_id} to {target_user_id}")
+
+        # 3. 更新 schedules 表
+        cursor.execute("""
+            UPDATE schedules SET user_id = ?, user_name = ? WHERE user_id = ?
+        """, (target_user_id, target_user_name, source_user_id))
+        print(f"Updated {cursor.rowcount} schedules from {source_user_id} to {target_user_id}")
+
+        # 4. 刪除 source_user
+        cursor.execute("DELETE FROM users WHERE user_id = ?", (source_user_id,))
+        print(f"Deleted source user {source_user_id}")
+
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"An error occurred during user merge: {e}")
+        return False
+    finally:
+        conn.close()
+
 def update_user_admin_status(user_id: str, is_admin: bool) -> bool:
     """更新指定用戶的管理員狀態"""
     conn = get_db()

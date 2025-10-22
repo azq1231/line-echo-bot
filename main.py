@@ -305,11 +305,6 @@ def closed_days_page():
         return "Feature disabled", 404
     return render_template("closed_days.html", user=user)
 
-@app.route("/admin/users") # 新增：使用者管理頁面
-@admin_required
-def users_management_page():
-    """渲染使用者管理頁面。"""
-    return render_template('admin_users.html')
 
 @app.route("/admin/stats")
 @admin_required
@@ -683,11 +678,45 @@ def api_toggle_admin(user_id):
     else:
         return jsonify({"message": "更新管理員權限失敗。"}), 500
 
-@app.route("/admin/list_users") # 舊的 API，建議整合到 /api/admin/users
+@app.route('/api/admin/users/add_manual', methods=['POST'])
 @admin_required
-def list_users():
-    users = db.get_all_users()
-    return jsonify({"allowed_users": users, "count": len(users)})
+def api_add_manual_user():
+    """手動新增臨時用戶"""
+    data = request.get_json()
+    name = data.get('name')
+
+    if not name or not name.strip():
+        return jsonify({"status": "error", "message": "用戶名稱不能為空。"}), 400
+
+    user_id = f"manual_{uuid.uuid4()}"
+    new_user = db.add_manual_user(user_id, name.strip())
+
+    if new_user:
+        return jsonify({"status": "success", "message": "臨時用戶已成功新增。", "user": new_user})
+    else:
+        return jsonify({"status": "error", "message": "新增臨時用戶時發生錯誤。"}), 500
+
+@app.route('/api/admin/users/merge', methods=['POST'])
+@admin_required
+def api_merge_users():
+    """合併用戶"""
+    data = request.get_json()
+    source_user_id = data.get('source_user_id')
+    target_user_id = data.get('target_user_id')
+
+    if not source_user_id or not target_user_id:
+        return jsonify({"status": "error", "message": "缺少來源或目標用戶 ID。"}), 400
+
+    if source_user_id == target_user_id:
+        return jsonify({"status": "error", "message": "來源和目標用戶不能相同。"}), 400
+
+    success = db.merge_users(source_user_id, target_user_id)
+
+    if success:
+        return jsonify({"status": "success", "message": "用戶資料已成功合併。"})
+    else:
+        return jsonify({"status": "error", "message": "合併用戶時發生錯誤，請檢查後台日誌。"}), 500
+
 
 @app.route("/admin/refresh_user_profile/<user_id>", methods=["POST"])
 def refresh_user_profile(user_id):
@@ -915,7 +944,9 @@ def _do_send_reminders(appointments: list) -> tuple[int, int]:
     template = db.get_config('message_template_reminder', default_template) or default_template
     
     for apt in appointments:
-        if apt.get('user_id'):
+        user_id = apt.get('user_id')
+        # 只對真實的 LINE 用戶 (ID 以 'U' 開頭) 發送提醒
+        if user_id and user_id.startswith('U'):
             date_obj = datetime.strptime(apt['date'], '%Y-%m-%d')
             weekday_names = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
             weekday_name = weekday_names[date_obj.weekday()]
@@ -929,7 +960,7 @@ def _do_send_reminders(appointments: list) -> tuple[int, int]:
             )
             
             success = send_line_message(
-                user_id=apt['user_id'],
+                user_id=user_id,
                 messages=[{"type": "text", "text": message}],
                 message_type='reminder',
                 target_name=apt['user_name']

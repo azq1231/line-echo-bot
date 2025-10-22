@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}LINE Bot 用戶管理{% endblock %}
-{% block header %}LINE Bot 用戶管理{% endblock %}
+{% block header %}👥 用戶管理{% endblock %}
 {% block content %}
 <style>
     .section {
@@ -96,6 +96,11 @@
         font-size: 12px;
         word-break: break-all;
     }
+    .user-id.manual {
+        color: #c53030;
+        font-style: italic;
+        font-weight: bold;
+    }
     .form-check-input:checked {
         background-color: #e53e3e;
         border-color: #e53e3e;
@@ -136,26 +141,14 @@
         padding: 40px;
         color: #999;
     }
-    .message {
-        padding: 12px 16px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        display: none;
-    }
-    .message.success {
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
-    }
-    .message.error {
-        background: #f8d7da;
-        color: #721c24;
-        border: 1px solid #f5c6cb;
-    }
-    .message.info {
-        background: #e7f3ff;
-        color: #1976D2;
-        border: 1px solid #b3e5fc;
+    #message-container {
+        position: fixed;
+        top: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1060;
+        width: 90%;
+        max-width: 500px;
     }
     .info-box {
         background: #e7f3ff;
@@ -190,30 +183,25 @@
 </style>
 
 <div class="container" data-allow-user-deletion="{{ allow_user_deletion|tojson }}">
+    <div id="message-container"></div>
+
     <div class="info-box">
         <p><strong>💡 提示：</strong></p>
         <p>• 用戶加好友或發訊息時會自動加入清單。</p>
         <p>• 點擊用戶姓名、注音或電話可以手動修改。✏️</p>
-        <p>• 將電話號碼指定給 LINE 用戶，系統會自動合併帳號與預約紀錄。</p>
         <p><strong>Webhook URL：</strong></p>
         <div class="webhook-url" id="webhookUrl">載入中...</div>
     </div>
 
-    <div id="message" class="message"></div>
-
     <div class="section">
-        <h2>➕ 新增用戶</h2>
-        <div class="input-group">
-            <input type="text" id="userIdInput" placeholder="輸入 LINE User ID (例如：U1234567890abcdef)">
-            <button onclick="addUser()">新增</button>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="mb-0">📋 用戶清單 (<span id="userCount">0</span>)</h2>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addManualUserModal">
+                <i class="fas fa-plus me-2"></i>新增臨時用戶
+            </button>
         </div>
-    </div>
-
-    <div class="section">
-        <h2>📋 允許的用戶清單 (<span id="userCount">0</span>)</h2>
         <div class="input-group">
             <input type="text" id="searchInput" placeholder="按姓名或注音搜尋用戶..." style="margin-bottom: 0;">
-            <span class="input-group-text" style="border-radius: 8px; background-color: #e9ecef;"><i class="bi bi-search"></i></span>
         </div>
         <ul id="userList" class="user-list">
             <li class="empty-state">載入中...</li>
@@ -221,82 +209,125 @@
     </div>
 </div>
 
+<!-- Add Manual User Modal -->
+<div class="modal fade" id="addManualUserModal" tabindex="-1" aria-labelledby="addManualUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addManualUserModalLabel">新增臨時用戶</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="manualUserName" class="form-label">用戶姓名</label>
+                    <input type="text" class="form-control" id="manualUserName" placeholder="例如：陳先生-電話">
+                    <div class="form-text">為無法使用 LINE 登入的用戶（如電話預約客）建立一個臨時帳號。</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="addManualUser()">儲存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Merge User Modal -->
+<div class="modal fade" id="mergeUserModal" tabindex="-1" aria-labelledby="mergeUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="mergeUserModalLabel">合併用戶</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>您正準備將臨時用戶 <strong id="sourceUserName"></strong> 的所有資料合併至一個真實的 LINE 用戶。</p>
+                <div class="mb-3">
+                    <label for="targetUserSelect" class="form-label">選擇要併入的目標 LINE 用戶</label>
+                    <select class="form-select" id="targetUserSelect">
+                        <!-- Target users will be populated by JavaScript -->
+                    </select>
+                </div>
+                <div class="alert alert-warning" role="alert">
+                    <strong>注意：</strong>此操作無法復原。臨時用戶的所有預約記錄將轉移給目標用戶，之後此臨時用戶將被刪除。
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" onclick="confirmMerge()">確認合併</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+    let allUsers = [];
+    let sourceUserToMerge = null;
+    let addManualUserModal, mergeUserModal;
+
     const allowUserDeletion = (function(){
         const el = document.querySelector('.container');
         return el ? (el.dataset.allowUserDeletion === 'true') : false;
     })();
 
     function showMessage(text, type) {
-        const msgEl = document.getElementById('message');
-        msgEl.textContent = text;
-        msgEl.className = `message ${type}`;
-        msgEl.style.display = 'block';
-        setTimeout(() => { msgEl.style.display = 'none'; }, 3000);
+        const container = document.getElementById('message-container');
+        const alertEl = document.createElement('div');
+        alertEl.className = `alert alert-${type} alert-dismissible fade show`;
+        alertEl.role = 'alert';
+        alertEl.innerHTML = `
+            ${text}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        container.appendChild(alertEl);
+        setTimeout(() => {
+            const alertInstance = bootstrap.Alert.getOrCreateInstance(alertEl);
+            if (alertInstance) {
+                alertInstance.close();
+            }
+        }, 4000);
     }
 
     async function loadUsers() {
         try {
-            const response = await fetch('/admin/list_users');
+            const response = await fetch('/api/admin/users');
+            if (!response.ok) throw new Error('無法載入用戶列表');
             const data = await response.json();
+            
+            allUsers = data.users;
             const userList = document.getElementById('userList');
             const userCount = document.getElementById('userCount');
 
-            userCount.textContent = data.count;
+            userCount.textContent = allUsers.length;
 
-            if (data.allowed_users.length === 0) {
-                userList.innerHTML = '<li class="empty-state">目前沒有允許的用戶</li>';
+            if (allUsers.length === 0) {
+                userList.innerHTML = '<li class="empty-state">目前沒有用戶</li>';
             } else {
-                userList.innerHTML = data.allowed_users.map(user => {
-                    const userId = user.user_id;
+                userList.innerHTML = allUsers.map(user => {
+                    const userId = user.id;
                     const userName = user.name || '未知';
-                    const zhuyin = user.zhuyin || '';
-                    const phone1 = user.phone || '';
-                    const phone2 = user.phone2 || '';
-                    const address = user.address || '';
+                    const isManual = userId.startsWith('manual_');
 
-                    const zhuyinDisplay = zhuyin 
-                        ? `<span class="editable-name" data-userid="${userId}" data-current-zhuyin="${zhuyin}" title="點擊編輯注音">${zhuyin}</span>`
-                        : `<button class="action-btn btn-secondary" data-userid="${userId}" data-action="generate-zhuyin">產生注音</button>`;
-
-                    const phone1Display = phone1
-                        ? `<span class="editable-name" data-userid="${userId}" data-field="phone" data-current-phone="${phone1}" title="點擊編輯市話">${phone1}</span>`
-                        : `<button class="action-btn btn-secondary" data-userid="${userId}" data-field="phone" data-current-phone="">新增</button>`;
-
-                    const phone2Display = phone2
-                        ? `<span class="editable-name" data-userid="${userId}" data-field="phone2" data-current-phone="${phone2}" title="點擊編輯手機">${phone2}</span>`
-                        : `<button class="action-btn btn-secondary" data-userid="${userId}" data-field="phone2" data-current-phone="">新增</button>`;
+                    const deleteButtonHtml = allowUserDeletion && !isManual ? `
+                        <button class="action-btn btn-danger" onclick="deleteUser('${userId}', '${userName}')">刪除</button>
+                    ` : '';
                     
-                    const deleteButtonHtml = allowUserDeletion ? `
-                        <button class="action-btn btn-danger" data-userid="${userId}" data-username="${userName}" data-action="delete-user">刪除</button>
+                    const mergeButtonHtml = isManual ? `
+                        <button class="action-btn btn-outline-primary" onclick='openMergeModal(${JSON.stringify(user)})'>合併</button>
                     ` : '';
 
-
                     return `
-                    <li class="user-item" data-name="${userName.toLowerCase()}" data-zhuyin="${(zhuyin || '').toLowerCase()}">
-                        <img src="/user_avatar/${userId}" alt="avatar" class="user-avatar" data-avatar-id="${userId}" onerror="this.src='https://via.placeholder.com/40'; this.onerror=null;">
+                    <li class="user-item" data-name="${userName.toLowerCase()}">
+                        <img src="/user_avatar/${userId}" alt="avatar" class="user-avatar" onerror="this.src='https://via.placeholder.com/40'; this.onerror=null;">
                         <div class="user-info-wrapper">
-                            <div style="font-weight: 600; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                <span class="editable-name" data-userid="${userId}" data-username="${userName}" title="點擊編輯姓名">
-                                    ${userName}
-                                </span>
+                            <div style="font-weight: 600; margin-bottom: 4px;">
+                                ${userName}
                             </div>
-                            <div class="info-container">
-                                <span class="info-label">注音:</span> ${zhuyinDisplay}
-                            </div>
-                            <div class="info-container">
-                                <span class="info-label">市話:</span> ${phone1Display}
-                            </div>
-                            <div class="info-container">
-                                <span class="info-label">手機:</span> ${phone2Display}
-                            </div>
-                            <div class="info-container">
-                                <span class="info-label">地址:</span> <span class="editable-name" data-userid="${userId}" data-field="address" data-current-address="${address}" title="點擊編輯地址">${address || '未設定'}</span>
-                            </div>
-                            <span class="user-id">${userId}</span>
+                            <span class="user-id ${isManual ? 'manual' : ''}">${userId}</span>
                         </div>
                         <div class="action-btn-group">
-                            <button class="action-btn btn-secondary" data-userid="${userId}" data-action="refresh-profile" title="從 LINE 更新用戶資料">更新資料</button>
+                            <button class="action-btn btn-secondary" onclick="refreshUserProfile('${userId}')" title="從 LINE 更新用戶資料">更新資料</button>
+                            ${mergeButtonHtml}
                             ${deleteButtonHtml}
                         </div>
                     </li>
@@ -304,25 +335,83 @@
                 }).join('');
             }
         } catch (error) {
-            showMessage('載入用戶清單失敗', 'error');
+            showMessage(error.message, 'danger');
             console.error('Error loading users:', error);
         }
     }
 
-    async function addUser() {
-        const input = document.getElementById('userIdInput');
-        const userId = input.value.trim();
-        if (!userId) { showMessage('請輸入用戶 ID', 'error'); return; }
-        
+    async function addManualUser() {
+        const nameInput = document.getElementById('manualUserName');
+        const name = nameInput.value.trim();
+        if (!name) {
+            showMessage('請輸入用戶姓名', 'warning');
+            return;
+        }
+
         try {
-            const response = await fetch(`/admin/add_user/${userId}`);
-            const data = await response.json();
-            if (data.status === 'success') {
-                showMessage(data.message, 'success');
-                input.value = '';
-                loadUsers();
-            } else { showMessage('新增失敗', 'error'); }
-        } catch (error) { showMessage('新增失敗', 'error'); }
+            const response = await fetch('/api/admin/users/add_manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || '新增失敗');
+            
+            showMessage(result.message, 'success');
+            addManualUserModal.hide();
+            nameInput.value = '';
+            await loadUsers();
+        } catch (error) {
+            showMessage(error.message, 'danger');
+        }
+    }
+
+    function openMergeModal(sourceUser) {
+        sourceUserToMerge = sourceUser;
+        document.getElementById('sourceUserName').textContent = `${sourceUser.name} (${sourceUser.id})`;
+        
+        const targetUserSelect = document.getElementById('targetUserSelect');
+        const realUsers = allUsers.filter(u => !u.id.startsWith('manual_'));
+        
+        targetUserSelect.innerHTML = realUsers.map(u => `<option value="${u.id}">${u.name} (${u.id})</option>`).join('');
+        
+        if (realUsers.length === 0) {
+            targetUserSelect.innerHTML = '<option>沒有可用的真實用戶</option>';
+            document.querySelector('#mergeUserModal .btn-danger').disabled = true;
+        } else {
+            document.querySelector('#mergeUserModal .btn-danger').disabled = false;
+        }
+        
+        mergeUserModal.show();
+    }
+
+    async function confirmMerge() {
+        if (!sourceUserToMerge) return;
+        
+        const targetUserId = document.getElementById('targetUserSelect').value;
+        if (!targetUserId) {
+            showMessage('請選擇一個目標用戶', 'warning');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/admin/users/merge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source_user_id: sourceUserToMerge.id,
+                    target_user_id: targetUserId
+                })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || '合併失敗');
+
+            showMessage(result.message, 'success');
+            mergeUserModal.hide();
+            await loadUsers();
+        } catch (error) {
+            showMessage(error.message, 'danger');
+        }
     }
 
     async function deleteUser(userId, userName) {
@@ -347,7 +436,6 @@
             const data = await response.json();
             if (data.status === 'success') {
                 showMessage('✅ 用戶資料已更新', 'success');
-                // 找到對應的頭像並更新它，而不是重新載入整個列表
                 const avatarImg = document.querySelector(`img[data-avatar-id="${userId}"]`);
                 if (avatarImg) {
                     avatarImg.src = `/user_avatar/${userId}?t=${new Date().getTime()}`;
@@ -358,144 +446,39 @@
         } catch (error) { showMessage('更新失敗', 'error'); }
     }
 
-    async function editUserName(userId, currentName) {
-        const newName = prompt('修改用戶姓名：', currentName);
-        if (newName === null || newName.trim() === '' || newName === currentName) return;
-        
-        try {
-            const response = await fetch('/admin/update_user_name', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId, name: newName.trim() })
-            });
-            const data = await response.json();
-            if (data.status === 'success') {
-                showMessage('✅ 姓名已更新，注音將自動重新產生', 'success');
-                loadUsers();
-            } else { showMessage('更新失敗', 'error'); }
-        } catch (error) { showMessage('更新失敗', 'error'); }
-    }
-
-    async function editZhuyin(userId, currentZhuyin) {
-        const newZhuyin = prompt('手動修改注音：', currentZhuyin);
-        if (newZhuyin === null || newZhuyin === currentZhuyin) return;
-
-        try {
-            const response = await fetch('/admin/update_user_zhuyin', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId, zhuyin: newZhuyin.trim() })
-            });
-            const data = await response.json();
-            if (data.status === 'success') {
-                showMessage('✅ 注音已更新', 'success');
-                loadUsers();
-            } else { showMessage('更新失敗', 'error'); }
-        } catch (error) { showMessage('更新失敗', 'error'); }
-    }
-
-    async function editUserPhone(userId, field, currentPhone) {
-        const newPhone = prompt(`請輸入新的${field === 'phone' ? '市話' : '手機'}號碼：`, currentPhone);
-        if (newPhone === null || newPhone.trim() === currentPhone) return;
-
-        try {
-            const response = await fetch('/admin/update_user_phone', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    user_id: userId, 
-                    field: field,
-                    phone: newPhone.trim()
-                })
-            });
-            const data = await response.json();
-            if (data.status === 'success') {
-                showMessage('✅ 電話號碼已更新，用戶資料已合併。', 'success');
-                loadUsers();
-            } else { showMessage('更新失敗', 'error'); }
-        } catch (error) { showMessage('更新失敗', 'error'); }
-    }
-
-    async function generateZhuyin(userId) {
-        try {
-            const response = await fetch(`/admin/generate_zhuyin/${userId}`, { method: 'POST' });
-            const data = await response.json();
-            if (data.status === 'success') {
-                showMessage('✅ 注音已產生', 'success');
-                loadUsers();
-            } else { showMessage('產生失敗', 'error'); }
-        } catch (error) { showMessage('產生失敗', 'error'); }
-    }
-
-    async function editUserAddress(userId, currentAddress) {
-        const newAddress = prompt('修改用戶地址：', currentAddress || '');
-        if (newAddress === null || newAddress.trim() === currentAddress) return;
-
-        try {
-            const response = await fetch('/admin/update_user_address', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId, address: newAddress.trim() })
-            });
-            const data = await response.json();
-            if (data.status === 'success') {
-                showMessage('✅ 地址已更新', 'success');
-                loadUsers();
-            } else { showMessage('更新失敗', 'error'); }
-        } catch (error) { showMessage('更新失敗', 'error'); }
-    }
-
-    window.onload = () => {
+    document.addEventListener('DOMContentLoaded', () => {
+        addManualUserModal = new bootstrap.Modal(document.getElementById('addManualUserModal'));
+        mergeUserModal = new bootstrap.Modal(document.getElementById('mergeUserModal'));
         loadUsers();
         const webhookUrl = `${window.location.origin}/webhook`;
         document.getElementById('webhookUrl').textContent = webhookUrl;
-        
+
+        // Simplified event listener
         document.getElementById('userList').addEventListener('click', (e) => {
-            const target = e.target;
-            // 如果點擊的目標沒有 userid，就直接返回
-            if (!target.dataset.userid) return; 
-            
-            const userId = target.dataset.userid;
-            const action = target.dataset.action;
-            
-            // 優先判斷特定動作按鈕
-            if (action === 'delete-user') {
-                deleteUser(userId, target.dataset.username);
-            } else if (action === 'generate-zhuyin') {
-                generateZhuyin(userId);
-            } else if (action === 'refresh-profile') {
-                refreshUserProfile(userId);
-            // 其次判斷可編輯的欄位
-            } else if (target.dataset.username) { // 編輯姓名
-                editUserName(userId, target.dataset.username);
-            } else if (target.dataset.currentZhuyin !== undefined) { // 編輯注音
-                editZhuyin(userId, target.dataset.currentZhuyin);
-            } else if (target.dataset.field === 'address') { // 編輯地址
-                editUserAddress(userId, target.dataset.currentAddress);
-            } else if (target.dataset.field) { // 編輯電話 (市話或手機)，這個判斷要放在最後
-                editUserPhone(userId, target.dataset.field, target.dataset.currentPhone);
+            const button = e.target.closest('button');
+            if (button && button.dataset.userid) {
+                const userId = button.dataset.userid;
+                if (button.textContent.includes('刪除')) {
+                    deleteUser(userId, button.dataset.username);
+                } else if (button.textContent.includes('更新')) {
+                    refreshUserProfile(userId);
+                }
             }
         });
-    };
 
-    document.getElementById('userIdInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') addUser();
-    });
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase().trim();
+            const userItems = document.querySelectorAll('#userList .user-item');
+            let visibleCount = 0;
 
-    document.getElementById('searchInput').addEventListener('input', (e) => {
-        const searchTerm = e.target.value.toLowerCase().trim();
-        const userItems = document.querySelectorAll('#userList .user-item');
-        let visibleCount = 0;
-
-        userItems.forEach(item => {
-            const name = item.dataset.name || '';
-            const zhuyin = item.dataset.zhuyin || '';
-
-            const isVisible = name.includes(searchTerm) || zhuyin.includes(searchTerm);
-            item.style.display = isVisible ? 'flex' : 'none';
-            if (isVisible) visibleCount++;
+            userItems.forEach(item => {
+                const name = item.dataset.name || '';
+                const isVisible = name.includes(searchTerm);
+                item.style.display = isVisible ? 'flex' : 'none';
+                if (isVisible) visibleCount++;
+            });
+            document.getElementById('userCount').textContent = `${visibleCount} / ${userItems.length}`;
         });
-        document.getElementById('userCount').textContent = `${visibleCount} / ${userItems.length}`;
     });
 </script>
 {% endblock %}
