@@ -3,54 +3,7 @@
 {% block header %}⚙️ 可預約時段設定{% endblock %}
 
 {% block content %}
-<style>
-    .weekday-group {
-        margin-bottom: 30px;
-    }
-    .weekday-header {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #667eea;
-        margin-bottom: 15px;
-        border-bottom: 2px solid #e0e0e0;
-        padding-bottom: 10px;
-    }
-    .slot-item {
-        display: flex;
-        align-items: center;
-        padding: 12px;
-        border-radius: 8px;
-        background-color: #f8f9fa;
-        margin-bottom: 8px;
-        gap: 15px;
-    }
-    .slot-time {
-        font-weight: 500;
-        min-width: 120px;
-    }
-    .slot-note {
-        color: #6c757d;
-        flex-grow: 1;
-    }
-    .slot-status {
-        font-weight: bold;
-    }
-    .status-active { color: #28a745; }
-    .status-inactive { color: #dc3545; }
-    .btn-action {
-        padding: 4px 8px;
-        font-size: 12px;
-    }
-    #message-container {
-        position: fixed;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 1050;
-        width: 90%;
-        max-width: 500px;
-    }
-</style>
+
 
 <div class="container my-4">
     <div id="message-container"></div>

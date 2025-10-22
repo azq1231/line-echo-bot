@@ -5,59 +5,7 @@
 {% block header %}📅 預約管理{% endblock %}
 
 {% block content %}
-<style>
-    :root { --primary-color: #667eea; --secondary-color: #764ba2; }
-    /* Styles specific to this page */
-    .container { width: 98%; max-width: 1800px; margin: 0 auto; }
-    .page-header { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .header-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
-    .btn { padding: 10px 20px; border: none; border-radius: 5px; font-size: 14px; cursor: pointer; transition: all 0.3s; }
-    .btn-primary { background: var(--primary-color); color: white; }
-    .btn-primary:hover { background: #5568d3; }
-    .btn-success { background: #48bb78; color: white; }
-    .btn-success:hover { background: #38a169; }    
-    .schedule-grid { display: flex; justify-content: space-between; gap: 1%; }
-    .day-card { flex-basis: 19%; min-width: 0; background: white; border-radius: 10px; padding: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
-    .day-header { background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%); color: white; padding: 10px; border-radius: 5px; margin-bottom: 15px; text-align: center; }
-    .day-header h3 { font-size: 16px; margin-bottom: 5px; }
-    .day-header p { font-size: 14px; opacity: 0.9; }
-    .time-slots { flex-grow: 1; }
-    .closed-day-overlay {
-        text-align: center; color: #e53e3e; font-weight: bold; padding: 20px;
-        background-color: rgba(255, 245, 245, 0.8); border-radius: 5px;
-    }
-    .time-slot { display: flex; align-items: center; gap: 8px; padding: 5px 6px; margin-bottom: 4px; }
-    .time-label { min-width: 50px; font-weight: 500; color: #4a5568; font-size: 13px; }
-    .custom-select-container { flex: 1; position: relative; }
-    .custom-select-display { width: 100%; padding: 5px; border: 1px solid #cbd5e0; font-size: 13px; border-radius: 4px; background: white; cursor: pointer; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; display: flex; justify-content: space-between; align-items: center; }
-    .custom-select-display.empty { color: #888; }
-    .custom-select-display::after { content: '\25bc'; font-size: 10px; }
-    .custom-select-options { display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #cbd5e0; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .custom-select-options.show { display: block; }
-    .custom-option { padding: 8px 10px; cursor: pointer; font-size: 13px; }
-    .custom-option:hover { background: #f0f0f0; }
-    .custom-option.back-option { color: var(--secondary-color); font-weight: bold; border-bottom: 1px solid #eee; }
-    .send-day-btn { margin-top: 10px; width: 100%; padding: 8px; background: #48bb78; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }
-    .send-day-btn:hover { background: #38a169; }
-    .status-message { position: fixed; top: 20px; right: 20px; padding: 15px 20px; background: #2d3748; color: white; border-radius: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); display: none; z-index: 1000; opacity: 0; transition: opacity 0.3s; }
-    .status-message.show { display: block; opacity: 1; }
 
-    /* 響應式設計：中等螢幕（例如平板） */
-    @media (max-width: 992px) {
-        .schedule-grid {
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-        .day-card {
-            flex-basis: calc(50% - 8px); /* 2欄佈局 */
-        }
-    }
-
-    /* 響應式設計：小型螢幕（例如手機） */
-    @media (max-width: 768px) {
-        .day-card { flex-basis: 100%; } /* 1欄佈局 */
-    }
-</style>
 
 <div class="page-header">
     <div class="header-buttons">
