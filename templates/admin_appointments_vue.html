@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}預約管理 (Vue){% endblock %}
+
+{% block header %}📅 預約管理 (Vue){% endblock %}
+
+{% block content %}
+<div id="app"></div>
+
+{# Vue app's assets will be injected here #}
+{% if css_path %}
+<link rel="stylesheet" href="{{ css_path }}">
+{% endif %}
+{% if js_path %}
+<script type="module" src="{{ js_path }}"></script>
+{% endif %}
+{% endblock %}

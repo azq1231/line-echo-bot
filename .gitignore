@@ -1,18 +1,24 @@
-# Environment variables
-.env
-
-# VS Code directory
-.vscode/
-
-# Python cache
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
 venv/
 
-# SQLite database
-*.db
-*.db-journal
+# IDE / Editor
+.vscode/
+.idea/
 
-# Local state & test files
-.local/
-sftp_test.txt
-修改內容.txt
+# Environment
+.env
+
+# Frontend
+frontend/*
+!frontend/dist/
+frontend/dist/index.html
+!frontend/dist/assets/
+
+# Database
+appointments.db

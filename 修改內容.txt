@@ -1,0 +1,31 @@
+改程式後，遠端需要重新啟動
+sudo systemctl restart mywebsite
+sudo systemctl status mywebsite
+
+本地測試用的終端機啟動命令
+venv\Scripts\activate
+
+python main.py
+
+若要停用虛擬環境，只需輸入 deactivate
+
+appointments.db 檔案是一個 SQLite 資料庫檔案，
+它包含了您系統中所有重要的資料，包括：
+
+✅ 您的時段設定 (available_slots 資料表)
+✅ 所有用戶資料 (users 資料表)
+✅ 所有預約紀錄 (appointments 資料表)
+✅ 休診日設定 (closed_days 資料表)
+✅ 系統設定 (configs 資料表)
+
+1.沒有提醒的人，要能夠做出提醒，方便電話連絡
+2.在設定中，可以編輯要發送的訊息，預約簿的發送訊息功能中的預約提醒訊息
+3.當有多人時，如何預約，訊息發送的內容為何?
+
+其他問題
+
+如果實在排不進去，應該在預約簿當天的下方，加入備取的名單，如果有人取消可以將人排進去
+
+這就是所有的第一階段開發了，完結灑花
+
+其他部分

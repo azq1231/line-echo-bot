@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template, flash, redirect, url_for, Response, session
+from flask import Flask, request, jsonify, render_template, flash, redirect, url_for, Response, session, send_from_directory
 import os
 import requests
 from datetime import datetime, timedelta
@@ -9,6 +9,7 @@ import hmac
 import hashlib
 from functools import wraps
 import base64
+import re
 
 # 导入数据库和 Flex Message 模块
 import database as db
@@ -19,7 +20,7 @@ import gemini_ai
 from dotenv import load_dotenv
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="frontend/dist", static_url_path="/")
 
 # 從環境變數讀取 SECRET_KEY，這對於生產環境至關重要
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
@@ -294,8 +295,37 @@ def schedule():
 @app.route("/admin/appointments")
 @admin_required
 def appointments_page():
-    user = session.get('user')
-    return render_template("appointments.html", user=user)
+    """
+    Renders the Vue.js frontend for the appointments page by injecting the
+    built asset paths into a Flask template that extends the base layout.
+    """
+    try:
+        # Ensure static_folder is not None before proceeding
+        static_folder = app.static_folder
+        if not static_folder:
+            return "Error: Flask static folder is not configured.", 500
+
+        # Construct the path to the Vite-built index.html
+        manifest_path = os.path.join(static_folder, "index.html")
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest_content = f.read()
+
+        # Use more robust regex to find the asset paths
+        js_match = re.search(r'src="(/assets/index-.*?\.js)"', manifest_content)
+        css_match = re.search(r'href="(/assets/index-.*?\.css)"', manifest_content)
+
+        js_path = js_match.group(1) if js_match else None
+        css_path = css_match.group(1) if css_match else None
+
+        if not js_path:
+            return "Error: Could not find Vue.js application assets. Please run 'npm run build' in the 'frontend' directory.", 500
+
+        return render_template("admin_appointments_vue.html", js_path=js_path, css_path=css_path, user=session.get('user'))
+
+    except FileNotFoundError:
+        return "Error: index.html not found in frontend/dist. Please run 'npm run build' in the 'frontend' directory.", 404
+    except Exception as e:
+        return f"An unexpected error occurred: {e}", 500
 
 @app.route("/admin/closed_days")
 @admin_required

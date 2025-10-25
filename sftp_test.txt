@@ -1,0 +1,1 @@
+This is the second test to verify SFTP auto-upload after creating the remote directory. If you see this, it works.
