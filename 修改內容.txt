@@ -7,6 +7,11 @@ venv\Scripts\activate
 
 python main.py
 
+新增vue環境，開新終端機
+Scripts\activate
+cd frontend
+npm run dev
+
 若要停用虛擬環境，只需輸入 deactivate
 
 appointments.db 檔案是一個 SQLite 資料庫檔案，
