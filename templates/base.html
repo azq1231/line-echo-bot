@@ -21,6 +21,10 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
+        .header-gradient h1.display-6 {
+            font-size: 3rem !important; /* Corresponds to Bootstrap's display-6, !important prevents override */
+            font-weight: 600 !important;
+        }
         .content-area {
             padding: 30px;
         }
@@ -30,7 +34,7 @@
     <div class="container-fluid my-4">
         <div class="main-container">
             <div class="header-gradient p-4 text-center">
-                <h1 class="display-5 fw-bold">{% block header %}LINE Bot 管理系統{% endblock %}</h1>
+                <h1 class="display-6 fw-bold">{% block header %}LINE Bot 管理系統{% endblock %}</h1>
             </div>
             <nav class="navbar navbar-expand-lg navbar-light bg-light">
                 <div class="container-fluid">
