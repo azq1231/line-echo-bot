@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #f7fafc; /* 淺灰色背景 */
+    font-family: "Microsoft JhengHei", system-ui, sans-serif;
+  }
+}

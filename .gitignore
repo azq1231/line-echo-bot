@@ -15,10 +15,8 @@ venv/
 .env
 
 # Frontend
-frontend/*
-!frontend/dist/
-frontend/dist/index.html
-!frontend/dist/assets/
+frontend/node_modules/
+frontend/dist/
 
 # Database
 appointments.db
