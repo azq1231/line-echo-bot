@@ -10,6 +10,9 @@
         <button class="px-4 py-2 rounded-md text-sm font-medium transition bg-indigo-600 text-white hover:bg-indigo-700" @click="loadInitialData">🔄 重新載入</button>
         <button class="px-4 py-2 rounded-md text-sm font-medium transition disabled:cursor-not-allowed" @click="sendWeekReminders" :disabled="isSendingWeek || !weekHasRemindable" :class="weekButtonClass">📨 {{ weekButtonText }}</button>
       </div>
+      <div class="text-center mt-3 text-xs text-gray-500">
+        提醒按鈕顏色說明：<span class="font-semibold text-gray-700">白色</span>=可發送, <span class="font-semibold text-blue-600">藍色</span>=已發送, <span class="font-semibold text-red-600">紅色</span>=無可提醒對象
+      </div>
     </div>
 
     <!-- Schedule Grid -->
