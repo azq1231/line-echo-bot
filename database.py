@@ -177,6 +177,17 @@ def init_database():
         )
     ''')
 
+    # 備取名單表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS waiting_list (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            user_name TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        )
+    ''')
     
     # 新增紀錄發送訊息函數
 def log_message_send(user_id: str, target_name: str, message_type: str, status: str, error_message: Optional[str] = None, message_excerpt: Optional[str] = None):
@@ -887,4 +898,55 @@ def set_config(key: str, value: str, description: Optional[str] = None) -> bool:
     conn.commit()
     conn.close()
     return updated
+# ==================== 備取名單管理 ====================
+
+def get_waiting_lists_by_date_range(start_date: str, end_date: str) -> Dict[str, List[Dict]]:
+    """获取指定日期范围内的备取名单，并按日期分组"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM waiting_list 
+        WHERE date BETWEEN ? AND ?
+        ORDER BY date, created_at
+    ''', (start_date, end_date))
+    
+    waiting_lists = {}
+    for row in cursor.fetchall():
+        row_dict = dict(row)
+        date_str = row_dict['date']
+        if date_str not in waiting_lists:
+            waiting_lists[date_str] = []
+        waiting_lists[date_str].append(row_dict)
+        
+    conn.close()
+    return waiting_lists
+
+def add_to_waiting_list(date: str, user_id: str, user_name: str) -> Optional[Dict]:
+    """新增到备取名单"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO waiting_list (date, user_id, user_name)
+            VALUES (?, ?, ?)
+        ''', (date, user_id, user_name))
+        item_id = cursor.lastrowid
+        conn.commit()
+        # 返回新增的項目
+        return {"id": item_id, "date": date, "user_id": user_id, "user_name": user_name}
+    except Exception as e:
+        print(f"新增備取失敗: {e}")
+        return None
+    finally:
+        conn.close()
+
+def remove_from_waiting_list(item_id: int) -> bool:
+    """从备取名单中移除"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM waiting_list WHERE id = ?', (item_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
 # ... (rest of the file remains the same)

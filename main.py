@@ -867,6 +867,7 @@ def get_week_appointments():
     
     week_schedule = {}
     all_users = db.get_all_users()
+    waiting_lists = db.get_waiting_lists_by_date_range(week_dates[0]['date'], week_dates[-1]['date'])
     
     for date_info in week_dates:
         date_str = date_info['date']
@@ -886,7 +887,8 @@ def get_week_appointments():
         
         week_schedule[date_str] = {
             'date_info': date_info,
-            'appointments': day_appointments
+            'appointments': day_appointments,
+            'waiting_list': waiting_lists.get(date_str, [])
         }
     
     response_data = {
@@ -896,6 +898,7 @@ def get_week_appointments():
     }
     
     return jsonify(response_data)
+
 @app.route("/api/admin/save_appointment", methods=["POST"])
 @admin_required
 def save_appointment():
@@ -905,11 +908,18 @@ def save_appointment():
     user_name = data.get('user_name')
     user_id = data.get('user_id', '')
     
+    # 如果是從備取拖曳過來的，需要提供 waiting_list_item_id
+    waiting_list_item_id = data.get('waiting_list_item_id')
+    
     db.cancel_appointment(date, time)
     
     if user_name and user_id:
         db.add_appointment(user_id, user_name, date, time)
     
+    # 如果是從備取來的，預約成功後就從備取名單中刪除
+    if waiting_list_item_id:
+        db.remove_from_waiting_list(waiting_list_item_id)
+
     return jsonify({"status": "success"})
 
 @app.route("/api/book_appointment", methods=["POST"])
@@ -1028,8 +1038,8 @@ def send_appointment_reminders():
     })
 
 # ============ 休诊管理 API ============ 
-@admin_required
 
+@admin_required
 @app.route("/api/admin/closed_days")
 def get_closed_days():
     closed_days = db.get_all_closed_days()
@@ -1051,6 +1061,31 @@ def set_closed_day():
         "status": "success",
         "message": f"已設定休診，取消了 {cancelled_count} 個預約"
     })
+
+@app.route("/api/admin/waiting_list", methods=["POST"])
+@admin_required
+def add_to_waiting_list():
+    data = request.get_json()
+    date = data.get('date')
+    user_id = data.get('user_id')
+    user_name = data.get('user_name')
+
+    if not all([date, user_id, user_name]):
+        return jsonify({"status": "error", "message": "缺少必要參數"}), 400
+
+    new_item = db.add_to_waiting_list(date, user_id, user_name)
+    if new_item:
+        return jsonify({"status": "success", "message": "已新增至備取名單", "item": new_item})
+    else:
+        return jsonify({"status": "error", "message": "新增備取失敗"}), 500
+
+@app.route("/api/admin/waiting_list/<int:item_id>", methods=["DELETE"])
+@admin_required
+def remove_from_waiting_list(item_id):
+    if db.remove_from_waiting_list(item_id):
+        return jsonify({"status": "success", "message": "已從備取名單移除"})
+    else:
+        return jsonify({"status": "error", "message": "移除失敗，找不到該項目"}), 404
 
 @app.route("/api/admin/remove_closed_day", methods=["POST"])
 @admin_required

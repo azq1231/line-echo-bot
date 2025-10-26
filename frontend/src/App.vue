@@ -8,7 +8,7 @@
         <button class="px-4 py-2 rounded-md text-sm font-medium transition bg-indigo-600 text-white hover:bg-indigo-700" @click="changeWeek(-1)">⬅️ 上一週</button>
         <button class="px-4 py-2 rounded-md text-sm font-medium transition bg-indigo-600 text-white hover:bg-indigo-700" @click="changeWeek(1)">下一週 ➡️</button>
         <button class="px-4 py-2 rounded-md text-sm font-medium transition bg-indigo-600 text-white hover:bg-indigo-700" @click="loadInitialData">🔄 重新載入</button>
-        <button class="px-4 py-2 rounded-md text-sm font-medium transition bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed" @click="sendWeekReminders" :disabled="isSendingWeek">📨 {{ isSendingWeek ? '發送中...' : '發送整週提醒' }}</button>
+        <button class="px-4 py-2 rounded-md text-sm font-medium transition disabled:cursor-not-allowed" @click="sendWeekReminders" :disabled="isSendingWeek || !weekHasRemindable" :class="weekButtonClass">📨 {{ weekButtonText }}</button>
       </div>
     </div>
 
@@ -22,9 +22,16 @@
         <div class="flex-grow space-y-1">
           <div v-if="dayData.is_closed" class="text-center text-red-600 font-bold p-5 bg-red-50 rounded-md">😴<br>本日休診</div>
           <template v-else>
+
             <div v-for="(apt, time, index) in dayData.appointments" :key="time" class="flex items-center gap-2">
               <span class="w-12 text-right text-sm font-medium text-gray-600">{{ time }}</span>
-              <div class="relative flex-1">
+              <div 
+                class="relative flex-1"
+                @dragover.prevent="handleDragOver(dayData.date_info.date, time, apt)"
+                @dragleave="handleDragLeave(dayData.date_info.date, time)"
+                @drop="handleDrop(dayData.date_info.date, time)"
+                :class="{ 'bg-green-100 border-green-400': isDragOver(`${dayData.date_info.date}-${time}`) }"
+              >
                 <div 
                   class="w-full p-1.5 border border-gray-300 text-sm rounded bg-white cursor-pointer truncate flex justify-between items-center text-gray-800" 
                   :class="{ 'text-gray-500': !apt.user_id }" 
@@ -44,7 +51,7 @@
                   </div>
                   <div v-if="selectStep === 2">
                     <div class="px-2.5 py-2 cursor-pointer text-sm font-bold border-b text-purple-700 hover:bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
-                    <div v-for="user in usersInGroup" :key="user.id" class="px-2.5 py-2 cursor-pointer text-sm text-gray-800 hover:bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, user.id, user.name)">
+                    <div v-for="user in usersInGroup" :key="user.id" class="px-2.5 py-2 cursor-pointer text-sm text-gray-800 hover:bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user)">
                       {{ user.name }}
                     </div>
                   </div>
@@ -53,8 +60,40 @@
             </div>
           </template>
         </div>
-        <button v-if="!dayData.is_closed" class="mt-2 w-full px-4 py-2 rounded-md text-sm font-medium transition bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed" @click="sendDayReminders($event, dayData.date_info.date, dayData.date_info.day_name)" :disabled="isSendingDay[dayData.date_info.date]">
-           {{ isSendingDay[dayData.date_info.date] ? '發送中...' : `📤 發送 ${dayData.date_info.day_name} 提醒` }}
+        <!-- Waiting List Section -->
+        <div v-if="!dayData.is_closed" class="mt-4 pt-3 border-t">
+            <h4 class="text-sm font-semibold text-gray-500 mb-2">備取名單</h4>
+            <div class="space-y-1 text-sm">
+                <div v-if="!dayData.waiting_list || dayData.waiting_list.length === 0" class="text-gray-400 text-xs text-center py-2">尚無備取</div>
+                <div v-for="item in dayData.waiting_list" :key="item.id" 
+                     class="flex items-center justify-between p-1.5 bg-yellow-50 border border-yellow-200 rounded cursor-grab"
+                     draggable="true"
+                     @dragstart="handleDragStart($event, item)">
+                    <span>{{ item.user_name }}</span>
+                    <button @click="removeFromWaitingList(item.id, dayData.date_info.date)" class="text-red-500 hover:text-red-700 text-xs">✕</button>
+                </div>
+            </div>
+            <div class="relative mt-2">
+              <button @click="toggleWaitingListDropdown(dayData.date_info.date)" class="w-full text-xs text-center py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-600">+ 新增備取</button>
+              <!-- Waiting List User Selection Dropdown -->
+              <div v-if="openSelect === `waiting-${dayData.date_info.date}`" class="absolute bottom-full left-0 right-0 bg-white border border-gray-300 rounded-md max-h-48 overflow-y-auto z-10 shadow-lg mb-1">
+                <div v-if="selectStep === 1">
+                  <div v-for="key in sortedZhuyinKeys" :key="key" class="px-2.5 py-2 cursor-pointer text-sm text-gray-800 hover:bg-gray-100" @click.stop="renderUserOptions(key)">
+                    {{ key }}
+                  </div>
+                </div>
+                <div v-if="selectStep === 2">
+                  <div class="px-2.5 py-2 cursor-pointer text-sm font-bold border-b text-purple-700 hover:bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                  <div v-for="user in usersInGroup" :key="user.id" class="px-2.5 py-2 cursor-pointer text-sm text-gray-800 hover:bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, null, user)">
+                    {{ user.name }}
+                  </div>
+                </div>
+              </div>
+            </div>
+        </div>
+
+        <button v-if="!dayData.is_closed" class="mt-2 w-full px-4 py-2 rounded-md text-sm font-medium transition disabled:cursor-not-allowed" @click="sendDayReminders(dayData.date_info.date, dayData.date_info.day_name)" :disabled="isSendingDay[dayData.date_info.date] || !dayHasRemindable(dayData)" :class="dayButtonClass(dayData)">
+           {{ dayButtonText(dayData) }}
         </button>
       </div>
     </div>
@@ -82,6 +121,11 @@ const previousUser = ref(null); // To store user from the slot above
 const status = ref({ show: false, message: '', type: 'info' });
 const isSendingWeek = ref(false);
 const isSendingDay = ref({});
+const weekReminderSent = ref(false);
+const dayReminderSent = ref({});
+
+const draggedItem = ref(null);
+const dragOverTarget = ref(null);
 
 // --- Computed Properties ---
 const weekTitle = computed(() => {
@@ -92,6 +136,14 @@ const weekTitle = computed(() => {
   return `過去第 ${Math.abs(currentWeekOffset.value)} 週`;
 });
 
+const userMap = computed(() => {
+  const map = new Map();
+  allUsers.value.forEach(user => {
+    map.set(user.id.toString(), user);
+  });
+  return map;
+});
+
 const sortedZhuyinKeys = computed(() => {
   const zhuyinOrder = 'ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙㄧㄨㄩㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤㄥㄦ#';
   return Object.keys(groupedUsers.value).sort((a, b) => {
@@ -100,6 +152,67 @@ const sortedZhuyinKeys = computed(() => {
     return zhuyinOrder.indexOf(a) - zhuyinOrder.indexOf(b);
   });
 });
+
+const weekHasRemindable = computed(() => {
+  for (const date in weekSchedule.value) {
+    if (dayHasRemindable(weekSchedule.value[date])) {
+      return true;
+    }
+  }
+  return false;
+});
+
+const weekButtonText = computed(() => {
+  if (isSendingWeek.value) return '發送中...';
+  if (weekReminderSent.value) return '本週提醒已發送';
+  if (!weekHasRemindable.value) return '本週無可提醒對象';
+  return '發送整週提醒';
+});
+
+const weekButtonClass = computed(() => {
+  if (isSendingWeek.value) return 'bg-gray-400 text-white';
+  if (!weekHasRemindable.value) return 'bg-red-200 text-red-700';
+  if (weekReminderSent.value) return 'bg-blue-600 text-white';
+  return 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50';
+});
+
+function isDragOver(targetId) {
+  return dragOverTarget.value === targetId;
+}
+
+
+function dayHasRemindable(dayData) {
+  if (!dayData || dayData.is_closed || !dayData.appointments) return false;
+  for (const time in dayData.appointments) {
+    const apt = dayData.appointments[time];
+    if (apt.user_id) {
+      // Reliably check the userMap for the line_id.
+      const user = userMap.value.get(apt.user_id.toString());
+      // The backend API sends 'line_user_id'. We check for that and ensure it starts with 'U' for a real LINE user.
+      if (user && user.line_user_id && user.line_user_id.startsWith('U')) { 
+        return true; // Found at least one user with a line_id
+      }
+    }
+  }
+  return false;
+}
+
+function dayButtonText(dayData) {
+  const date = dayData.date_info.date;
+  if (isSendingDay.value[date]) return '發送中...';
+  if (dayReminderSent.value[date]) return '本日提醒已發送';
+  if (!dayHasRemindable(dayData)) return '本日無可提醒對象';
+  return `📤 發送 ${dayData.date_info.day_name} 提醒`;
+}
+
+function dayButtonClass(dayData) {
+  const date = dayData.date_info.date;
+  if (isSendingDay.value[date]) return 'bg-gray-400 text-white';
+  if (!dayHasRemindable(dayData)) return 'bg-red-200 text-red-700';
+  if (dayReminderSent.value[date]) return 'bg-blue-600 text-white';
+  return 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50';
+}
+
 
 // --- Methods ---
 function showStatus(message, type = 'success', duration = 3000) {
@@ -158,6 +271,8 @@ async function loadInitialData() {
 
 function changeWeek(offset) {
   currentWeekOffset.value += offset;
+  weekReminderSent.value = false; // Reset sent status for the new week
+  dayReminderSent.value = {};
   loadSchedule();
 }
 
@@ -192,27 +307,37 @@ function toggleDropdown(date, time, index) {
   }
 }
 
+function toggleWaitingListDropdown(date) {
+  const selectId = `waiting-${date}`;
+  if (openSelect.value === selectId) {
+    closeAllSelects();
+  } else {
+    openSelect.value = selectId;
+    selectStep.value = 1;
+  }
+}
+
 function renderUserOptions(zhuyinInitial) {
   usersInGroup.value = groupedUsers.value[zhuyinInitial] || [];
   selectStep.value = 2;
 }
 
 async function selectUser(date, time, userId, userName) {
-  const originalUserName = weekSchedule.value[date]?.appointments[time]?.user_name;
   const originalUserId = weekSchedule.value[date]?.appointments[time]?.user_id;
+  const originalUserName = weekSchedule.value[date]?.appointments[time]?.user_name;
 
   closeAllSelects();
 
   // Optimistically update UI
   if (weekSchedule.value[date] && weekSchedule.value[date].appointments[time]) {
-    weekSchedule.value[date].appointments[time].user_id = userId;
+    weekSchedule.value[date].appointments[time].user_id = userId; // This might be a waiting list item ID
     weekSchedule.value[date].appointments[time].user_name = userName;
   }
 
   showStatus('儲存中...', 'info');
   try {
     const response = await axios.post('/api/admin/save_appointment', {
-      date, time, user_id: userId, user_name: userName
+      date, time, user_id: userId, user_name: userName, waiting_list_item_id: draggedItem.value?.id
     });
     if (response.data.status === 'success') {
       showStatus('✅ 預約已儲存', 'success');
@@ -229,6 +354,80 @@ async function selectUser(date, time, userId, userName) {
   }
 }
 
+async function addToWaitingList(date, user) {
+  closeAllSelects();
+  showStatus('新增備取中...', 'info');
+  try {
+    const response = await axios.post('/api/admin/waiting_list', {
+      date,
+      user_id: user.id,
+      user_name: user.name
+    });
+    if (response.data.status === 'success') {
+      if (!weekSchedule.value[date].waiting_list) {
+        weekSchedule.value[date].waiting_list = [];
+      }
+      weekSchedule.value[date].waiting_list.push(response.data.item);
+      showStatus('✅ 已新增至備取', 'success');
+    } else {
+      throw new Error(response.data.message || '新增失敗');
+    }
+  } catch (error) {
+    showStatus(`❌ 新增備取失敗: ${error.message}`, 'error');
+  }
+}
+
+async function removeFromWaitingList(itemId, date) {
+    if (!confirm('確定要從備取名單中移除嗎？')) return;
+    try {
+        await axios.delete(`/api/admin/waiting_list/${itemId}`);
+        const day = weekSchedule.value[date];
+        if (day && day.waiting_list) {
+            day.waiting_list = day.waiting_list.filter(item => item.id !== itemId);
+        }
+        showStatus('✅ 已從備取移除', 'success');
+    } catch (error) {
+        showStatus('❌ 移除失敗', 'error');
+    }
+}
+
+function handleUserSelection(date, time, user) {
+  if (openSelect.value.startsWith('waiting-')) {
+    addToWaitingList(date, user);
+  } else {
+    selectUser(date, time, user.id, user.name);
+  }
+}
+
+function handleDragStart(event, item) {
+  draggedItem.value = item;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', JSON.stringify(item));
+}
+
+function handleDragOver(date, time, apt) {
+  if (draggedItem.value && !apt.user_id) {
+    dragOverTarget.value = `${date}-${time}`;
+  }
+}
+
+function handleDragLeave(date, time) {
+  if (dragOverTarget.value === `${date}-${time}`) {
+    dragOverTarget.value = null;
+  }
+}
+
+async function handleDrop(date, time) {
+  if (draggedItem.value && dragOverTarget.value === `${date}-${time}`) {
+    await selectUser(date, time, draggedItem.value.user_id, draggedItem.value.user_name);
+    // After successful drop and save, the backend will remove the waiting list item.
+    // We just need to update the UI.
+    weekSchedule.value[date].waiting_list = weekSchedule.value[date].waiting_list.filter(item => item.id !== draggedItem.value.id);
+  }
+  draggedItem.value = null;
+  dragOverTarget.value = null;
+}
+
 async function sendWeekReminders() {
   if (!confirm('確定要發送整週的預約提醒嗎？')) return;
   isSendingWeek.value = true;
@@ -236,6 +435,7 @@ async function sendWeekReminders() {
     const response = await axios.post('/api/admin/send_appointment_reminders', { type: 'week' });
     const result = response.data;
     showStatus(`✅ 已發送 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
+    if (result.sent_count > 0) weekReminderSent.value = true;
   } catch (error) {
     showStatus('❌ 發送失敗', 'error');
   } finally {
@@ -243,12 +443,13 @@ async function sendWeekReminders() {
   }
 }
 
-async function sendDayReminders(event, date, dayName) {
+async function sendDayReminders(date, dayName) {
   if (!confirm(`確定要發送 ${dayName} 的預約提醒嗎？`)) return;
   isSendingDay.value[date] = true;
   try {
     const response = await axios.post('/api/admin/send_appointment_reminders', { type: 'day', date: date });
     const result = response.data;
+    if (result.sent_count > 0) dayReminderSent.value[date] = true;
     showStatus(`✅ 已發送 ${dayName} 的 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
   } catch (error) {
     showStatus('❌ 發送失敗', 'error');

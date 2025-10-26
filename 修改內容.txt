@@ -8,7 +8,7 @@ venv\Scripts\activate
 python main.py
 
 新增vue環境，開新終端機
-Scripts\activate
+venv\Scripts\activate
 cd frontend
 npm run dev
 
@@ -30,6 +30,7 @@ appointments.db 檔案是一個 SQLite 資料庫檔案，
 其他問題
 
 如果實在排不進去，應該在預約簿當天的下方，加入備取的名單，如果有人取消可以將人排進去
+在每日卡片的下方，新增一個「備取」區塊，如果有人取消，我可以從備取名單中拖曳用戶到空位上。
 
 這就是所有的第一階段開發了，完結灑花
 
