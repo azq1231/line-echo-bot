@@ -113,7 +113,7 @@ const filteredUsers = computed(() => {
   const term = searchTerm.value.toLowerCase();
   return users.value.filter(user => 
     user.name.toLowerCase().includes(term) || 
-    (user.zhuyin && user.zhuyin.toLowerCase().startsWith(term))
+    (user.zhuyin && user.zhuyin.toLowerCase().includes(term))
   );
 });
 
