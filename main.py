@@ -37,6 +37,15 @@ TAIPEI_TZ = pytz.timezone('Asia/Taipei')
 # 初始化数据库
 db.init_database()
 
+# ============ API 輔助函式 ============
+
+def api_response(data=None, error=None, status_code=200):
+    """通用的 API 回應包裝器"""
+    if error:
+        return jsonify({"status": "error", "message": error}), status_code
+    return jsonify({"status": "success", **(data or {})}), status_code
+
+
 # ============ 全局上下文處理器 ============
 
 @app.context_processor
@@ -57,10 +66,15 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         # 步驟 1：檢查 Session 中是否有使用者登入資訊
+        is_api_request = request.path.startswith('/api/')
+
         if 'user' not in session or 'user_id' not in session['user']:
-            flash('請先登入以存取此頁面。', 'warning')
-            # 登入後將使用者導回原本想去的頁面
-            return redirect(url_for('login', next=request.url))
+            if is_api_request:
+                return api_response(error="未授權或登入逾時，請重新整理頁面並登入。", status_code=401)
+            else:
+                flash('請先登入以存取此頁面。', 'warning')
+                # 登入後將使用者導回原本想去的頁面
+                return redirect(url_for('login', next=request.url))
 
         # 步驟 2：從資料庫獲取最新的使用者權限，確保資料同步
         user_data = db.get_user_by_id(session['user']['user_id'])
@@ -73,8 +87,11 @@ def admin_required(f):
 
         # 步驟 4：進行最終的權限檢查
         if not is_admin_in_db:
-            flash('您沒有權限存取此頁面。', 'danger')
-            return redirect(url_for('booking_page')) # 導向首頁或沒有權限的頁面
+            if is_api_request:
+                return api_response(error="權限不足。", status_code=403)
+            else:
+                flash('您沒有權限存取此頁面。', 'danger')
+                return redirect(url_for('booking_page')) # 導向首頁或沒有權限的頁面
 
         # 步驟 5：如果所有驗證都通過，則執行原始的路由函式
         return f(*args, **kwargs)
@@ -697,10 +714,7 @@ def api_get_users():
             "phone2": user.get('phone2', '')
         } for user in users
     ]
-    return jsonify({
-        "users": users_data,
-        "current_admin_id": current_admin_id
-    })
+    return api_response(data={"users": users_data, "current_admin_id": current_admin_id})
 
 @app.route('/api/admin/users/<string:user_id>/toggle_admin', methods=['POST']) # 新增：切換管理員狀態
 @admin_required
@@ -710,11 +724,11 @@ def api_toggle_admin(user_id):
     """
     # 安全性檢查：不能修改自己的權限
     if user_id == (session['user']['user_id'] if 'user' in session else None):
-        return jsonify({"message": "無法修改自己的管理員權限。"}), 403
+        return api_response(error="無法修改自己的管理員權限。", status_code=403)
 
     user_to_modify = db.get_user_by_id(user_id)
     if not user_to_modify:
-        return jsonify({"message": "找不到該使用者。"}), 404
+        return api_response(error="找不到該使用者。", status_code=404)
 
     # 切換 is_admin 狀態
     new_admin_status = not user_to_modify.get('is_admin', False)
@@ -724,12 +738,9 @@ def api_toggle_admin(user_id):
 
     if success:
         action = "授予" if new_admin_status else "移除"
-        return jsonify({
-            "message": f"已成功為使用者 {user_to_modify['name']} {action}管理員權限。",
-            "new_status": new_admin_status
-        })
+        return api_response(data={"message": f"已成功為使用者 {user_to_modify['name']} {action}管理員權限。", "new_status": new_admin_status})
     else:
-        return jsonify({"message": "更新管理員權限失敗。"}), 500
+        return api_response(error="更新管理員權限失敗。", status_code=500)
 
 @app.route('/api/admin/users/add_manual', methods=['POST'])
 @admin_required
@@ -739,15 +750,15 @@ def api_add_manual_user():
     name = data.get('name')
 
     if not name or not name.strip():
-        return jsonify({"status": "error", "message": "用戶名稱不能為空。"}), 400
+        return api_response(error="用戶名稱不能為空。", status_code=400)
 
     user_id = f"manual_{uuid.uuid4()}"
     new_user = db.add_manual_user(user_id, name.strip())
 
     if new_user:
-        return jsonify({"status": "success", "message": "臨時用戶已成功新增。", "user": new_user})
+        return api_response(data={"message": "臨時用戶已成功新增。", "user": new_user})
     else:
-        return jsonify({"status": "error", "message": "新增臨時用戶時發生錯誤。"}), 500
+        return api_response(error="新增臨時用戶時發生錯誤。", status_code=500)
 
 @app.route('/api/admin/users/merge', methods=['POST'])
 @admin_required
@@ -758,17 +769,27 @@ def api_merge_users():
     target_user_id = data.get('target_user_id')
 
     if not source_user_id or not target_user_id:
-        return jsonify({"status": "error", "message": "缺少來源或目標用戶 ID。"}), 400
+        return api_response(error="缺少來源或目標用戶 ID。", status_code=400)
 
     if source_user_id == target_user_id:
-        return jsonify({"status": "error", "message": "來源和目標用戶不能相同。"}), 400
+        return api_response(error="來源和目標用戶不能相同。", status_code=400)
 
     success = db.merge_users(source_user_id, target_user_id)
 
     if success:
-        return jsonify({"status": "success", "message": "用戶資料已成功合併。"})
+        return api_response(data={"message": "用戶資料已成功合併。"})
     else:
-        return jsonify({"status": "error", "message": "合併用戶時發生錯誤，請檢查後台日誌。"}), 500
+        return api_response(error="合併用戶時發生錯誤，請檢查後台日誌。", status_code=500)
+
+@app.route('/api/admin/users/<string:user_id>', methods=['DELETE'])
+@admin_required
+def api_delete_user(user_id):
+    """刪除指定用戶"""
+    # 可以在此處加入更多安全檢查，例如不能刪除自己
+    if db.delete_user(user_id):
+        return api_response(data={"message": "用戶已成功刪除。"})
+    else:
+        return api_response(error="刪除用戶失敗，找不到該用戶或有關聯資料。", status_code=500)
 
 
 @app.route("/admin/refresh_user_profile/<user_id>", methods=["POST"])
@@ -778,9 +799,9 @@ def refresh_user_profile(user_id):
     if user_info and user_info['name'] != '未知':
         # add_user 包含智能更新邏輯：如果名稱被手動修改過，則只更新頭像
         db.add_user(user_id, user_info['name'], user_info['picture_url'], address=None)
-        return jsonify({"status": "success", "message": "用戶資料已從 LINE 更新。"})
+        return api_response(data={"message": "用戶資料已從 LINE 更新。"})
     else:
-        return jsonify({"status": "error", "message": "從 LINE 獲取資料失敗。"}), 404
+        return api_response(error="從 LINE 獲取資料失敗。", status_code=404)
 
 # 為了保持一致性，將這些 API 也加上 admin_required 裝飾器
 @app.route('/user_avatar/<user_id>')
@@ -813,12 +834,12 @@ def update_user_name():
     new_name = data.get("name")
     
     if not user_id or not new_name:
-        return jsonify({"status": "error", "message": "缺少必要欄位"}), 400
+        return api_response(error="缺少必要欄位", status_code=400)
     
     if db.update_user_name(user_id, new_name):
-        return jsonify({"status": "success", "message": f"已更新姓名為：{new_name}"})
+        return api_response(data={"message": f"已更新姓名為：{new_name}"})
     else:
-        return jsonify({"status": "error", "message": "找不到用戶"}), 404
+        return api_response(error="找不到用戶", status_code=404)
 
 @admin_required
 @app.route("/admin/update_user_zhuyin", methods=["POST"])
@@ -828,12 +849,12 @@ def update_user_zhuyin_route():
     zhuyin = data.get("zhuyin")
     
     if not user_id or zhuyin is None:
-        return jsonify({"status": "error", "message": "缺少必要参数"}), 400
+        return api_response(error="缺少必要参数", status_code=400)
 
     if db.update_user_zhuyin(user_id, zhuyin):
-        return jsonify({"status": "success", "message": "注音已更新"})
+        return api_response(data={"message": "注音已更新"})
     else:
-        return jsonify({"status": "error", "message": "更新失败"}), 500
+        return api_response(error="更新失败", status_code=500)
 
 @admin_required
 @app.route("/admin/update_user_phone", methods=["POST"])
@@ -844,12 +865,12 @@ def update_user_phone_route():
     field = data.get("field", 'phone')
 
     if not user_id or phone is None:
-        return jsonify({"status": "error", "message": "缺少使用者 ID 或電話號碼"}), 400
+        return api_response(error="缺少使用者 ID 或電話號碼", status_code=400)
 
     if db.update_user_phone_field(user_id, field, phone):
-        return jsonify({"status": "success", "message": "電話號碼已更新"})
+        return api_response(data={"message": "電話號碼已更新"})
     else:
-        return jsonify({"status": "error", "message": "更新失敗"}), 500
+        return api_response(error="更新失敗", status_code=500)
 
 @admin_required
 @app.route("/admin/update_user_address", methods=["POST"])
@@ -860,21 +881,21 @@ def update_user_address_route():
     address = data.get("address")
 
     if not user_id or address is None:
-        return jsonify({"status": "error", "message": "缺少使用者 ID 或地址"}), 400
+        return api_response(error="缺少使用者 ID 或地址", status_code=400)
 
     if db.update_user_address(user_id, address):
-        return jsonify({"status": "success", "message": "地址已更新"})
+        return api_response(data={"message": "地址已更新"})
     else:
-        return jsonify({"status": "error", "message": "更新失敗"}), 500
+        return api_response(error="更新失敗", status_code=500)
 
 @admin_required
 @app.route("/admin/generate_zhuyin/<user_id>", methods=["POST"])
 def generate_zhuyin_route(user_id):
     new_zhuyin = db.generate_and_save_zhuyin(user_id)
     if new_zhuyin is not None:
-        return jsonify({"status": "success", "zhuyin": new_zhuyin})
+        return api_response(data={"zhuyin": new_zhuyin})
     else:
-        return jsonify({"status": "error", "message": "生成失败"}), 404
+        return api_response(error="生成失败", status_code=404)
 
 # ============ 预约管理 API ============ 
 
@@ -940,7 +961,7 @@ def save_appointment():
     if waiting_list_item_id:
         db.remove_from_waiting_list(waiting_list_item_id)
 
-    return jsonify({"status": "success"})
+    return api_response()
 
 @app.route("/api/book_appointment", methods=["POST"])
 def api_book_appointment():
@@ -953,7 +974,7 @@ def api_book_appointment():
     time = data.get('time')
 
     if not date or not time:
-        return jsonify({"status": "error", "message": "預約資料不完整"}), 400
+        return api_response(error="預約資料不完整", status_code=400)
 
     user = session['user']
     success = db.add_appointment(
@@ -964,20 +985,20 @@ def api_book_appointment():
     )
 
     if success:
-        return jsonify({"status": "success", "message": f"恭喜！您已成功預約 {date} {time} 的時段。"})
+        return api_response(data={"message": f"恭喜！您已成功預約 {date} {time} 的時段。"})
     else:
-        return jsonify({"status": "error", "message": f"抱歉，{date} {time} 的時段已被預約，請選擇其他時段。"}), 409
+        return api_response(error=f"抱歉，{date} {time} 的時段已被預約，請選擇其他時段。", status_code=409)
 
 @app.route("/api/cancel_my_appointment", methods=["POST"])
 def api_cancel_my_appointment():
     """API for user to cancel their own appointment from the web."""
     if 'user' not in session:
-        return jsonify({"status": "error", "message": "使用者未登入"}), 401
+        return api_response(error="使用者未登入", status_code=401)
 
     data = request.get_json()
     appointment_id = data.get('appointment_id')
     if not appointment_id:
-        return jsonify({"status": "error", "message": "缺少預約 ID"}), 400
+        return api_response(error="缺少預約 ID", status_code=400)
 
     user = session['user']
     user_id = user['user_id']
@@ -985,16 +1006,16 @@ def api_cancel_my_appointment():
     # 在取消前先獲取預約資訊，以便發送通知
     apt_to_cancel = db.get_appointment_by_id(appointment_id)
     if not apt_to_cancel or apt_to_cancel['user_id'] != user_id:
-        return jsonify({"status": "error", "message": "找不到此預約或權限不足"}), 404
+        return api_response(error="找不到此預約或權限不足", status_code=404)
 
     success = db.cancel_user_appointment(appointment_id, user_id)
 
     if success:
         # 已移除 LINE 取消成功通知
         # send_line_message(...)
-        return jsonify({"status": "success", "message": "預約已成功取消。"})
+        return api_response(data={"message": "預約已成功取消。"})
     else:
-        return jsonify({"status": "error", "message": "取消失敗，請稍後再試。"}), 500
+        return api_response(error="取消失敗，請稍後再試。", status_code=500)
 
 def _do_send_reminders(appointments: list) -> tuple[int, int]:
     """發送提醒的核心邏輯"""
@@ -1051,11 +1072,7 @@ def send_appointment_reminders():
     
     sent_count, failed_count = _do_send_reminders(appointments)
     
-    return jsonify({
-        "status": "success",
-        "sent_count": sent_count,
-        "failed_count": failed_count
-    })
+    return api_response(data={"sent_count": sent_count, "failed_count": failed_count})
 
 # ============ 休诊管理 API ============ 
 
@@ -1063,7 +1080,7 @@ def send_appointment_reminders():
 @app.route("/api/admin/closed_days")
 def get_closed_days():
     closed_days = db.get_all_closed_days()
-    return jsonify({"closed_days": closed_days})
+    return api_response(data={"closed_days": closed_days})
 
 @app.route("/api/admin/set_closed_day", methods=["POST"])
 @admin_required
@@ -1073,14 +1090,11 @@ def set_closed_day():
     reason = data.get('reason', '休診')
     
     if not date:
-        return jsonify({"status": "error", "message": "缺少日期"}), 400
+        return api_response(error="缺少日期", status_code=400)
     
     cancelled_count = db.set_closed_day(date, reason)
     
-    return jsonify({
-        "status": "success",
-        "message": f"已設定休診，取消了 {cancelled_count} 個預約"
-    })
+    return api_response(data={"message": f"已設定休診，取消了 {cancelled_count} 個預約"})
 
 @app.route("/api/admin/waiting_list", methods=["POST"])
 @admin_required
@@ -1091,21 +1105,21 @@ def add_to_waiting_list():
     user_name = data.get('user_name')
 
     if not all([date, user_id, user_name]):
-        return jsonify({"status": "error", "message": "缺少必要參數"}), 400
+        return api_response(error="缺少必要參數", status_code=400)
 
     new_item = db.add_to_waiting_list(date, user_id, user_name)
     if new_item:
-        return jsonify({"status": "success", "message": "已新增至備取名單", "item": new_item})
+        return api_response(data={"message": "已新增至備取名單", "item": new_item})
     else:
-        return jsonify({"status": "error", "message": "新增備取失敗"}), 500
+        return api_response(error="新增備取失敗", status_code=500)
 
 @app.route("/api/admin/waiting_list/<int:item_id>", methods=["DELETE"])
 @admin_required
 def remove_from_waiting_list(item_id):
     if db.remove_from_waiting_list(item_id):
-        return jsonify({"status": "success", "message": "已從備取名單移除"})
+        return api_response(data={"message": "已從備取名單移除"})
     else:
-        return jsonify({"status": "error", "message": "移除失敗，找不到該項目"}), 404
+        return api_response(error="移除失敗，找不到該項目", status_code=404)
 
 @app.route("/api/admin/remove_closed_day", methods=["POST"])
 @admin_required
@@ -1114,9 +1128,9 @@ def remove_closed_day():
     date = data.get('date')
     
     if db.remove_closed_day(date):
-        return jsonify({"status": "success", "message": "已移除休診設定"})
+        return api_response(data={"message": "已移除休診設定"})
     else:
-        return jsonify({"status": "error", "message": "未找到休診記錄"}), 404
+        return api_response(error="未找到休診記錄", status_code=404)
 
 # ============ 可用時段 API ============
 @admin_required
@@ -1125,9 +1139,9 @@ def remove_closed_day():
 def api_add_slot():
     data = request.get_json()
     if db.add_available_slot(data['weekday'], data['start_time'], data['end_time'], data.get('note')):
-        return jsonify({"status": "success", "message": "時段已新增"})
+        return api_response(data={"message": "時段已新增"})
     else:
-        return jsonify({"status": "error", "message": "新增失敗，該時段可能已存在"}), 409
+        return api_response(error="新增失敗，該時段可能已存在", status_code=409)
 
 @admin_required
 @app.route("/api/admin/slots/<int:slot_id>", methods=["PUT"])
@@ -1141,17 +1155,17 @@ def api_update_slot(slot_id):
         data['active'],
         data.get('note')
     ):
-        return jsonify({"status": "success", "message": "時段已更新"})
+        return api_response(data={"message": "時段已更新"})
     else:
-        return jsonify({"status": "error", "message": "更新失敗"}), 500
+        return api_response(error="更新失敗", status_code=500)
 
 @admin_required
 @app.route("/api/admin/slots/<int:slot_id>", methods=["DELETE"])
 def api_delete_slot(slot_id):
     if db.delete_available_slot(slot_id):
-        return jsonify({"status": "success", "message": "時段已刪除"})
+        return api_response(data={"message": "時段已刪除"})
     else:
-        return jsonify({"status": "error", "message": "刪除失敗"}), 500
+        return api_response(error="刪除失敗", status_code=500)
 
 @admin_required
 @app.route("/api/admin/slots/copy", methods=["POST"])
@@ -1161,13 +1175,13 @@ def api_copy_slots():
     target_weekdays = data.get('target_weekdays')
 
     if not source_weekday or not target_weekdays:
-        return jsonify({"status": "error", "message": "來源或目標星期未選擇"}), 400
+        return api_response(error="來源或目標星期未選擇", status_code=400)
 
     inserted_count, _ = db.copy_slots(int(source_weekday), target_weekdays)
     if inserted_count > 0:
-        return jsonify({"status": "success", "message": f"已成功複製設定，共新增 {inserted_count} 個時段。"})
+        return api_response(data={"message": f"已成功複製設定，共新增 {inserted_count} 個時段。"})
     else:
-        return jsonify({"status": "error", "message": "複製失敗，請確認來源星期有設定時段。"}), 400
+        return api_response(error="複製失敗，請確認來源星期有設定時段。", status_code=400)
 
 # ============ 系统配置 API ============ 
 @admin_required
@@ -1175,7 +1189,7 @@ def api_copy_slots():
 @app.route("/api/admin/configs")
 def get_config_api():
     configs = db.get_all_configs()
-    return jsonify({"configs": configs})
+    return api_response(data={"configs": configs})
 
 @app.route("/api/admin/set_config", methods=["POST"])
 @admin_required
@@ -1186,10 +1200,10 @@ def set_config_api():
     description = data.get('description', '')
     
     if not key or not value:
-        return jsonify({"status": "error", "message": "缺少必要参数"}), 400
+        return api_response(error="缺少必要参数", status_code=400)
     
     if key == 'booking_window_weeks' and value not in ['2', '4']:
-        return jsonify({"status": "error", "message": "预约窗口只能设置为2周或4周"}), 400
+        return api_response(error="预约窗口只能设置为2周或4周", status_code=400)
     
     if db.set_config(key, value, description):
         # 如果更新的是排程時間，動態更新排程器
@@ -1213,9 +1227,9 @@ def set_config_api():
             except Exception as e:
                 print(f"動態更新排程器失敗: {e}")
 
-        return jsonify({"status": "success", "message": "配置已更新"})
+        return api_response(data={"message": "配置已更新"})
     else:
-        return jsonify({"status": "error", "message": "更新失败"}), 500
+        return api_response(error="更新失败", status_code=500)
 
 # ============ LINE Webhook ============ 
 
@@ -1226,7 +1240,7 @@ def webhook():
     
     if not validate_signature(body_text, signature):
         print("❌ LINE Webhook 签名验证失败")
-        return jsonify({"status": "error", "message": "Invalid signature"}), 403
+        return api_response(error="Invalid signature", status_code=403)
     
     body = request.get_json()
     events = body.get("events", [])
@@ -1269,7 +1283,7 @@ def webhook():
             print(f"收到 Postback - 用戶ID: {user_id}, Data: {data}")
             handle_postback(user_id, data)
 
-    return jsonify({"status": "ok"})
+    return api_response(data={"status": "ok"})
 
 # ============ LINE 预约流程处理 ============ 
 
@@ -1475,11 +1489,11 @@ def delete_schedule_route(schedule_id):
     try:
         schedule_id = int(schedule_id)
     except (ValueError, TypeError):
-        return jsonify({"status": "error", "message": "無效的 ID 格式"}), 400
+        return api_response(error="無效的 ID 格式", status_code=400)
     if db.delete_schedule(schedule_id):
-        return jsonify({"status": "success", "message": "排程已刪除"})
+        return api_response(data={"message": "排程已刪除"})
     else:
-        return jsonify({"status": "error", "message": "刪除失敗，找不到該排程"}), 404
+        return api_response(error="刪除失敗，找不到該排程", status_code=404)
 
 # ============ Flask CLI 指令 ============
 

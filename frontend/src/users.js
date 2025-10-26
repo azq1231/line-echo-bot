@@ -1,4 +1,4 @@
-import { createApp } from 'vue';
-import UserManagement from './UserManagement.vue';
+import { createApp } from 'vue'
+import UserManagement from './UserManagement.vue'
 
-createApp(UserManagement).mount('#app');
+createApp(UserManagement).mount('#app')
