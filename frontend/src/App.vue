@@ -10,8 +10,9 @@
         <button class="px-4 py-2 rounded-md text-sm font-medium transition bg-indigo-600 text-white hover:bg-indigo-700" @click="loadInitialData">🔄 重新載入</button>
         <button class="px-4 py-2 rounded-md text-sm font-medium transition disabled:cursor-not-allowed" @click="sendWeekReminders" :disabled="isSendingWeek || !weekHasRemindable" :class="weekButtonClass">📨 {{ weekButtonText }}</button>
       </div>
-      <div class="text-center mt-3 text-xs text-gray-500">
-        提醒按鈕顏色說明：<span class="font-semibold text-gray-700">白色</span>=可發送, <span class="font-semibold text-blue-600">藍色</span>=已發送, <span class="font-semibold text-red-600">紅色</span>=無可提醒對象
+      <div class="text-center mt-3 text-xs text-gray-500 space-y-1">
+        <div>提醒按鈕：<span class="font-semibold text-gray-700">白色</span>=可發送, <span class="font-semibold text-blue-600">藍色</span>=已發送, <span class="font-semibold text-red-600">紅色</span>=無可提醒對象</div>
+        <div>預約時段：<span class="px-1 rounded bg-red-200 text-red-800 font-semibold">紅色底</span> = 臨時用戶 (無法發送LINE提醒)</div>
       </div>
     </div>
 
@@ -36,8 +37,13 @@
                 :class="{ 'bg-green-100 border-green-400': isDragOver(`${dayData.date_info.date}-${time}`) }"
               >
                 <div 
-                  class="w-full p-1.5 border border-gray-300 text-sm rounded bg-white cursor-pointer truncate flex justify-between items-center text-gray-800" 
-                  :class="{ 'text-gray-500': !apt.user_id }" 
+                  class="w-full p-1.5 border text-sm rounded cursor-pointer truncate flex justify-between items-center" 
+                  :class="{ 
+                    'text-gray-500': !apt.user_id,
+                    'bg-red-200 border-red-400 text-red-800': apt.user_id?.startsWith('manual_'),
+                    'bg-white border-gray-300 text-gray-800': !apt.user_id?.startsWith('manual_'),
+                    'font-semibold': apt.user_id && apt.user_id.startsWith('manual_')
+                  }" 
                   @click="toggleDropdown(dayData.date_info.date, time, index)">
                   {{ apt.user_name || '-- 未預約 --' }}
                   <span class="ml-2 text-gray-400 text-xs">▼</span>
