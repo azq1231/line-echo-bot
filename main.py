@@ -56,27 +56,27 @@ def admin_required(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # 1. 檢查使用者是否登入
+        # 步驟 1：檢查 Session 中是否有使用者登入資訊
         if 'user' not in session or 'user_id' not in session['user']:
             flash('請先登入以存取此頁面。', 'warning')
             # 登入後將使用者導回原本想去的頁面
             return redirect(url_for('login', next=request.url))
 
-        # 2. 檢查使用者是否具備管理員權限
+        # 步驟 2：從資料庫獲取最新的使用者權限，確保資料同步
         user_data = db.get_user_by_id(session['user']['user_id'])
         is_admin_in_db = user_data and user_data.get('is_admin')
 
-        # 3. 如果資料庫中的權限與 session 不符，更新 session
+        # 步驟 3：如果 Session 中的權限與資料庫不符（例如在其他地方被撤銷了權限），則強制更新 Session
         if 'is_admin' not in session['user'] or session['user']['is_admin'] != is_admin_in_db:
             session['user'] = db.get_user_by_id(session['user']['user_id']) # 直接用最新的資料庫物件覆蓋
             session.modified = True # 標記 session 已被修改
 
-        # 4. 最終權限檢查
+        # 步驟 4：進行最終的權限檢查
         if not is_admin_in_db:
             flash('您沒有權限存取此頁面。', 'danger')
             return redirect(url_for('booking_page')) # 導向首頁或沒有權限的頁面
 
-        # 5. 如果驗證通過，執行原本的函式
+        # 步驟 5：如果所有驗證都通過，則執行原始的路由函式
         return f(*args, **kwargs)
     return decorated_function
 
@@ -284,6 +284,26 @@ def admin_home():
     allow_deletion = db.get_config('allow_user_deletion', 'false') == 'true'
     return render_template("admin.html", user=user, allow_user_deletion=allow_deletion)
 
+@app.route("/admin/users_vue")
+@admin_required
+def users_vue_page():
+    """渲染用戶管理的 Vue.js 應用程式"""
+    try:
+        static_folder = app.static_folder
+        if not static_folder:
+            return "Error: Flask static folder is not configured.", 500
+
+        # 假設 Vite build 後的用戶管理頁面入口是 users.html
+        manifest_path = os.path.join(static_folder, "users.html")
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest_content = f.read()
+
+        js_match = re.search(r'src="(/assets/users-.*?\.js)"', manifest_content)
+        js_path = js_match.group(1) if js_match else None
+
+        return render_template("admin_users_vue.html", js_path=js_path, user=session.get('user'))
+    except FileNotFoundError:
+        return "Error: users.html not found in frontend/dist. Please run 'npm run build' in the 'frontend' directory.", 404
 @app.route("/admin/schedule")
 @admin_required
 def schedule():
@@ -769,8 +789,8 @@ def user_avatar(user_id):
     user = db.get_user_by_id(user_id)
     
     # 如果找不到用戶或用戶沒有頭像URL，重定向到一個預設圖片
-    if not user or not user.get('picture_url'):
-        return redirect('https://via.placeholder.com/40')
+    if not user or not user.get('picture_url') or user_id.startswith('manual_'):
+        return send_from_directory('static', 'nohead.png')
 
     try:
         # 從 LINE 的伺服器下載圖片
@@ -783,7 +803,7 @@ def user_avatar(user_id):
         return response
     except requests.RequestException as e:
         print(f"下載頭像失敗 for user {user_id}: {e}")
-        return redirect('https://via.placeholder.com/40')
+        return send_from_directory('static', 'nohead.png')
 
 @admin_required
 @app.route("/admin/update_user_name", methods=["POST"])

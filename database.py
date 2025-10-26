@@ -385,13 +385,13 @@ def add_user(user_id: str, name: str, picture_url: Optional[str] = None, phone: 
     zhuyin = _name_to_zhuyin(name)
 
     if existing_user:
-        # 如果用戶名稱是手動更新的，則只更新頭像，不覆蓋名稱
+        # 關鍵商業邏輯：如果用戶名稱是手動更新過的 (manual_update=True)，
+        # 則只更新頭像，不覆蓋手動設定的名稱，以保護管理員的修改。
         if existing_user['manual_update']:
             if existing_user['picture_url'] != picture_url:
                 cursor.execute('''
                     UPDATE users SET picture_url = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
                 ''', (picture_url, user_id))
-                print(f"Updated user {user_id}'s picture_url (name is manually set)")
         # 否則，正常更新姓名和頭像
         elif existing_user['name'] != name or existing_user['picture_url'] != picture_url:
             cursor.execute('''
