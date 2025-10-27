@@ -39,11 +39,11 @@
                     </button>
                     <div class="collapse navbar-collapse" id="navbarNav">
                         <ul class="navbar-nav w-100 justify-content-around">
-                            <li class="nav-item"><a class="nav-link" href="/admin/">用戶管理</a></li>
+                            <li class="nav-item"><a class="nav-link" href="{{ url_for('users_vue_page') }}">用戶管理</a></li>
                             {% if feature_schedule_enabled %}
                             <li class="nav-item"><a class="nav-link" href="/admin/schedule">排程管理</a></li>
                             {% endif %}
-                            <li class="nav-item"><a class="nav-link" href="/admin/appointments">預約簿</a></li>
+                            <li class="nav-item"><a class="nav-link" href="{{ url_for('appointments_page') }}">預約簿</a></li>
                             {% if feature_closed_days_enabled %}
                             <li class="nav-item"><a class="nav-link" href="/admin/closed_days">休診管理</a></li>
                             {% endif %}

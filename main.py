@@ -20,7 +20,10 @@ import gemini_ai
 from dotenv import load_dotenv
 load_dotenv()
 
-app = Flask(__name__, static_folder="frontend/dist", static_url_path="/")
+# 建立 Flask 應用程式
+# 將 static_folder 指向根目錄的 'static' 資料夾，這與 Vite 的 build.outDir 設定一致。
+# 這是讓 Flask 能夠找到 Vue.js 打包後檔案的關鍵。
+app = Flask(__name__, static_folder="static", static_url_path="/static")
 
 # 從環境變數讀取 SECRET_KEY，這對於生產環境至關重要
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
@@ -296,10 +299,8 @@ def get_week_schedule_for_booking(week_offset=0):
 @app.route("/admin/") # 後台首頁
 @admin_required
 def admin_home():
-    user = session.get('user')  # 從 session 中獲取已登入的使用者資訊
-    # 從資料庫讀取設定，決定是否允許刪除用戶，預設為 'false'
-    allow_deletion = db.get_config('allow_user_deletion', 'false') == 'true'
-    return render_template("admin.html", user=user, allow_user_deletion=allow_deletion)
+    # 將 /admin/ 重新導向到新的 Vue 用戶管理頁面
+    return redirect(url_for('users_vue_page'))
 
 @app.route("/admin/users_vue")
 @admin_required
@@ -315,10 +316,18 @@ def users_vue_page():
         with open(manifest_path, "r", encoding="utf-8") as f:
             manifest_content = f.read()
 
-        js_match = re.search(r'src="(/assets/users-.*?\.js)"', manifest_content)
-        js_path = js_match.group(1) if js_match else None
+        # 從 HTML 內容中提取出 JS 檔案的相對路徑，例如 /assets/users-a1b2c3d4.js
+        js_relative_path_match = re.search(r'src="(/assets/users-.*?\.js)"', manifest_content)
+        
+        if not js_relative_path_match:
+            return "Error: Could not find Vue.js application assets in users.html. Please run 'npm run build'.", 500
 
-        return render_template("admin_users_vue.html", js_path=js_path, user=session.get('user'))
+        # 使用 url_for('static', ...) 來產生包含正確 /static 前綴的完整 URL
+        # 我們需要移除開頭的 '/'，因為 url_for 會自動處理
+        js_filename = js_relative_path_match.group(1).lstrip('/')
+        final_js_path = url_for('static', filename=js_filename)
+
+        return render_template("admin_users_vue.html", js_path=final_js_path, user=session.get('user'))
     except FileNotFoundError:
         return "Error: users.html not found in frontend/dist. Please run 'npm run build' in the 'frontend' directory.", 404
 @app.route("/admin/schedule")
@@ -348,16 +357,23 @@ def appointments_page():
             manifest_content = f.read()
 
         # Use more robust regex to find the asset paths
-        js_match = re.search(r'src="(/assets/index-.*?\.js)"', manifest_content)
-        css_match = re.search(r'href="(/assets/index-.*?\.css)"', manifest_content)
-
-        js_path = js_match.group(1) if js_match else None
-        css_path = css_match.group(1) if css_match else None
-
-        if not js_path:
+        js_match = re.search(r'src="(/assets/main-.*?\.js)"', manifest_content)
+        css_match = re.search(r'href="(/assets/main-.*?\.css)"', manifest_content)
+        
+        if not js_match:
             return "Error: Could not find Vue.js application assets. Please run 'npm run build' in the 'frontend' directory.", 500
 
-        return render_template("admin_appointments_vue.html", js_path=js_path, css_path=css_path, user=session.get('user'))
+        # 使用 url_for 來產生包含正確 /static 前綴的完整 URL
+        js_filename = js_match.group(1).lstrip('/')
+        final_js_path = url_for('static', filename=js_filename)
+
+        final_css_path = None
+        if css_match:
+            css_filename = css_match.group(1).lstrip('/')
+            final_css_path = url_for('static', filename=css_filename)
+
+
+        return render_template("admin_appointments_vue.html", js_path=final_js_path, css_path=final_css_path, user=session.get('user'))
 
     except FileNotFoundError:
         return "Error: index.html not found in frontend/dist. Please run 'npm run build' in the 'frontend' directory.", 404
