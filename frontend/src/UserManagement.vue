@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="container py-3">
     <!-- Info & Header Section -->
     <div class="p-3 mb-4 rounded" style="background-color: #e9ecef;">
         <p class="mb-1"><strong>💡 提示：</strong></p>
