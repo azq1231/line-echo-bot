@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify, render_template, flash, redirect, url
 import os
 import requests
 from datetime import datetime, timedelta
-from apscheduler.schedulers.background import BackgroundScheduler
 import pytz
 import uuid
 import hmac
@@ -1548,29 +1547,37 @@ def set_admin_command():
     except ValueError:
         print("❌ 請輸入數字。")
 
-# 初始化排程器
-scheduler = BackgroundScheduler()
-# 每日提醒，從設定檔讀取時間
-daily_time_str = db.get_config('auto_reminder_daily_time', '09:00') or '09:00'
-daily_time = daily_time_str.split(':')
-scheduler.add_job(func=send_daily_reminders_job, trigger="cron", id='daily_reminder_job', hour=int(daily_time[0]), minute=int(daily_time[1]), timezone=TAIPEI_TZ)
-
-# 每週提醒，從設定檔讀取星期與時間
-weekly_day = db.get_config('auto_reminder_weekly_day', 'sun') or 'sun'
-weekly_time_str = db.get_config('auto_reminder_weekly_time', '21:00') or '21:00'
-weekly_time = weekly_time_str.split(':')
-scheduler.add_job(func=send_weekly_reminders_job, trigger="cron", id='weekly_reminder_job', day_of_week=weekly_day, hour=int(weekly_time[0]), minute=int(weekly_time[1]), timezone=TAIPEI_TZ)
-
-# 每分鐘檢查一次自訂排程
-scheduler.add_job(func=send_custom_schedules_job, trigger='interval', minutes=1, id='custom_schedule_job')
-
-scheduler.start()
-print("排程器已啟動。每日、每週及自訂排程任務已設定。")
-
 if __name__ == "__main__":
-    try:
-        # 透過環境變數來決定是否開啟除錯模式，方便本地開發
-        debug_mode = os.getenv("FLASK_DEBUG", "false").lower() in ['true', '1', 't']
-        app.run(host="0.0.0.0", port=5000, debug=debug_mode)
-    except (KeyboardInterrupt, SystemExit):
-        scheduler.shutdown()
+    # 透過環境變數來決定是否開啟除錯模式
+    debug_mode = os.getenv("FLASK_DEBUG", "false").lower() in ['true', '1', 't']
+    
+    scheduler = None
+    # 只有在非除錯模式（生產環境）下才初始化並啟動排程器
+    if not debug_mode:
+        # 延遲導入 APScheduler，確保在 debug 模式下不載入
+        from apscheduler.schedulers.background import BackgroundScheduler
+        scheduler = BackgroundScheduler()
+        # 每日提醒
+        daily_time_str = db.get_config('auto_reminder_daily_time', '09:00') or '09:00'
+        daily_time = daily_time_str.split(':')
+        scheduler.add_job(func=send_daily_reminders_job, trigger="cron", id='daily_reminder_job', hour=int(daily_time[0]), minute=int(daily_time[1]), timezone=TAIPEI_TZ)
+
+        # 每週提醒
+        weekly_day = db.get_config('auto_reminder_weekly_day', 'sun') or 'sun'
+        weekly_time_str = db.get_config('auto_reminder_weekly_time', '21:00') or '21:00'
+        weekly_time = weekly_time_str.split(':')
+        scheduler.add_job(func=send_weekly_reminders_job, trigger="cron", id='weekly_reminder_job', day_of_week=weekly_day, hour=int(weekly_time[0]), minute=int(weekly_time[1]), timezone=TAIPEI_TZ)
+
+        # 自訂排程
+        scheduler.add_job(func=send_custom_schedules_job, trigger='interval', minutes=1, id='custom_schedule_job')
+
+        scheduler.start()
+        print("排程器已在生產模式下啟動。")
+        try:
+            app.run(host="0.0.0.0", port=5000, debug=False)
+        except (KeyboardInterrupt, SystemExit):
+            if scheduler and scheduler.running:
+                scheduler.shutdown()
+    else:
+        # 在除錯模式下，不使用 try/except 包裹，讓 Flask reloader 自行處理
+        app.run(host="0.0.0.0", port=5000, debug=True)
