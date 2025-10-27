@@ -1,5 +1,5 @@
 <template>
-  <div class="container py-3">
+  <div class="user-management-page container py-3">
     <!-- Info & Header Section -->
     <div class="p-3 mb-4 rounded" style="background-color: #e9ecef;">
         <p class="mb-1"><strong>💡 提示：</strong></p>
@@ -9,17 +9,17 @@
         </ul>
     </div>
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="mb-0 text-primary fw-bold">📋 用戶清單 ({{ filteredUsers.length }})</h2>
+    <div class="d-flex justify-content-end align-items-center mb-3">
         <div class="d-flex gap-2 align-items-center">
             <input 
               type="text" 
               class="form-control"
               placeholder="依姓名或注音搜尋..." 
-              :value="searchTerm" @input="searchTerm = $event.target.value" style="width: 250px;">
-            <button class="btn btn-primary" @click="addManualUser">＋ 新增臨時用戶</button>
+              :value="searchTerm" @input="searchTerm = $event.target.value" style="width: 200px;">
+            <button class="btn btn-primary" @click="addManualUser">新增臨時用戶</button>
         </div>
     </div>
+    <h2 class="mb-3 text-primary fw-bold">📋 用戶清單 ({{ filteredUsers.length }})</h2>
 
     <!-- Main Content -->
     <div v-if="loading" class="d-flex justify-content-center align-items-center" style="min-height: 300px;">
@@ -28,47 +28,48 @@
       </div>
     </div>
     <div v-else-if="error" class="alert alert-danger">{{ error }}</div>
-    <div v-else class="table-responsive shadow-sm rounded border">
-        <table class="table table-hover table-striped mb-0 align-middle">
+    <div v-else class="table-responsive">
+        <table class="table table-striped table-bordered mb-0 align-middle">
           <thead class="table-light">
             <tr>
-              <th scope="col" style="width: 60px;" class="text-center">頭像</th>
-              <th scope="col">姓名</th>
-              <th scope="col">注音</th>
-              <th scope="col">LINE User ID</th>
-              <th scope="col">電話 (市)</th>
-              <th scope="col">電話 (手)</th>
-              <th scope="col" class="text-center">操作</th>
+              <th scope="col" style="width: 40px;" class="text-center">頭像</th>
+              <th scope="col">用戶資訊</th>
+              <th scope="col" class="text-center" style="width: 50px;">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="user in filteredUsers" :key="user.id">
               <td class="text-center">
-                <img :src="`/user_avatar/${user.id}`" alt="avatar" class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;">
+                <img :src="`/user_avatar/${user.id}`" alt="avatar" class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;" @error="onAvatarError">
               </td>
-              <td>
-                <span @click="editField(user, 'name')" class="editable-field">
-                  {{ user.name }} <i class="bi bi-pencil-fill text-primary ms-1"></i>
-                </span>
+              <td class="user-details">
+                <div class="d-flex align-items-center">
+                  <span @click="editField(user, 'name')" class="editable-field fw-bold fs-6">
+                    {{ user.name }} <i class="bi bi-pencil-fill text-primary ms-1"></i>
+                  </span>
+                  <button @click="toggleZhuyin(user.id)" class="btn btn-sm btn-link py-0 px-1 text-secondary" title="顯示/隱藏注音">[注]</button>
+                </div>
+                <div v-if="visibleZhuyin.has(user.id)" class="mt-1">
+                  <span @click="editField(user, 'zhuyin')" class="editable-field text-secondary" style="font-size: 0.8rem;">{{ user.zhuyin || '[點擊新增]' }}</span>
+                </div>
+                <div class="d-flex gap-2 align-items-center mt-2">
+                  <span @click="editField(user, 'phone')" class="editable-field text-muted small flex-shrink-0">
+                    <i class="bi bi-telephone-fill me-1"></i>{{ user.phone || '市話' }}
+                  </span>
+                  <span @click="editField(user, 'phone2')" class="editable-field text-muted small flex-shrink-0">
+                    <i class="bi bi-phone-fill me-1"></i>{{ user.phone2 || '手機' }}
+                  </span>
+                </div>
               </td>
-              <td>{{ user.zhuyin }}</td>
-              <td class="text-muted" style="font-size: 0.8rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" :title="user.line_user_id">{{ user.line_user_id }}</td>
-              <td>
-                <span @click="editField(user, 'phone')" class="editable-field">{{ user.phone || '[點擊新增]' }} <i class="bi bi-pencil-fill text-primary ms-1"></i></span>
-              </td>
-              <td>
-                <span @click="editField(user, 'phone2')" class="editable-field">{{ user.phone2 || '[點擊新增]' }} <i class="bi bi-pencil-fill text-primary ms-1"></i></span>
-              </td>
-              <td class="text-center d-flex gap-1 justify-content-center">
-                 <button v-if="user.line_user_id && user.line_user_id.startsWith('U')" @click="refreshUserProfile(user.id)" class="btn btn-sm btn-outline-info py-0 px-1" title="從LINE更新資料">
-                      <i class="bi bi-arrow-repeat" style="font-size: 1.1rem;"></i>
-                 </button>
-                  <button v-if="user.id.startsWith('manual_')" @click="openMergeModal(user)" class="btn btn-sm btn-outline-success py-0 px-1" title="合併用戶">
-                      <i class="bi bi-person-plus-fill" style="font-size: 1.1rem;"></i>
-                  </button>
-                  <button @click="deleteUser(user.id)" class="btn btn-sm btn-outline-danger py-0 px-1" title="刪除用戶">
-                      <i class="bi bi-trash-fill" style="font-size: 1.1rem;"></i>
-                  </button>
+              <td class="text-center">
+                <div class="d-flex flex-column gap-1">
+                    <button v-if="user.id.startsWith('manual_')" @click="openMergeModal(user)" class="btn btn-sm btn-outline-success px-2 icon-btn" title="合併用戶">
+                        <i class="bi bi-person-plus-fill" style="font-size: 1.1rem;"></i>
+                    </button>
+                    <button @click="deleteUser(user.id)" class="btn btn-sm btn-outline-danger px-2 icon-btn" title="刪除用戶">
+                        <i class="bi bi-trash-fill" style="font-size: 1.1rem;"></i>
+                    </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -92,18 +93,18 @@
 
 <script setup>
 import { ref, onMounted, computed, nextTick } from 'vue';
-import { getUsers, updateUser, addManual, mergeUsers, deleteUserApi, refreshProfile } from './api';
+import { getUsers, updateUser, addManual, deleteUserApi } from './api';
 
 const users = ref([]);
 const loading = ref(true);
 const error = ref(null);
 const searchTerm = ref('');
+const visibleZhuyin = ref(new Set());
 
 const sourceUser = ref(null);
 const targetUserId = ref(null);
 const mergeModalRef = ref(null);
 let mergeModalInstance = null;
-
 const status = ref({ show: false, message: '', type: 'info' });
 
 const filteredUsers = computed(() => {
@@ -126,6 +127,11 @@ function showStatus(message, type = 'success', duration = 3000) {
   }, duration);
 }
 
+const onAvatarError = (e) => {
+  // This prevents an infinite loop if the default image also fails to load.
+  e.target.src = '/static/nohead.png';
+}
+
 const loadUsers = async () => {
   loading.value = true;
   error.value = null;
@@ -140,8 +146,16 @@ const loadUsers = async () => {
   }
 };
 
+const toggleZhuyin = (userId) => {
+  if (visibleZhuyin.value.has(userId)) {
+    visibleZhuyin.value.delete(userId);
+  } else {
+    visibleZhuyin.value.add(userId);
+  }
+};
+
 const getFieldName = (field) => {
-  const names = { name: '姓名', phone: '電話(市)', phone2: '電話(手)' };
+  const names = { name: '姓名', zhuyin: '注音', phone: '電話(市)', phone2: '電話(手)' };
   return names[field] || '欄位';
 };
 
@@ -163,21 +177,7 @@ const editField = async (user, field) => {
 
 onMounted(() => {
   loadUsers();
-  if (mergeModalRef.value) {
-    mergeModalInstance = new window.bootstrap.Modal(mergeModalRef.value);
-  }
 });
-
-const refreshUserProfile = async (userId) => {
-  showStatus('正在從LINE更新資料...', 'info');
-  try {
-    await refreshProfile(userId);
-    showStatus('✅ 用戶資料已更新，將重新載入列表。', 'success');
-    await loadUsers();
-  } catch (error) {
-    showStatus(`❌ 更新失敗: ${error.message || '未知錯誤'}`, 'error');
-  }
-};
 
 const addManualUser = async () => {
   const name = prompt("請輸入臨時用戶的姓名：\n（建議格式：陳先生-手機末四碼）");
@@ -190,32 +190,6 @@ const addManualUser = async () => {
     } catch (error) {
       showStatus(`❌ 新增失敗: ${error.message || '未知錯誤'}`, 'error');
     }
-  }
-};
-
-const openMergeModal = (user) => {
-  sourceUser.value = user;
-  targetUserId.value = '';
-  if (mergeModalInstance) {
-    mergeModalInstance.show();
-  }
-};
-
-const confirmMerge = async () => {
-  if (!sourceUser.value || !targetUserId.value) {
-    showStatus('❌ 請選擇目標用戶', 'error');
-    return;
-  }
-  if (!confirm(`確定要將 ${sourceUser.value.name} 的所有資料合併到目標用戶嗎？此操作無法復原。`)) {
-    return;
-  }
-  try {
-    await mergeUsers(sourceUser.value.id, targetUserId.value);
-    showStatus('✅ 合併成功', 'success');
-    if (mergeModalInstance) mergeModalInstance.hide();
-    await loadUsers();
-  } catch (error) {
-    showStatus(`❌ 合併失敗: ${error.message || '未知錯誤'}`, 'error');
   }
 };
 
@@ -232,28 +206,20 @@ const deleteUser = async (userId) => {
 
 </script>
 
-<style>
-.table-hover tbody tr:hover {
-  background-color: rgba(0, 123, 255, 0.05);
+<style scoped>
+/* 使用命名空間來安全地覆寫樣式，並限定其只在此元件生效 */
+.user-management-page .table-responsive {
+  border: 1px solid #dee2e6; /* Re-add a border to the container */
+  border-radius: 0.375rem; /* Re-add rounded corners */
 }
-.form-check-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+
+.user-management-page .table {
+  border-collapse: collapse !important; /* 關鍵：壓平所有間距 */
+  margin-bottom: 0 !important; /* 確保表格本身沒有底部外邊距 */
 }
-.editable-field {
-    cursor: pointer;
-    display: inline-block;
-    padding: 4px 8px;
-    border-radius: 4px;
+
+.user-management-page .table tbody tr td {
+  vertical-align: middle !important; /* 強制所有欄位垂直置中 */
 }
-.editable-field:hover {
-    background-color: #e9ecef;
-}
-.editable-field .bi-pencil-fill {
-    opacity: 0;
-    transition: opacity 0.2s;
-}
-.editable-field:hover .bi-pencil-fill {
-    opacity: 0.6;
-}
+
 </style>

@@ -1,0 +1,38 @@
+/* ==========================================================================
+   Global Styles & Bootstrap Overrides
+   ========================================================================== */
+
+/* 終極解決方案：使用 Flexbox 完美置中按鈕中的圖示 */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon-btn .bi {
+  display: block; /* 將圖示轉為塊級元素，消除行高影響 */
+}
+
+/* 可點擊編輯的欄位樣式 */
+.editable-field {
+    cursor: pointer;
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+.editable-field:hover {
+    background-color: #e9ecef;
+}
+.editable-field .bi-pencil-fill {
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.editable-field:hover .bi-pencil-fill {
+    opacity: 0.6;
+}
+
+/* 移除可編輯欄位在被點擊（獲得焦點）時的預設藍色外框和背景，避免樣式殘留 */
+.editable-field:focus, .editable-field:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+}
