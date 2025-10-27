@@ -88,12 +88,34 @@
         </div>
     </div>
 
+    <!-- Merge Modal -->
+    <div class="modal fade" id="mergeUserModal" tabindex="-1" aria-labelledby="mergeUserModalLabel" aria-hidden="true" ref="mergeModalRef">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="mergeUserModalLabel">合併用戶</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>將臨時用戶 <strong>{{ sourceUser?.name }}</strong> 的所有預約紀錄合併至以下真實用戶：</p>
+            <select class="form-select" v-model="targetUserId">
+              <option disabled value="">請選擇一個目標用戶...</option>
+              <option v-for="u in realUsers" :key="u.id" :value="u.id">{{ u.name }} ({{ u.id }})</option>
+            </select>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="button" class="btn btn-danger" @click="confirmMerge" :disabled="!targetUserId">確認合併</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed, nextTick } from 'vue';
-import { getUsers, updateUser, addManual, deleteUserApi } from './api';
+import { getUsers, updateUser, addManual, mergeUsers, deleteUserApi } from './api';
 
 const users = ref([]);
 const loading = ref(true);
@@ -175,8 +197,22 @@ const editField = async (user, field) => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
+  await nextTick();
   loadUsers();
+
+  // 等待 Bootstrap 載入並初始化 Modal
+  const initModal = () => {
+    if (window.bootstrap && mergeModalRef.value) {
+      mergeModalInstance = new window.bootstrap.Modal(mergeModalRef.value);
+      console.log('✅ Bootstrap Modal 初始化成功');
+    } else {
+      console.warn('⏳ 等待 Bootstrap 載入中...');
+      setTimeout(initModal, 200);
+    }
+  };
+
+  initModal();
 });
 
 const addManualUser = async () => {
@@ -190,6 +226,43 @@ const addManualUser = async () => {
     } catch (error) {
       showStatus(`❌ 新增失敗: ${error.message || '未知錯誤'}`, 'error');
     }
+  }
+};
+
+const openMergeModal = (user) => {
+  sourceUser.value = user;
+  targetUserId.value = '';
+
+  // 確保 modal 有被初始化
+  if (!mergeModalInstance && window.bootstrap && mergeModalRef.value) {
+    mergeModalInstance = new window.bootstrap.Modal(mergeModalRef.value);
+    console.log('⚙️ 即時初始化 Modal');
+  }
+
+  if (mergeModalInstance) {
+    mergeModalInstance.show();
+    console.log('📦 開啟合併用戶視窗');
+  } else {
+    console.error('❌ 無法開啟 Modal：Bootstrap 未載入或 ref 尚未綁定');
+    alert('系統尚未載入完成，請稍後再試一次。');
+  }
+};
+
+const confirmMerge = async () => {
+  if (!sourceUser.value || !targetUserId.value) {
+    showStatus('❌ 請選擇目標用戶', 'error');
+    return;
+  }
+  if (!confirm(`確定要將 ${sourceUser.value.name} 的所有資料合併到目標用戶嗎？此操作無法復原。`)) {
+    return;
+  }
+  try {
+    await mergeUsers(sourceUser.value.id, targetUserId.value);
+    showStatus('✅ 合併成功', 'success');
+    if (mergeModalInstance) mergeModalInstance.hide();
+    await loadUsers();
+  } catch (error) {
+    showStatus(`❌ 合併失敗: ${error.message || '未知錯誤'}`, 'error');
   }
 };
 
