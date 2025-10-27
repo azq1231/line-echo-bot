@@ -756,7 +756,17 @@ def api_add_manual_user():
     new_user = db.add_manual_user(user_id, name.strip())
 
     if new_user:
-        return api_response(data={"message": "臨時用戶已成功新增。", "user": new_user})
+        # 格式化回傳的 user 物件，使其與 /api/admin/users 的結構一致
+        formatted_user = {
+            "id": new_user['user_id'],
+            "name": new_user['name'],
+            "line_user_id": new_user['user_id'],
+            "is_admin": new_user.get('is_admin', False),
+            "zhuyin": new_user.get('zhuyin', ''),
+            "phone": new_user.get('phone', ''),
+            "phone2": new_user.get('phone2', '')
+        }
+        return api_response(data={"message": "臨時用戶已成功新增。", "user": formatted_user})
     else:
         return api_response(error="新增臨時用戶時發生錯誤。", status_code=500)
 

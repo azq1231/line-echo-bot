@@ -16,7 +16,7 @@
               class="form-control"
               placeholder="依姓名或注音搜尋..." 
               :value="searchTerm" @input="searchTerm = $event.target.value" style="width: 200px;">
-            <button class="btn btn-primary" @click="addManualUser">新增臨時用戶</button>
+            <button class="btn btn-primary" @click="openAddManualUserModal">新增臨時用戶</button>
         </div>
     </div>
     <h2 class="mb-3 text-primary fw-bold">📋 用戶清單 ({{ filteredUsers.length }})</h2>
@@ -88,6 +88,27 @@
         </div>
     </div>
 
+    <!-- Add Manual User Modal -->
+    <div class="modal fade" id="addManualUserModal" tabindex="-1" aria-labelledby="addManualUserModalLabel" aria-hidden="true" ref="addManualModalRef">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="addManualUserModalLabel">新增臨時用戶</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <label for="manualUserName" class="form-label">用戶姓名</label>
+            <input type="text" class="form-control" id="manualUserName" v-model="newUserName" placeholder="例如：陳先生-手機末四碼" @keyup.enter="confirmAddManualUser">
+            <div class="form-text">為無法使用 LINE 登入的用戶（如電話預約客）建立一個臨時帳號。</div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="button" class="btn btn-primary" @click="confirmAddManualUser">儲存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Merge Modal -->
     <div class="modal fade" id="mergeUserModal" tabindex="-1" aria-labelledby="mergeUserModalLabel" aria-hidden="true" ref="mergeModalRef">
       <div class="modal-dialog modal-dialog-centered">
@@ -127,6 +148,10 @@ const sourceUser = ref(null);
 const targetUserId = ref(null);
 const mergeModalRef = ref(null);
 let mergeModalInstance = null;
+
+const newUserName = ref('');
+const addManualModalRef = ref(null);
+let addManualModalInstance = null;
 const status = ref({ show: false, message: '', type: 'info' });
 
 const filteredUsers = computed(() => {
@@ -199,13 +224,19 @@ const editField = async (user, field) => {
 
 onMounted(async () => {
   await nextTick();
-  loadUsers();
+  await loadUsers();
 
   // 等待 Bootstrap 載入並初始化 Modal
   const initModal = () => {
-    if (window.bootstrap && mergeModalRef.value) {
-      mergeModalInstance = new window.bootstrap.Modal(mergeModalRef.value);
-      console.log('✅ Bootstrap Modal 初始化成功');
+    if (window.bootstrap) {
+      if (mergeModalRef.value) {
+        mergeModalInstance = new window.bootstrap.Modal(mergeModalRef.value);
+        console.log('✅ Merge Modal 初始化成功');
+      }
+      if (addManualModalRef.value) {
+        addManualModalInstance = new window.bootstrap.Modal(addManualModalRef.value);
+        console.log('✅ Add Manual Modal 初始化成功');
+      }
     } else {
       console.warn('⏳ 等待 Bootstrap 載入中...');
       setTimeout(initModal, 200);
@@ -214,20 +245,6 @@ onMounted(async () => {
 
   initModal();
 });
-
-const addManualUser = async () => {
-  const name = prompt("請輸入臨時用戶的姓名：\n（建議格式：陳先生-手機末四碼）");
-  if (name && name.trim()) {
-    showStatus('正在新增臨時用戶...', 'info');
-    try {
-      const newUser = await addManual(name.trim());
-      users.value.unshift(newUser.user); // Add to the top of the list
-      showStatus('✅ 臨時用戶已新增', 'success');
-    } catch (error) {
-      showStatus(`❌ 新增失敗: ${error.message || '未知錯誤'}`, 'error');
-    }
-  }
-};
 
 const openMergeModal = (user) => {
   sourceUser.value = user;
@@ -245,6 +262,32 @@ const openMergeModal = (user) => {
   } else {
     console.error('❌ 無法開啟 Modal：Bootstrap 未載入或 ref 尚未綁定');
     alert('系統尚未載入完成，請稍後再試一次。');
+  }
+};
+
+const openAddManualUserModal = () => {
+  newUserName.value = '';
+  if (addManualModalInstance) {
+    addManualModalInstance.show();
+  } else {
+    console.error('❌ 無法開啟新增用戶 Modal');
+    alert('系統尚未載入完成，請稍後再試一次。');
+  }
+};
+
+const confirmAddManualUser = async () => {
+  const name = newUserName.value.trim();
+  if (!name) {
+    showStatus('❌ 請輸入用戶姓名', 'error');
+    return;
+  }
+  try {
+    const newUser = await addManual(name);
+    users.value.unshift(newUser.user);
+    showStatus('✅ 臨時用戶已新增', 'success');
+    if (addManualModalInstance) addManualModalInstance.hide();
+  } catch (error) {
+    showStatus(`❌ 新增失敗: ${error.message || '未知錯誤'}`, 'error');
   }
 };
 
