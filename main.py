@@ -1569,6 +1569,8 @@ print("排程器已啟動。每日、每週及自訂排程任務已設定。")
 
 if __name__ == "__main__":
     try:
-        app.run(host="0.0.0.0", port=5000, debug=False)
+        # 透過環境變數來決定是否開啟除錯模式，方便本地開發
+        debug_mode = os.getenv("FLASK_DEBUG", "false").lower() in ['true', '1', 't']
+        app.run(host="0.0.0.0", port=5000, debug=debug_mode)
     except (KeyboardInterrupt, SystemExit):
         scheduler.shutdown()
