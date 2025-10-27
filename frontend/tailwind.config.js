@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  prefix: 'tw-', // <--- 加入這一行
   content: [
     "./index.html",
     "./src/**/*.{vue,js,ts,jsx,tsx}",

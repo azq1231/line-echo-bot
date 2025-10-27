@@ -1,66 +1,66 @@
 <template>
-  <div class="max-w-screen-2xl mx-auto font-sans">
-    <div class="bg-white p-5 rounded-lg shadow-md mb-5">
-      <div class="text-center mb-4">
-        <h2 class="text-xl font-bold text-indigo-600">{{ weekTitle }}</h2>
+  <div class="tw-max-w-screen-2xl tw-mx-auto tw-font-sans">
+    <div class="tw-bg-white tw-p-5 tw-rounded-lg tw-shadow-md tw-mb-5">
+      <div class="tw-text-center tw-mb-4">
+        <h2 class="tw-text-xl tw-font-bold tw-text-indigo-600">{{ weekTitle }}</h2>
       </div>
-      <div class="flex flex-wrap gap-2 justify-center">
-        <button class="px-4 py-2 rounded-md text-sm font-medium transition bg-indigo-600 text-white hover:bg-indigo-700" @click="changeWeek(-1)">⬅️ 上一週</button>
-        <button class="px-4 py-2 rounded-md text-sm font-medium transition bg-indigo-600 text-white hover:bg-indigo-700" @click="changeWeek(1)">下一週 ➡️</button>
-        <button class="px-4 py-2 rounded-md text-sm font-medium transition bg-indigo-600 text-white hover:bg-indigo-700" @click="loadInitialData">🔄 重新載入</button>
-        <button class="px-4 py-2 rounded-md text-sm font-medium transition disabled:cursor-not-allowed" @click="sendWeekReminders" :disabled="isSendingWeek || !weekHasRemindable" :class="weekButtonClass">📨 {{ weekButtonText }}</button>
+      <div class="tw-flex tw-flex-wrap tw-gap-2 tw-justify-center">
+        <button class="tw-px-4 tw-py-2 tw-rounded-md tw-text-sm tw-font-medium tw-transition tw-bg-indigo-600 tw-text-white hover:tw-bg-indigo-700" @click="changeWeek(-1)">⬅️ 上一週</button>
+        <button class="tw-px-4 tw-py-2 tw-rounded-md tw-text-sm tw-font-medium tw-transition tw-bg-indigo-600 tw-text-white hover:tw-bg-indigo-700" @click="changeWeek(1)">下一週 ➡️</button>
+        <button class="tw-px-4 tw-py-2 tw-rounded-md tw-text-sm tw-font-medium tw-transition tw-bg-indigo-600 tw-text-white hover:tw-bg-indigo-700" @click="loadInitialData">🔄 重新載入</button>
+        <button class="tw-px-4 tw-py-2 tw-rounded-md tw-text-sm tw-font-medium tw-transition disabled:tw-cursor-not-allowed" @click="sendWeekReminders" :disabled="isSendingWeek || !weekHasRemindable" :class="weekButtonClass">📨 {{ weekButtonText }}</button>
       </div>
-      <div class="text-center mt-3 text-xs text-gray-500 space-y-1">
-        <div>提醒按鈕：<span class="font-semibold text-gray-700">白色</span>=可發送, <span class="font-semibold text-blue-600">藍色</span>=已發送, <span class="font-semibold text-red-600">紅色</span>=無可提醒對象</div>
-        <div>預約時段：<span class="px-1 rounded bg-red-200 text-red-800 font-semibold">紅色底</span> = 臨時用戶 (無法發送LINE提醒)</div>
+      <div class="tw-text-center tw-mt-3 tw-text-xs tw-text-gray-500 tw-space-y-1">
+        <div>提醒按鈕：<span class="tw-font-semibold tw-text-gray-700">白色</span>=可發送, <span class="tw-font-semibold tw-text-blue-600">藍色</span>=已發送, <span class="tw-font-semibold tw-text-red-600">紅色</span>=無可提醒對象</div>
+        <div>預約時段：<span class="tw-px-1 tw-rounded tw-bg-red-200 tw-text-red-800 tw-font-semibold">紅色底</span> = 臨時用戶 (無法發送LINE提醒)</div>
       </div>
     </div>
 
     <!-- Schedule Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 pb-4">
-      <div v-for="dayData in weekSchedule" :key="dayData.date_info.date" class="bg-white rounded-lg p-3 shadow-lg flex flex-col gap-y-3">
-        <div class="bg-gradient-to-r from-indigo-600 to-purple-700 text-white p-2.5 rounded-md text-center">
-          <h3 class="text-base font-bold">{{ dayData.date_info.day_name }}</h3>
-          <p class="text-sm opacity-90">{{ dayData.date_info.display }}</p>
+    <div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 md:tw-grid-cols-3 lg:tw-grid-cols-5 tw-gap-3 tw-pb-4">
+      <div v-for="dayData in weekSchedule" :key="dayData.date_info.date" class="tw-bg-white tw-rounded-lg tw-p-3 tw-shadow-lg tw-flex tw-flex-col tw-gap-y-3">
+        <div class="tw-bg-gradient-to-r tw-from-indigo-600 tw-to-purple-700 tw-text-white tw-p-2.5 tw-rounded-md tw-text-center">
+          <h3 class="tw-text-base tw-font-bold">{{ dayData.date_info.day_name }}</h3>
+          <p class="tw-text-sm tw-opacity-90">{{ dayData.date_info.display }}</p>
         </div>
-        <div class="flex-grow space-y-1">
-          <div v-if="dayData.is_closed" class="text-center text-red-600 font-bold p-5 bg-red-50 rounded-md">😴<br>本日休診</div>
+        <div class="tw-flex-grow tw-space-y-1">
+          <div v-if="dayData.is_closed" class="tw-text-center tw-text-red-600 tw-font-bold tw-p-5 tw-bg-red-50 tw-rounded-md">😴<br>本日休診</div>
           <template v-else>
 
-            <div v-for="(apt, time, index) in dayData.appointments" :key="time" class="flex items-center gap-2">
-              <span class="w-12 text-right text-sm font-medium text-gray-600">{{ time }}</span>
+            <div v-for="(apt, time, index) in dayData.appointments" :key="time" class="tw-flex tw-items-center tw-gap-2">
+              <span class="tw-w-12 tw-text-right tw-text-sm tw-font-medium tw-text-gray-600">{{ time }}</span>
               <div 
-                class="relative flex-1"
+                class="tw-relative tw-flex-1"
                 @dragover.prevent="handleDragOver(dayData.date_info.date, time, apt)"
                 @dragleave="handleDragLeave(dayData.date_info.date, time)"
                 @drop="handleDrop(dayData.date_info.date, time)"
-                :class="{ 'bg-green-100 border-green-400': isDragOver(`${dayData.date_info.date}-${time}`) }"
+                :class="{ 'tw-bg-green-100 tw-border-green-400': isDragOver(`${dayData.date_info.date}-${time}`) }"
               >
                 <div 
-                  class="w-full p-1.5 border text-sm rounded cursor-pointer truncate flex justify-between items-center" 
+                  class="tw-w-full tw-p-1.5 tw-border tw-text-sm tw-rounded tw-cursor-pointer tw-truncate tw-flex tw-justify-between tw-items-center" 
                   :class="{ 
-                    'text-gray-500': !apt.user_id,
-                    'bg-red-200 border-red-400 text-red-800': apt.user_id?.startsWith('manual_'),
-                    'bg-white border-gray-300 text-gray-800': !apt.user_id?.startsWith('manual_'),
-                    'font-semibold': apt.user_id && apt.user_id.startsWith('manual_')
+                    'tw-text-gray-500': !apt.user_id,
+                    'tw-bg-red-200 tw-border-red-400 tw-text-red-800': apt.user_id?.startsWith('manual_'),
+                    'tw-bg-white tw-border-gray-300 tw-text-gray-800': !apt.user_id?.startsWith('manual_'),
+                    'tw-font-semibold': apt.user_id && apt.user_id.startsWith('manual_')
                   }" 
                   @click="toggleDropdown(dayData.date_info.date, time, index)">
                   {{ apt.user_name || '-- 未預約 --' }}
-                  <span class="ml-2 text-gray-400 text-xs">▼</span>
+                  <span class="tw-ml-2 tw-text-gray-400 tw-text-xs">▼</span>
                 </div>
-                <div v-if="openSelect === `${dayData.date_info.date}-${time}`" class="absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md max-h-48 overflow-y-auto z-10 shadow-lg mt-1">
+                <div v-if="openSelect === `${dayData.date_info.date}-${time}`" class="tw-absolute tw-top-full tw-left-0 tw-right-0 tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mt-1">
                   <div v-if="selectStep === 1">
-                    <div v-if="previousUser" class="px-2.5 py-2 cursor-pointer text-sm text-blue-600 font-bold border-b hover:bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, previousUser.id, previousUser.name)">
+                    <div v-if="previousUser" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-blue-600 tw-font-bold tw-border-b hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, previousUser.id, previousUser.name)">
                       ➡️ 同上 ({{ previousUser.name }})
                     </div>
-                    <div class="px-2.5 py-2 cursor-pointer text-sm text-gray-800 hover:bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --')">-- 未預約 --</div>
-                    <div v-for="key in sortedZhuyinKeys" :key="key" class="px-2.5 py-2 cursor-pointer text-sm text-gray-800 hover:bg-gray-100" @click.stop="renderUserOptions(key)">
+                    <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --')">-- 未預約 --</div>
+                    <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
                       {{ key }}
                     </div>
                   </div>
                   <div v-if="selectStep === 2">
-                    <div class="px-2.5 py-2 cursor-pointer text-sm font-bold border-b text-purple-700 hover:bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
-                    <div v-for="user in usersInGroup" :key="user.id" class="px-2.5 py-2 cursor-pointer text-sm text-gray-800 hover:bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user)">
+                    <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                    <div v-for="user in usersInGroup" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user)">
                       {{ user.name }}
                     </div>
                   </div>
@@ -70,30 +70,30 @@
           </template>
         </div>
         <!-- Waiting List Section -->
-        <div v-if="!dayData.is_closed" class="mt-4 pt-3 border-t">
-            <h4 class="text-sm font-semibold text-gray-500 mb-2">備取名單</h4>
-            <div class="space-y-1 text-sm">
-                <div v-if="!dayData.waiting_list || dayData.waiting_list.length === 0" class="text-gray-400 text-xs text-center py-2">尚無備取</div>
+        <div v-if="!dayData.is_closed" class="tw-mt-4 tw-pt-3 tw-border-t">
+            <h4 class="tw-text-sm tw-font-semibold tw-text-gray-500 tw-mb-2">備取名單</h4>
+            <div class="tw-space-y-1 tw-text-sm">
+                <div v-if="!dayData.waiting_list || dayData.waiting_list.length === 0" class="tw-text-gray-400 tw-text-xs tw-text-center tw-py-2">尚無備取</div>
                 <div v-for="item in dayData.waiting_list" :key="item.id" 
-                     class="flex items-center justify-between p-1.5 bg-yellow-50 border border-yellow-200 rounded cursor-grab"
+                     class="tw-flex tw-items-center tw-justify-between tw-p-1.5 tw-bg-yellow-50 tw-border tw-border-yellow-200 tw-rounded tw-cursor-grab"
                      draggable="true"
                      @dragstart="handleDragStart($event, item)">
                     <span>{{ item.user_name }}</span>
-                    <button @click="removeFromWaitingList(item.id, dayData.date_info.date)" class="text-red-500 hover:text-red-700 text-xs">✕</button>
+                    <button @click="removeFromWaitingList(item.id, dayData.date_info.date)" class="tw-text-red-500 hover:tw-text-red-700 tw-text-xs">✕</button>
                 </div>
             </div>
-            <div class="relative mt-2">
-              <button @click="toggleWaitingListDropdown(dayData.date_info.date)" class="w-full text-xs text-center py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md text-gray-600">+ 新增備取</button>
+            <div class="tw-relative tw-mt-2">
+              <button @click="toggleWaitingListDropdown(dayData.date_info.date)" class="tw-w-full tw-text-xs tw-text-center tw-py-1.5 tw-bg-gray-100 hover:tw-bg-gray-200 tw-rounded-md tw-text-gray-600">+ 新增備取</button>
               <!-- Waiting List User Selection Dropdown -->
-              <div v-if="openSelect === `waiting-${dayData.date_info.date}`" class="absolute bottom-full left-0 right-0 bg-white border border-gray-300 rounded-md max-h-48 overflow-y-auto z-10 shadow-lg mb-1">
+              <div v-if="openSelect === `waiting-${dayData.date_info.date}`" class="tw-absolute tw-bottom-full tw-left-0 tw-right-0 tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mb-1">
                 <div v-if="selectStep === 1">
-                  <div v-for="key in sortedZhuyinKeys" :key="key" class="px-2.5 py-2 cursor-pointer text-sm text-gray-800 hover:bg-gray-100" @click.stop="renderUserOptions(key)">
+                  <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
                     {{ key }}
                   </div>
                 </div>
                 <div v-if="selectStep === 2">
-                  <div class="px-2.5 py-2 cursor-pointer text-sm font-bold border-b text-purple-700 hover:bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
-                  <div v-for="user in usersInGroup" :key="user.id" class="px-2.5 py-2 cursor-pointer text-sm text-gray-800 hover:bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, null, user)">
+                  <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                  <div v-for="user in usersInGroup" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, null, user)">
                     {{ user.name }}
                   </div>
                 </div>
@@ -101,14 +101,14 @@
             </div>
         </div>
 
-        <button v-if="!dayData.is_closed" class="mt-2 w-full px-4 py-2 rounded-md text-sm font-medium transition disabled:cursor-not-allowed" @click="sendDayReminders(dayData.date_info.date, dayData.date_info.day_name)" :disabled="isSendingDay[dayData.date_info.date] || !dayHasRemindable(dayData)" :class="dayButtonClass(dayData)">
+        <button v-if="!dayData.is_closed" class="tw-mt-2 tw-w-full tw-px-4 tw-py-2 tw-rounded-md tw-text-sm tw-font-medium tw-transition disabled:tw-cursor-not-allowed" @click="sendDayReminders(dayData.date_info.date, dayData.date_info.day_name)" :disabled="isSendingDay[dayData.date_info.date] || !dayHasRemindable(dayData)" :class="dayButtonClass(dayData)">
            {{ dayButtonText(dayData) }}
         </button>
       </div>
     </div>
 
     <!-- Status Message -->
-    <div v-if="status.show" class="fixed top-5 right-5 px-5 py-4 rounded-md shadow-lg text-white" :class="status.type === 'success' ? 'bg-gray-800' : 'bg-red-700'" >
+    <div v-if="status.show" class="tw-fixed tw-top-5 tw-right-5 tw-px-5 tw-py-4 tw-rounded-md tw-shadow-lg tw-text-white" :class="status.type === 'success' ? 'tw-bg-gray-800' : 'tw-bg-red-700'" >
       {{ status.message }}
     </div>
   </div>
@@ -179,10 +179,10 @@ const weekButtonText = computed(() => {
 });
 
 const weekButtonClass = computed(() => {
-  if (isSendingWeek.value) return 'bg-gray-400 text-white';
-  if (!weekHasRemindable.value) return 'bg-red-200 text-red-700';
-  if (weekReminderSent.value) return 'bg-blue-600 text-white';
-  return 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50';
+  if (isSendingWeek.value) return 'tw-bg-gray-400 tw-text-white';
+  if (!weekHasRemindable.value) return 'tw-bg-red-200 tw-text-red-700';
+  if (weekReminderSent.value) return 'tw-bg-blue-600 tw-text-white';
+  return 'tw-bg-white tw-text-gray-700 tw-border tw-border-gray-300 hover:tw-bg-gray-50';
 });
 
 function isDragOver(targetId) {
@@ -216,10 +216,10 @@ function dayButtonText(dayData) {
 
 function dayButtonClass(dayData) {
   const date = dayData.date_info.date;
-  if (isSendingDay.value[date]) return 'bg-gray-400 text-white';
-  if (!dayHasRemindable(dayData)) return 'bg-red-200 text-red-700';
-  if (dayReminderSent.value[date]) return 'bg-blue-600 text-white';
-  return 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50';
+  if (isSendingDay.value[date]) return 'tw-bg-gray-400 tw-text-white';
+  if (!dayHasRemindable(dayData)) return 'tw-bg-red-200 tw-text-red-700';
+  if (dayReminderSent.value[date]) return 'tw-bg-blue-600 tw-text-white';
+  return 'tw-bg-white tw-text-gray-700 tw-border tw-border-gray-300 hover:tw-bg-gray-50';
 }
 
 
@@ -468,8 +468,8 @@ async function sendDayReminders(date, dayName) {
 }
 
 const handleClickOutside = (e) => {
-    // Close dropdown if click is outside of any custom-select-container
-    if (!e.target.closest('.relative')) {
+    // Close dropdown if click is outside of any dropdown container
+    if (!e.target.closest('.tw-relative')) {
         closeAllSelects();
     }
 };

@@ -317,6 +317,7 @@ def users_vue_page():
 
         # 從 HTML 內容中提取出 JS 檔案的相對路徑，例如 /assets/users-a1b2c3d4.js
         js_relative_path_match = re.search(r'src="(/assets/users-.*?\.js)"', manifest_content)
+        css_relative_path_match = re.search(r'href="(/assets/users-.*?\.css)"', manifest_content)
         
         if not js_relative_path_match:
             return "Error: Could not find Vue.js application assets in users.html. Please run 'npm run build'.", 500
@@ -326,7 +327,13 @@ def users_vue_page():
         js_filename = js_relative_path_match.group(1).lstrip('/')
         final_js_path = url_for('static', filename=js_filename)
 
-        return render_template("admin_users_vue.html", js_path=final_js_path, user=session.get('user'))
+        final_css_path = None
+        if css_relative_path_match:
+            css_filename = css_relative_path_match.group(1).lstrip('/')
+            final_css_path = url_for('static', filename=css_filename)
+
+        return render_template("admin_users_vue.html", js_path=final_js_path, css_path=final_css_path, user=session.get('user'))
+
     except FileNotFoundError:
         return "Error: users.html not found in frontend/dist. Please run 'npm run build' in the 'frontend' directory.", 404
 @app.route("/admin/schedule")
@@ -371,7 +378,7 @@ def appointments_page():
             css_filename = css_match.group(1).lstrip('/')
             final_css_path = url_for('static', filename=css_filename)
 
-
+        # 渲染預約管理的 Vue.js 應用程式模板
         return render_template("admin_appointments_vue.html", js_path=final_js_path, css_path=final_css_path, user=session.get('user'))
 
     except FileNotFoundError:
