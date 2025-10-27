@@ -66,7 +66,7 @@
                     <button v-if="user.id.startsWith('manual_')" @click="openMergeModal(user)" class="btn btn-sm btn-outline-success px-2 icon-btn" title="合併用戶">
                         <i class="bi bi-person-plus-fill" style="font-size: 1.1rem;"></i>
                     </button>
-                    <button @click="deleteUser(user.id)" class="btn btn-sm btn-outline-danger px-2 icon-btn" title="刪除用戶">
+                    <button v-if="allowUserDeletion" @click="deleteUser(user.id)" class="btn btn-sm btn-outline-danger px-2 icon-btn" title="刪除用戶">
                         <i class="bi bi-trash-fill" style="font-size: 1.1rem;"></i>
                     </button>
                 </div>
@@ -142,6 +142,7 @@ const users = ref([]);
 const loading = ref(true);
 const error = ref(null);
 const searchTerm = ref('');
+const allowUserDeletion = ref(false); // 新增：控制刪除按鈕的顯示
 const visibleZhuyin = ref(new Set());
 
 const sourceUser = ref(null);
@@ -184,7 +185,8 @@ const loadUsers = async () => {
   error.value = null;
   try {
     const data = await getUsers();
-    users.value = data.users;
+    users.value = data.users; // 獲取用戶列表
+    allowUserDeletion.value = data.allow_user_deletion; // 獲取刪除權限設定
   } catch (err) {
     error.value = '無法載入用戶資料，請稍後再試。';
     console.error(err);

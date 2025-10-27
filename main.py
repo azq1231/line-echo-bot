@@ -714,7 +714,8 @@ def api_get_users():
             "phone2": user.get('phone2', '')
         } for user in users
     ]
-    return api_response(data={"users": users_data, "current_admin_id": current_admin_id})
+    allow_deletion = db.get_config('allow_user_deletion', 'false') == 'true'
+    return api_response(data={"users": users_data, "current_admin_id": current_admin_id, "allow_user_deletion": allow_deletion})
 
 @app.route('/api/admin/users/<string:user_id>/toggle_admin', methods=['POST']) # 新增：切換管理員狀態
 @admin_required
