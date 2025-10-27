@@ -726,16 +726,20 @@ def api_get_users():
     current_admin_id = session['user']['user_id'] if 'user' in session else None
     
     users_data = [
+        # 確保 user_id 始終為字串，即使資料庫中為 None
+        # 並使用 .get() 處理可能缺失的鍵，提供預設值
         {
-            "id": user['user_id'],
-            "name": user['name'],
-            "line_user_id": user['user_id'],
+            "id": str(user.get('user_id', '')) if user.get('user_id') is not None else '',
+            "name": user.get('name', ''),
+            "line_user_id": str(user.get('user_id', '')) if user.get('user_id') is not None else '',
             "is_admin": user.get('is_admin', False),
             "zhuyin": user.get('zhuyin', ''),
             "phone": user.get('phone', ''),
             "phone2": user.get('phone2', '')
-        } for user in users
+        } 
+        for user in users
     ]
+
     allow_deletion = db.get_config('allow_user_deletion', 'false') == 'true'
     return api_response(data={"users": users_data, "current_admin_id": current_admin_id, "allow_user_deletion": allow_deletion})
 
@@ -781,9 +785,9 @@ def api_add_manual_user():
     if new_user:
         # 格式化回傳的 user 物件，使其與 /api/admin/users 的結構一致
         formatted_user = {
-            "id": new_user['user_id'],
-            "name": new_user['name'],
-            "line_user_id": new_user['user_id'],
+            "id": str(new_user.get('user_id', '')) if new_user.get('user_id') is not None else '',
+            "name": new_user.get('name', ''),
+            "line_user_id": str(new_user.get('user_id', '')) if new_user.get('user_id') is not None else '',
             "is_admin": new_user.get('is_admin', False),
             "zhuyin": new_user.get('zhuyin', ''),
             "phone": new_user.get('phone', ''),
@@ -938,9 +942,17 @@ def get_week_appointments():
     print(f"get_week_appointments: offset={week_offset}")  # Add log
 
     week_dates = get_week_dates(week_offset)
-    
+
+    # 獲取所有用戶並確保 user_id 始終為字串
+    all_users_raw = db.get_all_users()
+    all_users = []
+    for user in all_users_raw:
+        processed_user = user.copy()
+        processed_user['user_id'] = str(user.get('user_id', '')) if user.get('user_id') is not None else ''
+        processed_user['line_user_id'] = str(user.get('user_id', '')) if user.get('user_id') is not None else '' # 確保 line_user_id 也被處理
+        processed_user['id'] = processed_user['user_id'] # 確保前端使用的 'id' 鍵也存在且為字串
+        all_users.append(processed_user)
     week_schedule = {}
-    all_users = db.get_all_users()
     waiting_lists = db.get_waiting_lists_by_date_range(week_dates[0]['date'], week_dates[-1]['date'])
     
     for date_info in week_dates:
@@ -955,8 +967,8 @@ def get_week_appointments():
         for time_slot in time_slots:
             apt = appointments_map.get(time_slot)
             day_appointments[time_slot] = {
-                'user_name': apt['user_name'] if apt else '',
-                'user_id': apt['user_id'] if apt else ''
+                'user_name': apt.get('user_name', '') if apt else '',
+                'user_id': str(apt.get('user_id', '')) if apt and apt.get('user_id') is not None else ''
             }
         
         week_schedule[date_str] = {

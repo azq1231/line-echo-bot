@@ -9,6 +9,8 @@
         <button class="tw-px-4 tw-py-2 tw-rounded-md tw-text-sm tw-font-medium tw-transition tw-bg-indigo-600 tw-text-white hover:tw-bg-indigo-700" @click="changeWeek(1)">下一週 ➡️</button>
         <button class="tw-px-4 tw-py-2 tw-rounded-md tw-text-sm tw-font-medium tw-transition tw-bg-indigo-600 tw-text-white hover:tw-bg-indigo-700" @click="loadInitialData">🔄 重新載入</button>
         <button class="tw-px-4 tw-py-2 tw-rounded-md tw-text-sm tw-font-medium tw-transition disabled:tw-cursor-not-allowed" @click="sendWeekReminders" :disabled="isSendingWeek || !weekHasRemindable" :class="weekButtonClass">📨 {{ weekButtonText }}</button>
+        <!-- New button for adding manual user -->
+        <button class="tw-px-4 tw-py-2 tw-rounded-md tw-text-sm tw-font-medium tw-transition tw-bg-green-600 tw-text-white hover:tw-bg-green-700" @click="openAddManualUserModal">➕ 新增臨時用戶</button>
       </div>
       <div class="tw-text-center tw-mt-3 tw-text-xs tw-text-gray-500 tw-space-y-1">
         <div>提醒按鈕：<span class="tw-font-semibold tw-text-gray-700">白色</span>=可發送, <span class="tw-font-semibold tw-text-blue-600">藍色</span>=已發送, <span class="tw-font-semibold tw-text-red-600">紅色</span>=無可提醒對象</div>
@@ -16,8 +18,15 @@
       </div>
     </div>
 
+    <!-- Loading Spinner -->
+    <div v-if="isLoading" class="tw-flex tw-justify-center tw-items-center tw-py-10">
+      <div class="tw-animate-spin tw-rounded-full tw-h-12 tw-w-12 tw-border-b-2 tw-border-indigo-500"></div>
+      <p class="tw-ml-4 tw-text-gray-600">載入中...</p>
+    </div>
+
     <!-- Schedule Grid -->
-    <div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 md:tw-grid-cols-3 lg:tw-grid-cols-5 tw-gap-3 tw-pb-4">
+    <div v-else class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 md:tw-grid-cols-3 lg:tw-grid-cols-5 tw-gap-3 tw-pb-4">
+      {{ console.log('DEBUG: v-else block is being rendered.') }}
       <div v-for="dayData in weekSchedule" :key="dayData.date_info.date" class="tw-bg-white tw-rounded-lg tw-p-3 tw-shadow-lg tw-flex tw-flex-col tw-gap-y-3">
         <div class="tw-bg-gradient-to-r tw-from-indigo-600 tw-to-purple-700 tw-text-white tw-p-2.5 tw-rounded-md tw-text-center">
           <h3 class="tw-text-base tw-font-bold">{{ dayData.date_info.day_name }}</h3>
@@ -111,6 +120,36 @@
     <div v-if="status.show" class="tw-fixed tw-top-5 tw-right-5 tw-px-5 tw-py-4 tw-rounded-md tw-shadow-lg tw-text-white" :class="status.type === 'success' ? 'tw-bg-gray-800' : 'tw-bg-red-700'" >
       {{ status.message }}
     </div>
+
+    <!-- Add Manual User Modal -->
+    <div v-if="showAddManualUserModal" class="tw-fixed tw-inset-0 tw-bg-gray-600 tw-bg-opacity-50 tw-overflow-y-auto tw-h-full tw-w-full tw-z-50 tw-flex tw-justify-center tw-items-center">
+      <div class="tw-relative tw-p-5 tw-border tw-w-96 tw-shadow-lg tw-rounded-md tw-bg-white">
+        <h3 class="tw-text-lg tw-font-bold tw-mb-4">新增臨時用戶</h3>
+        <input 
+          type="text" 
+          v-model="newManualUserName" 
+          placeholder="請輸入用戶姓名" 
+          class="tw-mt-1 tw-block tw-w-full tw-px-3 tw-py-2 tw-border tw-border-gray-300 tw-rounded-md tw-shadow-sm focus:tw-outline-none focus:tw-ring-indigo-500 focus:tw-border-indigo-500 sm:tw-text-sm"
+          @keyup.enter="addManualUser"
+        />
+        <div class="tw-mt-4 tw-flex tw-justify-end tw-space-x-2">
+          <button 
+            @click="closeAddManualUserModal" 
+            class="tw-px-4 tw-py-2 tw-bg-gray-300 tw-text-gray-800 tw-rounded-md hover:tw-bg-gray-400"
+          >
+            取消
+          </button>
+          <button 
+            @click="addManualUser" 
+            :disabled="isAddingManualUser || !newManualUserName.trim()"
+            class="tw-px-4 tw-py-2 tw-bg-indigo-600 tw-text-white tw-rounded-md hover:tw-bg-indigo-700 disabled:tw-opacity-50 disabled:tw-cursor-not-allowed"
+          >
+            <span v-if="isAddingManualUser">新增中...</span>
+            <span v-else>確定新增</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -136,6 +175,14 @@ const dayReminderSent = ref({});
 const draggedItem = ref(null);
 const dragOverTarget = ref(null);
 
+// New reactive properties for manual user modal
+const showAddManualUserModal = ref(false);
+const newManualUserName = ref('');
+const isAddingManualUser = ref(false);
+
+// New loading state
+const isLoading = ref(true);
+
 // --- Computed Properties ---
 const weekTitle = computed(() => {
   if (currentWeekOffset.value === 0) return '本週預約';
@@ -147,8 +194,10 @@ const weekTitle = computed(() => {
 
 const userMap = computed(() => {
   const map = new Map();
-  allUsers.value.forEach(user => {
-    map.set(user.id.toString(), user);
+  allUsers.value.forEach(user => { // 確保 user.id 存在且有效
+    if (user && user.id !== undefined && user.id !== null) {
+      map.set(user.id.toString(), user);
+    }
   });
   return map;
 });
@@ -231,16 +280,6 @@ function showStatus(message, type = 'success', duration = 3000) {
   }, duration);
 }
 
-async function loadUsers() {
-  try {
-    const response = await axios.get('/api/admin/users');
-    allUsers.value = response.data.users || [];
-    groupedUsers.value = groupUsersByZhuyin(allUsers.value);
-  } catch (error) {
-    showStatus('❌ 用戶載入失敗', 'error');
-  }
-}
-
 function groupUsersByZhuyin(users) {
   const groups = users.reduce((acc, user) => {
     const initial = user.zhuyin ? user.zhuyin[0] : '#';
@@ -252,8 +291,14 @@ function groupUsersByZhuyin(users) {
 }
 
 async function loadSchedule() {
+  isLoading.value = true; 
   try {
     const response = await axios.get(`/api/admin/get_week_appointments?offset=${currentWeekOffset.value}`);
+
+    allUsers.value = response.data.users || []; // <--- Update allUsers here
+
+    groupedUsers.value = groupUsersByZhuyin(allUsers.value); // <--- Re-group users here
+
     const schedule = response.data.week_schedule || {};
 
     // The API doesn't explicitly provide an `is_closed` flag per day.
@@ -261,7 +306,7 @@ async function loadSchedule() {
     for (const dateKey in schedule) {
         if (Object.prototype.hasOwnProperty.call(schedule, dateKey)) {
             const day = schedule[dateKey];
-            // Assuming if a day has no appointment slots, it's considered closed.
+            // Ensure day.appointments is an object before accessing Object.keys
             day.is_closed = !day.appointments || Object.keys(day.appointments).length === 0;
         }
     }
@@ -270,12 +315,15 @@ async function loadSchedule() {
   } catch (error) {
     showStatus('❌ 排程載入失敗', 'error');
     console.error("Schedule loading error:", error);
+  } finally {
+    // 無論成功或失敗，最後都要將載入狀態設為 false
+    isLoading.value = false;
   }
 }
 
 async function loadInitialData() {
-  showStatus('載入中...', 'info');
-  await Promise.all([loadUsers(), loadSchedule()]);
+  showStatus('載入中...', 'info'); // loadSchedule now handles fetching users as well
+  await loadSchedule();
 }
 
 function changeWeek(offset) {
@@ -464,6 +512,42 @@ async function sendDayReminders(date, dayName) {
     showStatus('❌ 發送失敗', 'error');
   } finally {
     isSendingDay.value[date] = false;
+  }
+}
+
+// New methods for manual user modal
+function openAddManualUserModal() {
+  showAddManualUserModal.value = true;
+  newManualUserName.value = ''; // Clear previous input
+}
+
+function closeAddManualUserModal() {
+  showAddManualUserModal.value = false;
+}
+
+async function addManualUser() {
+  const name = newManualUserName.value.trim();
+  if (!name) {
+    showStatus('用戶姓名不能為空。', 'error');
+    return;
+  }
+
+  isAddingManualUser.value = true;
+  try {
+    const response = await axios.post('/api/admin/users/add_manual', { name });
+    if (response.data.status === 'success') {
+      const newUser = response.data.user;
+      allUsers.value.push(newUser); // Add to allUsers
+      groupedUsers.value = groupUsersByZhuyin(allUsers.value); // Re-group users
+      showStatus(`✅ 臨時用戶 "${newUser.name}" 已新增。`, 'success');
+      closeAddManualUserModal();
+    } else {
+      throw new Error(response.data.message || '新增失敗');
+    }
+  } catch (error) {
+    showStatus(`❌ 新增臨時用戶失敗: ${error.message || '未知錯誤'}`, 'error');
+  } finally {
+    isAddingManualUser.value = false;
   }
 }
 
