@@ -3,6 +3,7 @@ import os
 import requests
 from datetime import datetime, timedelta
 import pytz
+from collections import defaultdict
 import uuid
 import hmac
 import hashlib
@@ -1062,41 +1063,79 @@ def api_cancel_my_appointment():
     else:
         return api_response(error="取消失敗，請稍後再試。", status_code=500)
 
-def _do_send_reminders(appointments: list) -> tuple[int, int]:
-    """發送提醒的核心邏輯"""
+def _do_send_reminders(appointments: list, reminder_type: str = 'daily') -> tuple[int, int]:
+    """
+    發送提醒的核心邏輯。
+    會將同一位使用者在同一天的預約合併成一則訊息發送。
+    """
     sent_count = 0
     failed_count = 0
 
-    # 從資料庫讀取訊息範本，若無則使用預設值
-    default_template = '提醒您，{user_name}，您的預約時間是 {date} {weekday} {time}，謝謝。'
-    template = db.get_config('message_template_reminder', default_template) or default_template
-    
+    if not appointments:
+        return 0, 0
+
+    # 1. 建立一個兩層的分組結構：user_id -> date -> [appointment_list]
+    user_appointments = defaultdict(list)
     for apt in appointments:
-        user_id = apt.get('user_id')
-        # 只對真實的 LINE 用戶 (ID 以 'U' 開頭) 發送提醒
-        if user_id and user_id.startswith('U'):
-            date_obj = datetime.strptime(apt['date'], '%Y-%m-%d')
-            weekday_names = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
-            weekday_name = weekday_names[date_obj.weekday()]
+        # 只處理真實的 LINE 用戶
+        if apt.get('user_id') and apt['user_id'].startswith('U'):
+            user_appointments[apt['user_id']].append(apt)
+
+    # 2. 遍歷每個使用者
+    for user_id, apt_list in user_appointments.items():
+        # 3. 在該使用者的預約中，再按日期進行分組
+        appointments_by_date = defaultdict(list)
+        for apt in apt_list:
+            appointments_by_date[apt['date']].append(apt)
+
+        # 4. 為每個日期建立並發送一則獨立的訊息
+        for date_str, daily_apt_list in appointments_by_date.items():
+            # 確保當天的預約按時間排序
+            daily_apt_list.sort(key=lambda x: x['time'])
             
-            # 準備用於範本的變數
-            message = template.format(
-                user_name=apt['user_name'],
-                date=f"{date_obj.month}月{date_obj.day}日",
-                weekday=weekday_name,
-                time=apt['time']
+            user_name = daily_apt_list[0]['user_name']
+            
+            # 取得提醒的日期關鍵字（例如 "今天" 或 "明天"）
+            apt_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            today = datetime.now(TAIPEI_TZ).date()
+            
+            if apt_date == today:
+                date_keyword = "今天"
+            elif apt_date == today + timedelta(days=1):
+                date_keyword = "明天"
+            else:
+                # 如果是更遠的日期，加上星期幾讓資訊更清楚
+                weekday_names = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
+                date_keyword = f" {weekday_names[apt_date.weekday()]}"
+
+            # 格式化所有預約時段
+            time_slots_str = ""
+            for apt in daily_apt_list:
+                time_obj = datetime.strptime(apt['time'], '%H:%M')
+                # 使用 12 小時制並替換 AM/PM，更符合台灣用法
+                time_str = time_obj.strftime('%p %I:%M').replace('AM', '上午').replace('PM', '下午')
+                time_slots_str += f"• {time_str}\n"
+                
+            # 組合最終的訊息內容
+            message = (
+                f"{user_name} 您好，\n"
+                f"提醒您{date_keyword} ({apt_date.strftime('%m/%d')}) 在我們這裡有以下預約時段：\n\n"
+                f"{time_slots_str.strip()}\n\n"
+                "期待您的光臨！如果需要更改或取消，請與我們聯繫。"
             )
             
+            # 5. 發送訊息
             success = send_line_message(
                 user_id=user_id,
                 messages=[{"type": "text", "text": message}],
-                message_type='reminder',
-                target_name=apt['user_name']
+                message_type=f'reminder_{reminder_type}',
+                target_name=user_name
             )
             if success:
                 sent_count += 1
             else:
                 failed_count += 1
+            
     return sent_count, failed_count
 
 @app.route("/api/admin/send_appointment_reminders", methods=["POST"])
@@ -1107,15 +1146,16 @@ def send_appointment_reminders():
     
     if send_type == 'day' and target_date:
         appointments = db.get_appointments_by_date_range(target_date, target_date)
+        reminder_type = 'day'
     else:
         week_dates = get_week_dates()
         start_date = week_dates[0]['date']
         end_date = week_dates[-1]['date']
         appointments = db.get_appointments_by_date_range(start_date, end_date)
+        reminder_type = 'week'
     
     appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
-    
-    sent_count, failed_count = _do_send_reminders(appointments)
+    sent_count, failed_count = _do_send_reminders(appointments, reminder_type)
     
     return api_response(data={"sent_count": sent_count, "failed_count": failed_count})
 
@@ -1252,7 +1292,7 @@ def set_config_api():
     
     if db.set_config(key, value, description):
         # 如果更新的是排程時間，動態更新排程器
-        if key.startswith('auto_reminder_'):
+        if scheduler and key.startswith('auto_reminder_'):
             try:
                 # 移除現有排程
                 scheduler.remove_job('daily_reminder_job')
@@ -1463,7 +1503,7 @@ def send_daily_reminders_job():
         appointments = db.get_appointments_by_date_range(today_str, today_str)
         appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
         if appointments:
-            sent, failed = _do_send_reminders(appointments)
+            sent, failed = _do_send_reminders(appointments, 'daily')
             print(f"每日提醒發送完成: {sent} 成功, {failed} 失敗。")
         else:
             print("今日無預約，不執行提醒。")
@@ -1479,7 +1519,7 @@ def send_weekly_reminders_job():
         appointments = db.get_appointments_by_date_range(start_date, end_date)
         appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
         if appointments:
-            sent, failed = _do_send_reminders(appointments)
+            sent, failed = _do_send_reminders(appointments, 'weekly')
             print(f"每週提醒發送完成: {sent} 成功, {failed} 失敗。")
         else:
             print("下週無預約，不執行提醒。")
