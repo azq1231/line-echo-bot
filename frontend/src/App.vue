@@ -26,14 +26,19 @@
 
     <!-- Schedule Grid -->
     <div v-else class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 md:tw-grid-cols-3 lg:tw-grid-cols-5 tw-gap-3 tw-pb-4">
-      {{ console.log('DEBUG: v-else block is being rendered.') }}
-      <div v-for="dayData in weekSchedule" :key="dayData.date_info.date" class="tw-bg-white tw-rounded-lg tw-p-3 tw-shadow-lg tw-flex tw-flex-col tw-gap-y-3">
-        <div class="tw-bg-gradient-to-r tw-from-indigo-600 tw-to-purple-700 tw-text-white tw-p-2.5 tw-rounded-md tw-text-center">
+      <div v-for="dayData in weekSchedule" :key="dayData.date_info.date" 
+           class="tw-rounded-lg tw-p-3 tw-shadow-lg tw-flex tw-flex-col tw-gap-y-3"
+           :class="dayData.is_closed ? 'tw-bg-gray-100' : 'tw-bg-white'">
+        <div 
+          class="tw-text-white tw-p-2.5 tw-rounded-md tw-text-center"
+          :class="dayData.is_closed ? 'tw-bg-gray-400' : 'tw-bg-gradient-to-r tw-from-indigo-600 tw-to-purple-700'">
           <h3 class="tw-text-base tw-font-bold">{{ dayData.date_info.day_name }}</h3>
           <p class="tw-text-sm tw-opacity-90">{{ dayData.date_info.display }}</p>
         </div>
         <div class="tw-flex-grow tw-space-y-1">
-          <div v-if="dayData.is_closed" class="tw-text-center tw-text-red-600 tw-font-bold tw-p-5 tw-bg-red-50 tw-rounded-md">😴<br>本日休診</div>
+          <div v-if="dayData.is_closed" class="tw-flex-grow tw-flex tw-items-center tw-justify-center tw-text-center tw-text-gray-500 tw-font-bold tw-p-5 tw-bg-gray-200 tw-rounded-md">
+            😴<br>本日休診
+          </div>
           <template v-else>
 
             <div v-for="(apt, time, index) in dayData.appointments" :key="time" class="tw-flex tw-items-center tw-gap-2">
@@ -299,18 +304,8 @@ async function loadSchedule() {
 
     groupedUsers.value = groupUsersByZhuyin(allUsers.value); // <--- Re-group users here
 
-    const schedule = response.data.week_schedule || {};
-
-    // The API doesn't explicitly provide an `is_closed` flag per day.
-    // We deduce it based on whether there are any appointment slots.
-    for (const dateKey in schedule) {
-        if (Object.prototype.hasOwnProperty.call(schedule, dateKey)) {
-            const day = schedule[dateKey];
-            // Ensure day.appointments is an object before accessing Object.keys
-            day.is_closed = !day.appointments || Object.keys(day.appointments).length === 0;
-        }
-    }
-    weekSchedule.value = schedule;
+    // 修正：直接使用後端傳來的 week_schedule，不再覆蓋 is_closed 狀態
+    weekSchedule.value = response.data.week_schedule || {};
     showStatus('✅ 資料已更新', 'success');
   } catch (error) {
     showStatus('❌ 排程載入失敗', 'error');

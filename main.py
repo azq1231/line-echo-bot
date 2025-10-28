@@ -650,8 +650,9 @@ def booking_page():
              day['is_closed'] = day['date'] in closed_days
              all_slots = generate_time_slots(day['weekday'])
              day['slots'] = []
-             for slot in all_slots:
-                 is_available = (day['date'], slot) not in booked_slots.keys() and not day['is_closed']
+             for slot in all_slots:                 
+                 # 修正：判斷時段是否可用時，必須同時檢查「是否已被預約」和「當天是否為休診日」
+                 is_available = (day['date'], slot) not in booked_slots and not day['is_closed']
                  
                  # 統一檢查時段是否已過去
                  if is_available:
@@ -942,12 +943,16 @@ def get_week_appointments():
     week_offset = int(request.args.get('offset', 0))
     print(f"get_week_appointments: offset={week_offset}")  # Add log
 
+    # 獲取週次日期範圍
     week_dates = get_week_dates(week_offset)
+    start_date = week_dates[0]['date']
+    end_date = week_dates[-1]['date']
 
     # 獲取所有用戶並確保 user_id 始終為字串
     all_users_raw = db.get_all_users()
     all_users = []
     for user in all_users_raw:
+        # 確保 user 物件的 id 相關欄位都是字串，避免前端出錯
         processed_user = user.copy()
         processed_user['user_id'] = str(user.get('user_id', '')) if user.get('user_id') is not None else ''
         processed_user['line_user_id'] = str(user.get('user_id', '')) if user.get('user_id') is not None else '' # 確保 line_user_id 也被處理
@@ -955,7 +960,11 @@ def get_week_appointments():
         all_users.append(processed_user)
     week_schedule = {}
     waiting_lists = db.get_waiting_lists_by_date_range(week_dates[0]['date'], week_dates[-1]['date'])
-    
+
+    # 修正：一次性獲取整週的休診日，以提高效率
+    all_closed_days = {day['date'] for day in db.get_all_closed_days()}
+
+    # 為每一天建立預約簿資料
     for date_info in week_dates:
         date_str = date_info['date']
         weekday = date_info['weekday']
@@ -975,6 +984,7 @@ def get_week_appointments():
         week_schedule[date_str] = {
             'date_info': date_info,
             'appointments': day_appointments,
+            'is_closed': date_str in all_closed_days, # 修正：加入休診狀態
             'waiting_list': waiting_lists.get(date_str, [])
         }
     
