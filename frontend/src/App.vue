@@ -481,10 +481,22 @@ async function handleDrop(date, time) {
 }
 
 async function sendWeekReminders() {
-  if (!confirm('確定要發送整週的預約提醒嗎？')) return;
+  // 修正：在確認訊息中加入日期範圍，讓管理員更清楚
+  const dates = Object.keys(weekSchedule.value).sort();
+  let dateRange = '';
+  if (dates.length > 0) {
+    const startDate = weekSchedule.value[dates[0]].date_info.display;
+    const endDate = weekSchedule.value[dates[dates.length - 1]].date_info.display;
+    dateRange = ` (${startDate} ~ ${endDate})`;
+  }
+
+  if (!confirm(`確定要發送「${weekTitle.value}」${dateRange} 的預約提醒嗎？`)) return;
   isSendingWeek.value = true;
   try {
-    const response = await axios.post('/api/admin/send_appointment_reminders', { type: 'week' });
+    const response = await axios.post('/api/admin/send_appointment_reminders', { 
+      type: 'week',
+      offset: currentWeekOffset.value // 修正：將當前的週次偏移量傳給後端
+    });
     const result = response.data;
     showStatus(`✅ 已發送 ${result.sent_count} 則提醒${result.failed_count > 0 ? `，${result.failed_count} 則失敗` : ''}`);
     if (result.sent_count > 0) weekReminderSent.value = true;

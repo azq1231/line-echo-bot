@@ -1301,7 +1301,7 @@ def set_config_api():
     
     if db.set_config(key, value, description):
         # 如果更新的是排程時間，動態更新排程器
-        if scheduler and key.startswith('auto_reminder_'):
+        if scheduler and key.startswith('auto_reminder_'): # 修正：確保 scheduler 物件存在
             try:
                 # 移除現有排程
                 scheduler.remove_job('daily_reminder_job')
