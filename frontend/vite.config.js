@@ -12,7 +12,8 @@ export default defineConfig({
         users: resolve(__dirname, 'users.html'), // 用戶管理
       },
     },
-    outDir: '../static', // 將打包結果直接輸出到 Flask 的 static 資料夾
+    manifest: true,       // 生成 manifest.json
+    outDir: '../static',  // 將打包結果直接輸出到 Flask 的 static 資料夾
     assetsDir: 'assets',
     emptyOutDir: true,
   },

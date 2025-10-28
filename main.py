@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify, render_template, flash, redirect, url_for, Response, session, send_from_directory
 import os
 import requests
+import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime, timedelta
 import pytz
 from collections import defaultdict
@@ -10,6 +12,7 @@ import hashlib
 from functools import wraps
 import base64
 import re
+import json
 import traceback
 
 # 导入数据库和 Flex Message 模块
@@ -32,6 +35,10 @@ if not app.secret_key:
     # 在生產環境中，FLASK_SECRET_KEY 必須被設定，否則會導致 session 失效
     raise ValueError("FLASK_SECRET_KEY 環境變數未設定。請在 .env 或環境中設定一個安全的隨機字串。")
 
+# 根據您的建議，強化 Session 安全性
+app.config['SESSION_PERMANENT'] = True
+app.permanent_session_lifetime = timedelta(hours=6)
+
 LINE_CHANNEL_TOKEN = os.getenv("LINE_CHANNEL_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 LINE_LOGIN_CHANNEL_ID = os.getenv("LINE_LOGIN_CHANNEL_ID")
@@ -40,6 +47,20 @@ TAIPEI_TZ = pytz.timezone('Asia/Taipei')
 
 # 初始化数据库
 db.init_database()
+
+# 配置日誌
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+if not logger.handlers:
+    # 根據您的建議，新增日誌輪替與檔案輸出
+    # 修正：明確指定 UTF-8 編碼，以解決在 Windows 上的 UnicodeEncodeError
+    file_handler = RotatingFileHandler('app.log', maxBytes=1_000_000, backupCount=3, encoding='utf-8')
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    
+    # 將 handler 同時應用到 app logger 和我們自訂的 logger
+    app.logger.addHandler(file_handler)
+    logger.addHandler(file_handler)
 
 # ============ API 輔助函式 ============
 
@@ -119,12 +140,47 @@ def api_error_handler(f):
             return api_response(error=f"伺服器內部發生未預期錯誤: {e}", status_code=500)
     return decorated_function
 
+def get_vue_assets(entry_point: str):
+    """
+    從 manifest.json 讀取 Vite 打包後的 JS 和 CSS 資源路徑。
+    這是一個更穩健的作法，取代了原本的 Regex 解析。
+
+    Args:
+        entry_point (str): 在 manifest.json 中的入口點鍵名 (例如 'index.html' 或 'users.html')。
+
+    Returns:
+        tuple[str | None, str | None]: (js_path, css_path)
+    """
+    static_folder = app.static_folder
+    if not static_folder:
+        logger.error("Flask static_folder is not configured. Cannot find manifest.json.")
+        return None, None
+
+    try:
+        # Now that we've checked, static_folder is guaranteed to be a string.
+        # 修正：Vite 會將 manifest.json 放在 .vite 子目錄下
+        manifest_path = os.path.join(static_folder, ".vite", "manifest.json")
+        with open(manifest_path, "r", encoding="utf-8") as f: # Corrected indentation
+            manifest = json.load(f)
+        
+        # 修正：直接使用傳入的 entry_point (例如 'index.html') 作為主鍵
+        entry = manifest.get(entry_point, {}) 
+        js_file = entry.get('file')
+        css_files = entry.get('css', [])
+
+        js_path = url_for('static', filename=js_file) if js_file else None
+        css_path = url_for('static', filename=css_files[0]) if css_files else None
+        return js_path, css_path
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        logger.warning(f"⚠️ 無法載入或解析 manifest.json: {e}. 請確認已在 frontend 目錄執行 'npm run build'")
+        return None, None
+
 # ============ LINE API 辅助函数 ============ 
 
 def validate_signature(body, signature):
     """验证 LINE webhook 签名"""
     if not LINE_CHANNEL_SECRET:
-        print("警告：未设置 LINE_CHANNEL_SECRET，跳过签名验证")
+        logger.warning("未设置 LINE_CHANNEL_SECRET，跳过签名验证")
         return True
     
     hash_obj = hmac.new(
@@ -148,12 +204,12 @@ def get_line_profile(user_id):
                 'name': profile.get('displayName', '未知'),
                 'picture_url': profile.get('pictureUrl')
             }
-            print(f"成功獲取用戶資料：{user_info['name']}")
+            logger.info(f"成功獲取用戶資料：{user_info['name']}")
             return user_info
         else:
-            print(f"LINE Profile API 錯誤: {response.text}")
+            logger.error(f"LINE Profile API 錯誤: {response.text}")
     except Exception as e:
-        print(f"獲取用戶資料時發生錯誤: {e}")
+        logger.error(f"獲取用戶資料時發生錯誤: {e}")
     return {'name': '未知', 'picture_url': None}
 
 def send_line_message(user_id, messages, message_type="message", target_name=None):
@@ -204,7 +260,7 @@ def send_line_message(user_id, messages, message_type="message", target_name=Non
                 error_message=error_msg,
                 message_excerpt=message_excerpt
             )
-            print(f"Error sending message: {error_msg}")
+            logger.error(f"Error sending message: {error_msg}")
             return False
     except Exception as e:
         error_msg = str(e)
@@ -217,7 +273,7 @@ def send_line_message(user_id, messages, message_type="message", target_name=Non
             error_message=error_msg,
             message_excerpt=message_excerpt
         )
-        print(f"Exception sending message: {error_msg}")
+        logger.error(f"Exception sending message: {error_msg}")
         return False
 
 def reply_message(user_id, text):
@@ -325,37 +381,9 @@ def admin_home():
 @admin_required
 def users_vue_page():
     """渲染用戶管理的 Vue.js 應用程式"""
-    try:
-        static_folder = app.static_folder
-        if not static_folder:
-            return "Error: Flask static folder is not configured.", 500
-
-        # 假設 Vite build 後的用戶管理頁面入口是 users.html
-        manifest_path = os.path.join(static_folder, "users.html")
-        with open(manifest_path, "r", encoding="utf-8") as f:
-            manifest_content = f.read()
-
-        # 從 HTML 內容中提取出 JS 檔案的相對路徑，例如 /assets/users-a1b2c3d4.js
-        js_relative_path_match = re.search(r'src="(/assets/users-.*?\.js)"', manifest_content)
-        css_relative_path_match = re.search(r'href="(/assets/users-.*?\.css)"', manifest_content)
-        
-        if not js_relative_path_match:
-            return "Error: Could not find Vue.js application assets in users.html. Please run 'npm run build'.", 500
-
-        # 使用 url_for('static', ...) 來產生包含正確 /static 前綴的完整 URL
-        # 我們需要移除開頭的 '/'，因為 url_for 會自動處理
-        js_filename = js_relative_path_match.group(1).lstrip('/')
-        final_js_path = url_for('static', filename=js_filename)
-
-        final_css_path = None
-        if css_relative_path_match:
-            css_filename = css_relative_path_match.group(1).lstrip('/')
-            final_css_path = url_for('static', filename=css_filename)
-
-        return render_template("admin_users_vue.html", js_path=final_js_path, css_path=final_css_path, user=session.get('user'))
-
-    except FileNotFoundError:
-        return "Error: users.html not found in frontend/dist. Please run 'npm run build' in the 'frontend' directory.", 404
+    # 使用新的工具函式來獲取資源路徑
+    js_path, css_path = get_vue_assets('users.html')
+    return render_template("admin_users_vue.html", js_path=js_path, css_path=css_path, user=session.get('user'))
 @app.route("/admin/schedule")
 @admin_required
 def schedule():
@@ -371,40 +399,9 @@ def appointments_page():
     Renders the Vue.js frontend for the appointments page by injecting the
     built asset paths into a Flask template that extends the base layout.
     """
-    try:
-        # Ensure static_folder is not None before proceeding
-        static_folder = app.static_folder
-        if not static_folder:
-            return "Error: Flask static folder is not configured.", 500
-
-        # Construct the path to the Vite-built index.html
-        manifest_path = os.path.join(static_folder, "index.html")
-        with open(manifest_path, "r", encoding="utf-8") as f:
-            manifest_content = f.read()
-
-        # Use more robust regex to find the asset paths
-        js_match = re.search(r'src="(/assets/main-.*?\.js)"', manifest_content)
-        css_match = re.search(r'href="(/assets/main-.*?\.css)"', manifest_content)
-        
-        if not js_match:
-            return "Error: Could not find Vue.js application assets. Please run 'npm run build' in the 'frontend' directory.", 500
-
-        # 使用 url_for 來產生包含正確 /static 前綴的完整 URL
-        js_filename = js_match.group(1).lstrip('/')
-        final_js_path = url_for('static', filename=js_filename)
-
-        final_css_path = None
-        if css_match:
-            css_filename = css_match.group(1).lstrip('/')
-            final_css_path = url_for('static', filename=css_filename)
-
-        # 渲染預約管理的 Vue.js 應用程式模板
-        return render_template("admin_appointments_vue.html", js_path=final_js_path, css_path=final_css_path, user=session.get('user'))
-
-    except FileNotFoundError:
-        return "Error: index.html not found in frontend/dist. Please run 'npm run build' in the 'frontend' directory.", 404
-    except Exception as e:
-        return f"An unexpected error occurred: {e}", 500
+    # 使用新的工具函式來獲取資源路徑
+    js_path, css_path = get_vue_assets('index.html')
+    return render_template("admin_appointments_vue.html", js_path=js_path, css_path=css_path, user=session.get('user'))
 
 @app.route("/admin/closed_days")
 @admin_required
@@ -960,7 +957,7 @@ def generate_zhuyin_route(user_id):
 @app.route("/api/admin/get_week_appointments")
 def get_week_appointments():
     week_offset = int(request.args.get('offset', 0))
-    print(f"get_week_appointments: offset={week_offset}")  # Add log
+    logger.debug(f"get_week_appointments: offset={week_offset}")  # Add log
 
     # 獲取週次日期範圍
     week_dates = get_week_dates(week_offset)
@@ -1033,7 +1030,7 @@ def save_appointment():
         db.add_appointment(user_id, user_name, date, time)
     
     # 如果是從備取來的，預約成功後就從備取名單中刪除
-    if waiting_list_item_id is not None: # 確保 waiting_list_item_id 存在
+    if waiting_list_item_id is not None:
         try:
             db.remove_from_waiting_list(int(waiting_list_item_id)) # 修正：強制轉換為整數
         except ValueError:
@@ -1550,20 +1547,20 @@ def handle_cancel_booking(user_id):
 def send_daily_reminders_job():
     """每日提醒的排程任務"""
     if db.get_config('auto_reminder_daily_enabled', 'false') == 'true':
-        print(f"[{datetime.now(TAIPEI_TZ)}] 執行每日自動提醒...")
+        logger.info("執行每日自動提醒...")
         today_str = datetime.now(TAIPEI_TZ).strftime('%Y-%m-%d')
         appointments = db.get_appointments_by_date_range(today_str, today_str)
         appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
         if appointments:
-            sent, failed = _do_send_reminders(appointments, 'daily')
-            print(f"每日提醒發送完成: {sent} 成功, {failed} 失敗。")
+            sent, failed = _do_send_reminders(appointments, 'daily') # 確保這裡的 _do_send_reminders 邏輯是正確的
+            logger.info(f"每日提醒發送完成: {sent} 成功, {failed} 失敗。")
         else:
-            print("今日無預約，不執行提醒。")
+            logger.info("今日無預約，不執行提醒。")
 
 def send_weekly_reminders_job():
     """每週提醒的排程任務"""
     if db.get_config('auto_reminder_weekly_enabled', 'false') == 'true':
-        print(f"[{datetime.now(TAIPEI_TZ)}] 執行每週自動提醒...")
+        logger.info("執行每週自動提醒...")
         # 預設為下週的預約
         week_dates = get_week_dates(week_offset=1)
         start_date = week_dates[0]['date']
@@ -1571,10 +1568,10 @@ def send_weekly_reminders_job():
         appointments = db.get_appointments_by_date_range(start_date, end_date)
         appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
         if appointments:
-            sent, failed = _do_send_reminders(appointments, 'weekly')
-            print(f"每週提醒發送完成: {sent} 成功, {failed} 失敗。")
+            sent, failed = _do_send_reminders(appointments, 'weekly') # 確保這裡的 _do_send_reminders 邏輯是正確的
+            logger.info(f"每週提醒發送完成: {sent} 成功, {failed} 失敗。")
         else:
-            print("下週無預約，不執行提醒。")
+            logger.info("下週無預約，不執行提醒。")
 
 def send_custom_schedules_job():
     """處理自訂排程訊息的背景任務"""
@@ -1583,7 +1580,7 @@ def send_custom_schedules_job():
         if not schedules_to_send:
             return
 
-        print(f"[{datetime.now(TAIPEI_TZ)}] 發現 {len(schedules_to_send)} 個待發送的排程...")
+        logger.info(f"發現 {len(schedules_to_send)} 個待發送的排程...")
         for schedule in schedules_to_send:
             success = send_line_message(
                 user_id=schedule['user_id'],
@@ -1594,7 +1591,7 @@ def send_custom_schedules_job():
             
             new_status = 'sent' if success else 'failed'
             db.update_schedule_status(schedule['id'], new_status)
-            print(f"  - 排程 {schedule['id']} 發送給 {schedule['user_name']}，狀態: {new_status}")
+            logger.info(f"排程 {schedule['id']} 發送給 {schedule['user_name']}，狀態: {new_status}")
 
 @app.route("/admin/add_schedule", methods=["POST"])
 @admin_required
@@ -1637,26 +1634,26 @@ def delete_schedule_route(schedule_id):
 @app.cli.command("set-admin")
 def set_admin_command():
     """互動式設定管理員指令"""
-    print("--- 設定管理員 ---")
+    logger.info("--- 設定管理員 ---")
     users = db.get_all_users()
     if not users:
-        print("資料庫中沒有任何使用者。請先至少讓一位使用者登入系統。")
+        logger.warning("資料庫中沒有任何使用者。請先至少讓一位使用者登入系統。")
         return
 
     for i, user in enumerate(users):
         admin_tag = "[管理員]" if user.get('is_admin') else ""
-        print(f"{i + 1}: {user['name']} ({user['user_id']}) {admin_tag}")
+        logger.info(f"{i + 1}: {user['name']} ({user['user_id']}) {admin_tag}")
     
     try:
         choice = int(input("請輸入要設為管理員的使用者編號: ")) - 1
         if 0 <= choice < len(users):
             user_to_set = users[choice]
             db.update_user_admin_status(user_to_set['user_id'], True)
-            print(f"✅ 已成功將 '{user_to_set['name']}' 設為管理員。")
+            logger.info(f"已成功將 '{user_to_set['name']}' 設為管理員。")
         else:
-            print("❌ 無效的選擇。")
+            logger.error("無效的選擇。")
     except ValueError:
-        print("❌ 請輸入數字。")
+        logger.error("請輸入數字。")
 
 if __name__ == "__main__":
     # 透過環境變數來決定是否開啟除錯模式
@@ -1683,12 +1680,8 @@ if __name__ == "__main__":
         scheduler.add_job(func=send_custom_schedules_job, trigger='interval', minutes=1, id='custom_schedule_job')
 
         scheduler.start()
-        print("排程器已在生產模式下啟動。")
-        try:
-            app.run(host="0.0.0.0", port=5000, debug=False)
-        except (KeyboardInterrupt, SystemExit):
-            if scheduler and scheduler.running:
-                scheduler.shutdown()
+        logger.info("排程器已在生產模式下啟動。")
+        app.run(host="0.0.0.0", port=5000, debug=False)
     else:
         # 在除錯模式下，不使用 try/except 包裹，讓 Flask reloader 自行處理
         app.run(host="0.0.0.0", port=5000, debug=True)
