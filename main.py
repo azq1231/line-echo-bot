@@ -1033,8 +1033,11 @@ def save_appointment():
         db.add_appointment(user_id, user_name, date, time)
     
     # 如果是從備取來的，預約成功後就從備取名單中刪除
-    if waiting_list_item_id:
-        db.remove_from_waiting_list(waiting_list_item_id)
+    if waiting_list_item_id is not None: # 確保 waiting_list_item_id 存在
+        try:
+            db.remove_from_waiting_list(int(waiting_list_item_id)) # 修正：強制轉換為整數
+        except ValueError:
+            print(f"警告：無法將 waiting_list_item_id '{waiting_list_item_id}' 轉換為整數。")
 
     return api_response()
 

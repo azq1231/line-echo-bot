@@ -47,7 +47,7 @@
                 class="tw-relative tw-flex-1"
                 @dragover.prevent="handleDragOver(dayData.date_info.date, time, apt)"
                 @dragleave="handleDragLeave(dayData.date_info.date, time)"
-                @drop="handleDrop(dayData.date_info.date, time)"
+                @drop.prevent="handleDrop(dayData.date_info.date, time)"
                 :class="{ 'tw-bg-green-100 tw-border-green-400': isDragOver(`${dayData.date_info.date}-${time}`) }"
               >
                 <div 
@@ -389,7 +389,9 @@ async function selectUser(date, time, userId, userName, waitingListItemId = null
   showStatus('儲存中...', 'info');
   try {
     const response = await axios.post('/api/admin/save_appointment', {
-      date, time, user_id: userId, user_name: userName, waiting_list_item_id: waitingListItemId
+      date, time, user_id: userId, user_name: userName, 
+      // 修正：確保 waiting_list_item_id 是一個數字或 null
+      waiting_list_item_id: typeof waitingListItemId === 'number' ? waitingListItemId : null
     });
     if (response.data.status === 'success') {
       showStatus('✅ 預約已儲存', 'success');
