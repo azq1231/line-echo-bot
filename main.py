@@ -1118,10 +1118,9 @@ def _do_send_reminders(appointments: list, reminder_type: str = 'daily') -> tupl
                 
             # 組合最終的訊息內容
             message = (
-                f"{user_name} 您好，\n"
-                f"提醒您{date_keyword} ({apt_date.strftime('%m/%d')}) 在我們這裡有以下預約時段：\n\n"
+                f"您好，提醒您{date_keyword} ({apt_date.strftime('%m/%d')}) 有預約以下時段：\n\n"
                 f"{time_slots_str.strip()}\n\n"
-                "期待您的光臨！如果需要更改或取消，請與我們聯繫。"
+                "如果需要更改或取消，請與我們聯繫，謝謝！。"
             )
             
             # 5. 發送訊息
