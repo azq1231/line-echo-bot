@@ -374,7 +374,7 @@ function renderUserOptions(zhuyinInitial) {
   selectStep.value = 2;
 }
 
-async function selectUser(date, time, userId, userName) {
+async function selectUser(date, time, userId, userName, waitingListItemId = null) {
   const originalUserId = weekSchedule.value[date]?.appointments[time]?.user_id;
   const originalUserName = weekSchedule.value[date]?.appointments[time]?.user_name;
 
@@ -389,7 +389,7 @@ async function selectUser(date, time, userId, userName) {
   showStatus('儲存中...', 'info');
   try {
     const response = await axios.post('/api/admin/save_appointment', {
-      date, time, user_id: userId, user_name: userName, waiting_list_item_id: draggedItem.value?.id
+      date, time, user_id: userId, user_name: userName, waiting_list_item_id: waitingListItemId
     });
     if (response.data.status === 'success') {
       showStatus('✅ 預約已儲存', 'success');
@@ -471,7 +471,7 @@ function handleDragLeave(date, time) {
 
 async function handleDrop(date, time) {
   if (draggedItem.value && dragOverTarget.value === `${date}-${time}`) {
-    await selectUser(date, time, draggedItem.value.user_id, draggedItem.value.user_name);
+    await selectUser(date, time, draggedItem.value.user_id, draggedItem.value.user_name, draggedItem.value.id);
     // After successful drop and save, the backend will remove the waiting list item.
     // We just need to update the UI.
     weekSchedule.value[date].waiting_list = weekSchedule.value[date].waiting_list.filter(item => item.id !== draggedItem.value.id);

@@ -223,13 +223,26 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ key: key, value: value })
             });
-            const result = await response.json();
+            // 嘗試先讀取為純文字，再解析為 JSON（若伺服器回傳 HTML 錯誤頁面或其他非 JSON，將能在 console 中看到原始內容）
+            const text = await response.text();
+            let result = null;
+            try {
+                result = JSON.parse(text);
+            } catch (e) {
+                console.error('非 JSON 回應:', text);
+            }
+
             if (response.ok) {
-                showAlert(result.message, 'success');
+                const msg = (result && result.message) ? result.message : '配置已更新';
+                console.log('set_config 成功:', response.status, msg);
+                showAlert(msg, 'success');
             } else {
-                showAlert(result.message || '更新失敗', 'danger');
+                const errMsg = (result && result.message) ? result.message : `更新失敗 (HTTP ${response.status})`;
+                console.error('set_config 錯誤:', response.status, text);
+                showAlert(errMsg, 'danger');
             }
         } catch (error) {
+            console.error('fetch 發生錯誤:', error);
             showAlert('網路錯誤，請稍後再試。', 'danger');
         }
     }
