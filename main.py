@@ -736,7 +736,6 @@ def booking_history_page():
 # ============ 後台使用者管理 API (需要 admin_required 保護) ============ 
 
 @app.route('/api/admin/users', methods=['GET']) # 新增：獲取所有使用者列表
-@api_error_handler
 @admin_required
 def api_get_users():
     """
@@ -766,7 +765,6 @@ def api_get_users():
     return api_response(data={"users": users_data, "current_admin_id": current_admin_id, "allow_user_deletion": allow_deletion})
 
 @app.route('/api/admin/users/<string:user_id>/toggle_admin', methods=['POST']) # 新增：切換管理員狀態
-@api_error_handler
 @admin_required
 def api_toggle_admin(user_id):
     """
@@ -793,7 +791,6 @@ def api_toggle_admin(user_id):
         return api_response(error="更新管理員權限失敗。", status_code=500)
 
 @app.route('/api/admin/users/add_manual', methods=['POST'])
-@api_error_handler
 @admin_required
 def api_add_manual_user():
     """手動新增臨時用戶"""
@@ -822,7 +819,6 @@ def api_add_manual_user():
         return api_response(error="新增臨時用戶時發生錯誤。", status_code=500)
 
 @app.route('/api/admin/users/merge', methods=['POST'])
-@api_error_handler
 @admin_required
 def api_merge_users():
     """合併用戶"""
@@ -844,7 +840,6 @@ def api_merge_users():
         return api_response(error="合併用戶時發生錯誤，請檢查後台日誌。", status_code=500)
 
 @app.route('/api/admin/users/<string:user_id>', methods=['DELETE'])
-@api_error_handler
 @admin_required
 def api_delete_user(user_id):
     """刪除指定用戶"""
@@ -856,7 +851,6 @@ def api_delete_user(user_id):
 
 
 @app.route("/admin/refresh_user_profile/<user_id>", methods=["POST"])
-@api_error_handler
 def refresh_user_profile(user_id):
     """手動從 LINE 更新用戶的個人資料（特別是頭像）"""
     user_info = get_line_profile(user_id)
@@ -891,7 +885,6 @@ def user_avatar(user_id):
         return send_from_directory('static', 'nohead.png')
 
 @admin_required
-@api_error_handler
 @app.route("/admin/update_user_name", methods=["POST"])
 def update_user_name():
     data = request.get_json()
@@ -907,7 +900,6 @@ def update_user_name():
         return api_response(error="找不到用戶", status_code=404)
 
 @admin_required
-@api_error_handler
 @app.route("/admin/update_user_zhuyin", methods=["POST"])
 def update_user_zhuyin_route():
     data = request.get_json()
@@ -923,7 +915,6 @@ def update_user_zhuyin_route():
         return api_response(error="更新失败", status_code=500)
 
 @admin_required
-@api_error_handler
 @app.route("/admin/update_user_phone", methods=["POST"])
 def update_user_phone_route():
     data = request.get_json()
@@ -940,7 +931,6 @@ def update_user_phone_route():
         return api_response(error="更新失敗", status_code=500)
 
 @admin_required
-@api_error_handler
 @app.route("/admin/update_user_address", methods=["POST"])
 def update_user_address_route():
     """更新用戶地址"""
@@ -957,7 +947,6 @@ def update_user_address_route():
         return api_response(error="更新失敗", status_code=500)
 
 @admin_required
-@api_error_handler
 @app.route("/admin/generate_zhuyin/<user_id>", methods=["POST"])
 def generate_zhuyin_route(user_id):
     new_zhuyin = db.generate_and_save_zhuyin(user_id)
@@ -969,7 +958,6 @@ def generate_zhuyin_route(user_id):
 # ============ 预约管理 API ============ 
 
 @app.route("/api/admin/get_week_appointments")
-@api_error_handler
 def get_week_appointments():
     week_offset = int(request.args.get('offset', 0))
     print(f"get_week_appointments: offset={week_offset}")  # Add log
@@ -1028,7 +1016,6 @@ def get_week_appointments():
     return jsonify(response_data)
 
 @app.route("/api/admin/save_appointment", methods=["POST"])
-@api_error_handler
 @admin_required
 def save_appointment():
     data = request.get_json()
@@ -1052,7 +1039,6 @@ def save_appointment():
     return api_response()
 
 @app.route("/api/book_appointment", methods=["POST"])
-@api_error_handler
 def api_book_appointment():
     """API for booking from the web interface"""
     if 'user' not in session:
@@ -1079,7 +1065,6 @@ def api_book_appointment():
         return api_response(error=f"抱歉，{date} {time} 的時段已被預約，請選擇其他時段。", status_code=409)
 
 @app.route("/api/cancel_my_appointment", methods=["POST"])
-@api_error_handler
 def api_cancel_my_appointment():
     """API for user to cancel their own appointment from the web."""
     if 'user' not in session:
@@ -1182,7 +1167,6 @@ def _do_send_reminders(appointments: list, reminder_type: str = 'daily') -> tupl
     return sent_count, failed_count
 
 @app.route("/api/admin/send_appointment_reminders", methods=["POST"])
-@api_error_handler
 def send_appointment_reminders():
     data = request.get_json()
     send_type = data.get('type', 'week')
@@ -1208,14 +1192,12 @@ def send_appointment_reminders():
 # ============ 休诊管理 API ============ 
 
 @admin_required
-@api_error_handler
 @app.route("/api/admin/closed_days")
 def get_closed_days():
     closed_days = db.get_all_closed_days()
     return api_response(data={"closed_days": closed_days})
 
 @app.route("/api/admin/set_closed_day", methods=["POST"])
-@api_error_handler
 @admin_required
 def set_closed_day():
     data = request.get_json()
@@ -1230,7 +1212,6 @@ def set_closed_day():
     return api_response(data={"message": f"已設定休診，取消了 {cancelled_count} 個預約"})
 
 @app.route("/api/admin/waiting_list", methods=["POST"])
-@api_error_handler
 @admin_required
 def add_to_waiting_list():
     data = request.get_json()
@@ -1248,7 +1229,6 @@ def add_to_waiting_list():
         return api_response(error="新增備取失敗", status_code=500)
 
 @app.route("/api/admin/waiting_list/<int:item_id>", methods=["DELETE"])
-@api_error_handler
 @admin_required
 def remove_from_waiting_list(item_id):
     if db.remove_from_waiting_list(item_id):
@@ -1257,7 +1237,6 @@ def remove_from_waiting_list(item_id):
         return api_response(error="移除失敗，找不到該項目", status_code=404)
 
 @app.route("/api/admin/remove_closed_day", methods=["POST"])
-@api_error_handler
 @admin_required
 def remove_closed_day():
     data = request.get_json()
@@ -1270,8 +1249,8 @@ def remove_closed_day():
 
 # ============ 可用時段 API ============
 @admin_required
+
 @app.route("/api/admin/slots", methods=["POST"])
-@api_error_handler
 def api_add_slot():
     data = request.get_json()
     if db.add_available_slot(data['weekday'], data['start_time'], data['end_time'], data.get('note')):
@@ -1281,7 +1260,6 @@ def api_add_slot():
 
 @admin_required
 @app.route("/api/admin/slots/<int:slot_id>", methods=["PUT"])
-@api_error_handler
 def api_update_slot(slot_id):
     data = request.get_json()
     if db.update_available_slot(
@@ -1298,7 +1276,6 @@ def api_update_slot(slot_id):
 
 @admin_required
 @app.route("/api/admin/slots/<int:slot_id>", methods=["DELETE"])
-@api_error_handler
 def api_delete_slot(slot_id):
     if db.delete_available_slot(slot_id):
         return api_response(data={"message": "時段已刪除"})
@@ -1307,7 +1284,6 @@ def api_delete_slot(slot_id):
 
 @admin_required
 @app.route("/api/admin/slots/copy", methods=["POST"])
-@api_error_handler
 def api_copy_slots():
     data = request.get_json()
     source_weekday = data.get('source_weekday')
@@ -1324,14 +1300,13 @@ def api_copy_slots():
 
 # ============ 系统配置 API ============ 
 @admin_required
+
 @app.route("/api/admin/configs")
-@api_error_handler
 def get_config_api():
     configs = db.get_all_configs()
     return api_response(data={"configs": configs})
 
 @app.route("/api/admin/set_config", methods=["POST"])
-@api_error_handler
 @admin_required
 def set_config_api():
     try:
@@ -1619,7 +1594,6 @@ def send_custom_schedules_job():
             print(f"  - 排程 {schedule['id']} 發送給 {schedule['user_name']}，狀態: {new_status}")
 
 @app.route("/admin/add_schedule", methods=["POST"])
-@api_error_handler
 @admin_required
 def add_schedule_route():
     import json
@@ -1638,14 +1612,12 @@ def add_schedule_route():
         return jsonify({"status": "error", "message": "新增排程失敗"}), 500
 
 @app.route("/admin/list_schedules")
-@api_error_handler
 @admin_required
 def list_schedules():
     schedules = db.get_all_schedules()
     return jsonify({"schedules": schedules, "count": len(schedules)})
 
 @app.route("/admin/delete_schedule/<schedule_id>", methods=["DELETE"])
-@api_error_handler
 @admin_required
 def delete_schedule_route(schedule_id):
     try:
