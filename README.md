@@ -1,100 +1,167 @@
-﻿# LINE Bot 智慧預約管理系統
+﻿# LINE 預約管理機器人 (LINE Appointment Booking Bot)
 
-一個功能強大的 LINE Bot 預約與會員管理系統，基於 Flask 和 SQLite 打造。系統不僅提供使用者透過 LINE 進行互動式預約，還包含一個功能完善的網頁後台，讓管理者可以輕鬆進行排程、會員、休診日與系統設定的管理。
+這是一個圍繞 LINE 平台建立的綜合性預約及後台管理系統。它為客戶提供了一個方便的 LINE 機器人來進行預約、查詢和取消，同時為管理員提供了一個功能強大的網頁後台來管理預約、使用者和系統設定。
 
-## 主要功能
+後台管理介面採用了現代化的前後端分離架構，前端由 Vue.js 驅動，後端由 Python Flask 提供 API 服務。
 
-### 👤 使用者端 (LINE & 網頁)
+ <!-- 建議替換成您的預約簿截圖 -->
 
-1.  **LINE 互動預約**
-    *   **關鍵字觸發**：輸入「預約」、「查詢」、「取消」等關鍵字，即可啟動對應功能。
-    *   **互動式卡片**：透過 Flex Message 卡片進行日期與時段的選擇，操作直觀。
-    *   **智慧過濾**：系統會自動隱藏已額滿或已過去的時段。
-    *   **預約管理**：可查詢未來預約，或一鍵取消最近的預約。
+---
 
-2.  **網頁預約與查詢**
-    *   **LINE 登入**：整合 LINE Login，確保使用者身份安全。
-    *   **視覺化預約 (`/booking/`)**：以週曆形式呈現可預約時段，點擊即可快速預約。
-    *   **預約紀錄 (`/booking/history`)**：登入後可查看所有「進行中」與「歷史」預約，並可直接在網頁上取消未來的預約。
+## ✨ 主要功能
 
-### ⚙️ 管理後台 (Web Admin Panel)
+### 👤 使用者端 (透過 LINE 機器人)
+- **互動式預約流程**：透過 Flex Message 進行視覺化的日期與時間選擇。
+- **查詢我的預約**：使用者可以隨時查詢未來的預約記錄。
+- **一鍵取消預約**：透過簡單的指令或按鈕快速取消預約。
+- **智慧預約提醒**：自動合併使用者在同一天的多個預約，並發送單一則提醒訊息，提供最佳體驗。
 
-1.  **總覽儀表板 (`/schedule`)**
-    *   以週曆表格呈現所有預約狀況，一目了然。
-    *   可直接在表格中為指定用戶手動新增或取消預約。
-    *   **快速帶入**：點選「同上」按鈕可複製前一時段的預約用戶，加速連續時段的登記。
-    *   支援手動觸發「本日」或「本週」的預約提醒訊息。
+### ⚙️ 管理員端 (網頁後台)
+- **Vue.js 預約簿**：動態、響應式的週曆格線，清晰展示所有預約時段。
+- **拖曳操作**：可將「備取名單」中的使用者直接拖曳到空的預約時段中。
+- **使用者管理**：
+  - 瀏覽所有與機器人互動過的使用者。
+  - 授予或移除管理員權限。
+  - 手動新增臨時用戶（用於電話預約等場景）。
+  - 合併重複的使用者帳號。
+- **排程設定**：
+  - 自訂每週各天的可用預約時段區間。
+  - 設定休診日，自動取消當天所有預約並防止新的預約。
+- **系統設定**：
+  - 功能開關：動態啟用或停用特定功能模組。
+  - 設定自動提醒的排程時間（每日提醒、每週提醒）。
+- **手動發送提醒**：可針對特定一天或一整週手動觸發預約提醒。
+- **訊息統計**：追蹤不同類型訊息（提醒、預約成功等）的發送狀況。
 
-2.  **用戶管理 (`/`)**
-    *   自動記錄所有互動過的使用者，並顯示其頭像、姓名、注音、電話。
-    *   支援**即時搜尋**功能，可依姓名或注音快速找到用戶。
-    *   可手動新增、編輯用戶資料，或從 LINE 重新同步。
+---
 
-3.  **休診管理 (`/closed_days`)**
-    *   可設定特定日期為休診日。
-    *   設定後，系統會**自動取消**該日所有已確認的預約，避免衝突。
+## 🛠️ 技術棧
 
-4.  **訊息統計 (`/stats`)**
-    *   記錄所有系統發送的訊息（如預約提醒、成功/失敗通知）。
-    *   提供圖表與數據，分析各類型訊息的發送成功率。
+- **後端**: Python, Flask, APScheduler
+- **前端**: Vue.js 3 (Composition API), Vite, Tailwind CSS, Axios
+- **資料庫**: SQLite
+- **平台**: LINE Messaging API, LINE Login
+- **部署**: Gunicorn (建議), Nginx (建議)
 
-5.  **全方位系統設定 (`/admin/configs`)**
-    *   **訊息範本客製化**：為了提供更個人化的體驗，管理者可直接在後台編輯發送給顧客的「預約提醒」訊息。支援 `{user_name}`, `{date}`, `{weekday}`, `{time}` 等變數，讓訊息既統一又具備彈性。
-    *   **功能模組化**：可根據實際需求，透過開關獨立啟用或關閉「排程管理」、「休診管理」、「線上預約」等核心功能模組。
-    *   **自動提醒排程**：可開啟自動提醒功能，並自訂「本日提醒」與「本週提醒」的發送時間。時間設定會即時更新排程，無需重啟服務。
-    *   **管理權限指派**：首位管理員設定完成後，即可在後台介面中方便地新增或移除其他管理員權限。
-    *   **預約規則調整**：可設定線上預約的開放週數（2週或4週），控制顧客可預約的未來時間範圍。
+---
 
-6.  **可自訂時段管理 (`/admin/settings/slots`)**
-    *   **動態班表**：管理者可在後台自由設定每週二至週六的可預約時段，無需修改程式碼。
-    *   **批次設定**：提供「複製週二設定」功能，一鍵將班表套用至其他工作日，大幅提升設定效率。
-    *   **即時同步**：所有時段的變更會即時反映在 LINE Bot 和網頁預約介面。
+## 🚀 安裝與啟動
 
-## 技術架構
+### 環境準備
+- Python 3.8+
+- Node.js 16+ 和 npm
 
-*   **後端框架**: Flask
-*   **資料庫**: SQLite
-*   **背景排程**: APScheduler (用於自動提醒)
-*   **AI 整合**: Gemini AI (用於智慧排程建議)
-*   **外部 API**: LINE Messaging API, LINE Login API
-*   **安全性**: Webhook 簽名驗證 (HMAC-SHA256)
+### 1. 複製專案
+```bash
+git clone https://github.com/your-username/your-repo-name.git
+cd your-repo-name
+```
 
-## 安裝與部署
+### 2. 後端設定
 
-詳細步驟請參考 `DEPLOYMENT_TUTORIAL.md` 文件。
+```bash
+# 建立並啟用虛擬環境
+python -m venv venv
+# Windows
+venv\Scripts\activate
+# macOS / Linux
+# source venv/bin/activate
 
-### 環境變數
+# 安裝 Python 依賴套件
+pip install -r requirements.txt
+```
 
-執行前需設定以下環境變數：
-*   `LINE_CHANNEL_TOKEN`: Messaging API 的 Channel Access Token
-*   `LINE_CHANNEL_SECRET`: Messaging API 的 Channel Secret
-*   `LINE_LOGIN_CHANNEL_ID`: LINE Login 的 Channel ID
-*   `LINE_LOGIN_CHANNEL_SECRET`: LINE Login 的 Channel Secret
-*   `FLASK_SECRET_KEY`: Flask 應用程式的密鑰 (用於 Session)
-*   `GEMINI_API_KEY`: Google Gemini 的 API 金鑰
+#### 環境變數
+複製 `.env.example` 為 `.env`，並填入您的 LINE Channel 和 Flask 的金鑰。
+```.env
+FLASK_SECRET_KEY='一個超級安全的隨機字串'
+LINE_CHANNEL_TOKEN='您的 Channel access token'
+LINE_CHANNEL_SECRET='您的 Channel secret'
+LINE_LOGIN_CHANNEL_ID='您的 LINE Login Channel ID'
+LINE_LOGIN_CHANNEL_SECRET='您的 LINE Login Channel Secret'
+```
 
-### 本地啟動
+### 3. 前端設定
 
-1.  安裝依賴：
+```bash
+# 進入前端目錄
+cd frontend
+
+# 安裝 Node.js 依賴套件
+npm install
+
+# 編譯前端專案，產生靜態檔案到 /static 目錄
+npm run build
+
+# 返回專案根目錄
+cd ..
+```
+
+### 4. 資料庫與管理員設定
+
+```bash
+# 首次執行時，程式會自動建立 appointments.db 資料庫檔案
+python main.py
+
+# (請先讓至少一個 LINE 帳號加入您的機器人好友，並登入一次網頁)
+
+# 開啟另一個終端機，設定第一位管理員
+venv\Scripts\activate
+flask set-admin
+```
+按照提示選擇一位使用者設為管理員。
+
+### 5. 啟動應用程式
+
+#### 開發模式
+1.  **啟動後端 (Flask)**：
     ```bash
-    pip install -r requirements.txt
-    ```
-2.  設定 `.env` 檔案。
-3.  啟動應用：
-    ```bash
+    # 確保虛擬環境已啟用
     python main.py
     ```
+2.  **啟動前端 (Vite Dev Server)**：
+    ```bash
+    # 開啟新終端機
+    cd frontend
+    npm run dev
+    ```
+    在開發模式下，請訪問 Vite 提供的網址 (例如 `http://localhost:5173`) 來查看前端頁面。
 
-## 專案結構
+#### 生產模式
+在生產環境中，請將 `.env` 中的 `FLASK_DEBUG` 設為 `false` 或移除。
+```bash
+# 直接執行 main.py 會以生產模式啟動，並啟用排程器
+python main.py
+```
+建議使用 Gunicorn + Nginx 進行部署以獲得更好的效能和穩定性。
 
-```plaintext
-├── main.py                 # 主應用程式
-├── database.py             # 資料庫操作模組
-├── gemini_ai.py            # Gemini AI 整合模組
-├── line_flex_messages.py   # LINE Flex Message 模板
-├── templates/              # HTML 網頁模板
-├── appointments.db         # SQLite 資料庫檔案
-├── requirements.txt        # Python 依賴列表
-├── DEPLOYMENT_TUTORIAL.md  # 部署指南
-└── README.md               # 本文件
+---
+
+## 📜 部署範例 (使用 systemd)
+
+您可以建立一個 systemd 服務檔案來管理您的應用程式。
+
+`/etc/systemd/system/mywebsite.service`:
+```ini
+[Unit]
+Description=Gunicorn instance for LINE Appointment Bot
+After=network.target
+
+[Service]
+User=your_user
+Group=www-data
+WorkingDirectory=/path/to/your/project
+Environment="PATH=/path/to/your/project/venv/bin"
+ExecStart=/path/to/your/project/venv/bin/gunicorn --workers 3 --bind unix:mywebsite.sock -m 007 main:app
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**管理服務**
+```bash
+sudo systemctl start mywebsite
+sudo systemctl enable mywebsite
+sudo systemctl status mywebsite
+sudo systemctl restart mywebsite
 ```
