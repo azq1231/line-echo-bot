@@ -669,14 +669,14 @@ def update_appointment_reply_status(appointment_id: int, status: str, last_reply
     # 根據狀態決定要更新哪些欄位
     if status == '已回覆':
         cursor.execute('''
-            UPDATE appointments 
-            SET reply_status = ?, last_reply = ?, reply_time = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', (status, last_reply, appointment_id))
+UPDATE appointments
+SET reply_status = ?, last_reply = ?, reply_time = ?
+WHERE id = ?
+''', (status, last_reply, datetime.now(pytz.timezone('Asia/Taipei')), appointment_id))
     elif status == '已確認':
         cursor.execute('''
-            UPDATE appointments SET reply_status = ?, confirm_time = ? WHERE id = ?
-        ''', (status, confirm_time, appointment_id))
+UPDATE appointments SET reply_status = ?, confirm_time = ? WHERE id = ?
+''', (status, confirm_time, appointment_id))
     elif status == '未回覆':
         # 修正：新增處理「未回覆」狀態的邏輯，將相關欄位重設為 NULL
         cursor.execute('''
