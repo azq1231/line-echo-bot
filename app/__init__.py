@@ -13,7 +13,7 @@ load_dotenv()
 # 導入資料庫模組，我們將在 create_app 中初始化它
 import database as db
 
-def create_app():
+def create_app(start_scheduler=True):
     """
     建立並設定 Flask 應用程式的工廠函式。
     """
@@ -92,11 +92,11 @@ def create_app():
         }
 
     # --- 初始化排程器 ---
-    # 只有在非除錯模式（通常是生產環境）下才啟動排程器
-    if not app.debug:
+    # 根據傳入的參數決定是否啟動排程器
+    if start_scheduler:
         from .scheduler import init_scheduler
         init_scheduler(app)
     else:
-        app.logger.info("除錯模式下，排程器未啟動。")
+        app.logger.info("此進程不啟動排程器。")
 
     return app

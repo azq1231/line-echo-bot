@@ -1,4 +1,4 @@
-﻿# LINE 預約管理機器人 (LINE Appointment Booking Bot)
+﻿﻿# LINE 預約管理機器人 (LINE Appointment Booking Bot)
 
 這是一個圍繞 LINE 平台建立的綜合性預約及後台管理系統。它為客戶提供了一個方便的 LINE 機器人來進行預約、查詢和取消，同時為管理員提供了一個功能強大的網頁後台來管理預約、使用者和系統設定。
 
@@ -152,7 +152,9 @@ User=your_user
 Group=www-data
 WorkingDirectory=/path/to/your/project
 Environment="PATH=/path/to/your/project/venv/bin"
-ExecStart=/path/to/your/project/venv/bin/gunicorn --workers 3 --bind unix:mywebsite.sock -m 007 main:app
+# --preload 參數是關鍵，它會讓 Gunicorn 在主進程中預先載入應用，
+# 確保排程器 (APScheduler) 只會被初始化一次，避免重複執行排程任務。
+ExecStart=/path/to/your/project/venv/bin/gunicorn --workers 3 --bind unix:mywebsite.sock -m 007 --preload main:app
 
 [Install]
 WantedBy=multi-user.target

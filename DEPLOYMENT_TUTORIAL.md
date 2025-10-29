@@ -134,8 +134,10 @@ WorkingDirectory=/var/www/myapp
 # 直接指定 .env 檔案的路徑，systemd 會自動載入所有變數
 EnvironmentFile=/var/www/myapp/.env
 
-# 確保 gunicorn 從虛擬環境中執行
-ExecStart=/var/www/myapp/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:5000 main:app
+# 確保 gunicorn 從虛擬環境中執行。
+# --preload 參數是關鍵，它會讓 Gunicorn 在主進程中預先載入應用，
+# 確保排程器 (APScheduler) 只會被初始化一次，避免重複執行排程任務。
+ExecStart=/var/www/myapp/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:5000 --preload main:app
 Restart=always
 
 [Install]
@@ -161,6 +163,7 @@ sudo systemctl enable mywebsite
 ## 四、日常維護
 
 *   **查看日誌**: `sudo journalctl -u mywebsite -f`
+*   **只顯示50條**: `sudo journalctl -u mywebsite -n 50 --no-pager`
 *   **備份資料庫**: `cp /var/www/myapp/appointments.db /var/www/myapp/appointments_backup_$(date +%Y%m%d).db`
 *   **更新代碼**:
     ```bash
