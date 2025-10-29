@@ -210,7 +210,7 @@
 
     async function loadSchedules() {
         try {
-            const response = await fetch('/admin/list_schedules');
+            const response = await fetch('/api/admin/schedule/list');
             const data = await response.json();
             const listEl = document.getElementById('scheduleList');
             const countEl = document.getElementById('scheduleCount');
@@ -289,7 +289,7 @@
         }
         const formattedTime = sendTime.replace('T', ' ');
         try {
-            const response = await fetch('/admin/add_schedule', {
+            const response = await fetch('/api/admin/schedule', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -321,7 +321,7 @@
             return;
         }
         try {
-            const response = await fetch(`/admin/delete_schedule/${scheduleId}`, {
+            const response = await fetch(`/api/admin/schedule/${scheduleId}`, {
                 method: 'DELETE'
             });
             const data = await response.json();

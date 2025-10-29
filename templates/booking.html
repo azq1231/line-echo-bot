@@ -109,23 +109,23 @@
     <!-- 已登入 -->
     <div class="user-profile">
         <div class="d-flex align-items-center">
-            <img src="{{ url_for('user_avatar', user_id=user.user_id) }}" alt="User Avatar">
+            <img src="{{ url_for('user.user_avatar_route', user_id=user.user_id) }}" alt="User Avatar">
             <div>
                 <h5 class="mb-0">歡迎，{{ user.name }}！</h5>
                 <small class="text-muted">請選擇您要預約的時段</small>
             </div>
         </div>
         <div>
-            <a href="{{ url_for('booking_history_page') }}" class="btn btn-sm btn-info text-white">我的預約</a>
-            <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-secondary">登出</a>
+            <a href="{{ url_for('booking.booking_history_page') }}" class="btn btn-sm btn-info text-white">我的預約</a>
+            <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-secondary">登出</a>
         </div>
     </div>
 
     {% if schedule %}
     <div class="week-navigation">
-        <a href="{{ url_for('booking_page', week_offset=week_offset - 1) }}" class="btn btn-outline-primary {% if week_offset <= 0 %}disabled{% endif %}">&laquo; 上週</a>
+        <a href="{{ url_for('booking.booking_page', week_offset=week_offset - 1) }}" class="btn btn-outline-primary {% if week_offset <= 0 %}disabled{% endif %}">&laquo; 上週</a>
         <h4>{{ schedule[0].display }} - {{ schedule[-1].display }}</h4>
-        <a href="{{ url_for('booking_page', week_offset=week_offset + 1) }}" class="btn btn-outline-primary {% if week_offset + 1 >= max_weeks %}disabled{% endif %}">&raquo; 下週</a>
+        <a href="{{ url_for('booking.booking_page', week_offset=week_offset + 1) }}" class="btn btn-outline-primary {% if week_offset + 1 >= max_weeks %}disabled{% endif %}">&raquo; 下週</a>
     </div>
 
     <div class="schedule-grid">
@@ -160,7 +160,7 @@
     <div class="login-prompt">
         <h2>請先登入</h2>
         <p class="lead text-muted">使用您的 LINE 帳號登入以進行預約。</p>
-        <a href="{{ url_for('login') }}" class="btn btn-lg btn-line-login">
+        <a href="{{ url_for('auth.login') }}" class="btn btn-lg btn-line-login">
             <i class="bi bi-line"></i> 使用 LINE 登入
         </a>
     </div>
@@ -195,7 +195,7 @@
         }
 
         try {
-            const response = await fetch("{{ url_for('api_book_appointment') }}", {
+            const response = await fetch("{{ url_for('booking.api_book_appointment') }}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

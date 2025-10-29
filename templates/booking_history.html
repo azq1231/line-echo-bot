@@ -84,7 +84,7 @@
     <div id="message-container"></div>
 
     {% if not user %}
-    <div class="alert alert-warning">請先<a href="{{ url_for('login') }}">登入</a>以查看您的預約紀錄。</div>
+    <div class="alert alert-warning">請先<a href="{{ url_for('auth.login') }}">登入</a>以查看您的預約紀錄。</div>
     {% else %}
         {% if future_appointments %}
         <h4>進行中的預約</h4>
@@ -151,7 +151,7 @@
         if (!confirm(`您確定要取消 ${date} ${time} 的預約嗎？`)) return;
 
         try {
-            const response = await fetch("{{ url_for('api_cancel_my_appointment') }}", {
+            const response = await fetch("{{ url_for('booking.api_cancel_my_appointment') }}", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ appointment_id: appointmentId }),

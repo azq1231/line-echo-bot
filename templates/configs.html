@@ -149,7 +149,7 @@
                     {% for admin in admins %}
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span>
-                                <img src="{{ url_for('user_avatar', user_id=admin.user_id) }}" class="rounded-circle me-2" width="30" height="30" alt="Avatar">
+                                <img src="{{ url_for('user.user_avatar_route', user_id=admin.user_id) }}" class="rounded-circle me-2" width="30" height="30" alt="Avatar">
                                 {{ admin.name }}
                             </span>
                             <small class="text-muted">{{ admin.user_id }}</small>
@@ -163,7 +163,7 @@
 
         <hr>
 
-        <form action="{{ url_for('set_admin_status') }}" method="POST">
+        <form action="{{ url_for('admin.set_admin_status') }}" method="POST">
             <div class="mb-3">
                 <label for="userIdInput" class="form-label">LINE User ID</label>
                 <input type="text" class="form-control" id="userIdInput" name="user_id" placeholder="請輸入要變更權限的 LINE User ID" required>
@@ -214,12 +214,17 @@
     }
 
     async function saveFeatureToggle(key, isEnabled) {
-        await updateConfig(key, isEnabled ? 'true' : 'false');
+        // 呼叫 updateConfig 並等待其完成
+        const updateSuccessful = await updateConfig(key, isEnabled ? 'true' : 'false');
+        // 如果更新成功，則在短暫延遲後重新載入頁面，以便讓使用者看到成功訊息
+        if (updateSuccessful) {
+            setTimeout(() => window.location.reload(), 500); // Reload to update navbar
+        }
     }
 
     async function updateConfig(key, value) {
         try {
-            const response = await fetch("{{ url_for('set_config_api') }}", {
+            const response = await fetch("{{ url_for('api_admin.set_config_api_admin') }}", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ key: key, value: value })
@@ -237,14 +242,17 @@
                 const msg = (result && result.message) ? result.message : '配置已更新';
                 console.log('set_config 成功:', response.status, msg);
                 showAlert(msg, 'success');
+                return true; // Indicate success
             } else {
                 const errMsg = (result && result.message) ? result.message : `更新失敗 (HTTP ${response.status})`;
                 console.error('set_config 錯誤:', response.status, text);
                 showAlert(errMsg, 'danger');
+                return false; // Indicate failure
             }
         } catch (error) {
             console.error('fetch 發生錯誤:', error);
             showAlert('網路錯誤，請稍後再試。', 'danger');
+            return false; // Indicate failure
         }
     }
 </script>

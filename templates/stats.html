@@ -164,7 +164,7 @@ function updateStats() {
     if (type) params.append('type', type);
     if (user) params.append('user', user);
 
-    window.location.href = `/stats?${params.toString()}`;
+    window.location.href = `{{ url_for('admin.stats_page') }}?${params.toString()}`;
 }
 
 document.addEventListener('DOMContentLoaded', function() {
