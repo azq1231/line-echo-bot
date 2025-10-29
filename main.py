@@ -7,9 +7,5 @@ load_dotenv()
 app = create_app()
 
 if __name__ == "__main__":
-    debug_mode = os.getenv("FLASK_DEBUG", "false").lower() in ['true', '1', 't']
-    
-    if not debug_mode:
-        app.run(host="0.0.0.0", port=5000, debug=False) 
-    else:
-        app.run(host="0.0.0.0", port=5000, debug=True)
+    # 透過環境變數 FLASK_DEBUG 來決定是否開啟除錯模式
+    app.run(host="0.0.0.0", port=5000)

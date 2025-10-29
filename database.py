@@ -571,8 +571,8 @@ def get_all_schedules() -> List[Dict]:
 def delete_schedule(schedule_id: int) -> bool:
     """刪除一個排程訊息"""
     conn = get_db()
-    cursor = conn.cursor()    
-    cursor.execute('DELETE FROM schedules WHERE id = ?', (schedule_id,))
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM schedules WHERE id = ?', [schedule_id])
     deleted = cursor.rowcount > 0
     conn.commit()
     conn.close()

@@ -6,20 +6,29 @@ from datetime import datetime
 import database as db
 from app.utils.decorators import admin_required, api_error_handler
 from app.utils.helpers import get_week_dates, generate_time_slots
-from app.scheduler.jobs import _do_send_reminders
+from app.scheduler.jobs import _do_send_reminders # 導入新的提醒函式
 from . import api_admin_bp
+
+def _truncate_name(name, limit=7):
+    """如果名稱長度超過限制，則截斷。"""
+    if name and len(name) > limit:
+        return name[:limit]
+    return name
 
 @api_admin_bp.route("/get_week_appointments")
 @api_error_handler
 def get_week_appointments():
     week_offset = int(request.args.get('offset', 0))
     week_dates = get_week_dates(week_offset)
-    start_date = week_dates[0]['date']
-    end_date = week_dates[-1]['date']
+    
+    # 取得所有用戶並預先截斷名稱
     all_users_raw = db.get_all_users()
     all_users = []
     for user in all_users_raw:
         processed_user = user.copy()
+        # 在此處截斷用戶列表中的名稱
+        if 'name' in processed_user and processed_user['name']:
+            processed_user['name'] = _truncate_name(processed_user['name'])
         processed_user['user_id'] = str(user.get('user_id', '')) if user.get('user_id') is not None else ''
         processed_user['line_user_id'] = str(user.get('user_id', '')) if user.get('user_id') is not None else ''
         processed_user['id'] = processed_user['user_id']
@@ -40,14 +49,21 @@ def get_week_appointments():
                 'id': apt.get('id') if apt else None,
                 'reply_status': apt.get('reply_status', '未回覆') if apt else '未回覆',
                 'last_reply': apt.get('last_reply', '') if apt else '',
-                'user_name': apt.get('user_name', '') if apt else '',
+                # 在此處截斷預約中的名稱
+                'user_name': _truncate_name(apt.get('user_name', '')) if apt else '',
                 'user_id': str(apt.get('user_id', '')) if apt and apt.get('user_id') is not None else ''
             }
+        
+        # 取得並處理備取名單
+        day_waiting_list = waiting_lists.get(date_str, [])
+        for item in day_waiting_list:
+            item['user_name'] = _truncate_name(item.get('user_name'))
+
         week_schedule[date_str] = {
             'date_info': date_info,
             'appointments': day_appointments,
             'is_closed': date_str in all_closed_days,
-            'waiting_list': waiting_lists.get(date_str, [])
+            'waiting_list': day_waiting_list
         }
     response_data = {
         'week_schedule': week_schedule,
@@ -97,7 +113,8 @@ def send_appointment_reminders():
         appointments = db.get_appointments_by_date_range(start_date, end_date)
         reminder_type = 'week'
     appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
-    sent_count, failed_count = _do_send_reminders(appointments, reminder_type)
+    # 直接使用 _do_send_reminders，並傳入當前的 app 物件
+    sent_count, failed_count = _do_send_reminders(current_app._get_current_object(), appointments, reminder_type)
     return jsonify({"status": "success", "sent_count": sent_count, "failed_count": failed_count})
 
 @api_admin_bp.route("/appointments/<int:appointment_id>/confirm_reply", methods=["POST"])

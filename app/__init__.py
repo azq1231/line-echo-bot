@@ -49,15 +49,23 @@ def create_app():
         db.init_database()
 
     # --- 設定日誌 ---
-    # 只有在沒有 handlers 的情況下才新增，避免在 debug 模式重載時重複新增
-    if not app.logger.handlers:
-        # 新增日誌輪替與檔案輸出
-        # 明確指定 UTF-8 編碼，以解決在 Windows 上的 UnicodeEncodeError
-        file_handler = RotatingFileHandler('app.log', maxBytes=1_000_000, backupCount=3, encoding='utf-8')
-        file_handler.setLevel(logging.INFO)
+    # 關鍵：設定 app logger 的等級，否則在生產模式下它只會處理 WARNING 等級以上的訊息
+    if not app.debug:
+        app.logger.setLevel(logging.INFO)
+
+    # 為了避免在 debug 模式重載時重複新增 handler，
+    # 我們檢查 logger 中是否已經有 RotatingFileHandler 類型的 handler。
+    if not any(isinstance(handler, RotatingFileHandler) for handler in app.logger.handlers):
+        # 建立一個日誌檔案處理器
+        file_handler = RotatingFileHandler(
+            'app.log', 
+            maxBytes=1_000_000, 
+            backupCount=3, 
+            encoding='utf-8'
+        )
+        file_handler.setLevel(logging.INFO) # 設定只記錄 INFO 等級以上的訊息
         file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-        
-        # 將 handler 應用到 app logger
+        # 將檔案處理器加入到 app 的 logger 中
         app.logger.addHandler(file_handler)
 
     # --- 註冊藍圖 (Blueprints) ---
@@ -82,5 +90,13 @@ def create_app():
             'feature_closed_days_enabled': db.get_config('feature_closed_days_enabled', 'true') != 'false',
             'feature_booking_enabled': db.get_config('feature_booking_enabled', 'true') != 'false',
         }
+
+    # --- 初始化排程器 ---
+    # 只有在非除錯模式（通常是生產環境）下才啟動排程器
+    if not app.debug:
+        from .scheduler import init_scheduler
+        init_scheduler(app)
+    else:
+        app.logger.info("除錯模式下，排程器未啟動。")
 
     return app

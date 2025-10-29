@@ -1,1 +1,1 @@
-2025-10-29 01:55:48,129 - __main__ - WARNING - ⚠️ 無法載入或解析 manifest.json: [Errno 2] No such file or directory: 'D:\\MyProjects\\line-echo-bot\\static\\manifest.json'. 請確認已在 frontend 目錄執行 'npm run build'
+2025-10-29 18:24:13,983 - app - INFO - 排程器已啟動。

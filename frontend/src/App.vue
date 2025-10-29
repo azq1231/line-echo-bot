@@ -51,16 +51,19 @@
                 @drop.prevent="handleDrop(dayData.date_info.date, time)"
                 :class="{ 'tw-bg-green-100 tw-border-green-400': isDragOver(`${dayData.date_info.date}-${time}`) }"
               > 
-                <div 
-                  class="tw-w-full tw-p-1.5 tw-border tw-text-sm tw-rounded tw-cursor-pointer tw-truncate tw-flex tw-justify-between tw-items-center" 
+                <div
+                  class="tw-w-full tw-p-1.5 tw-border tw-text-sm tw-rounded tw-cursor-pointer tw-flex tw-justify-between tw-items-center tw-min-w-0" 
                   :class="{ 
                     'tw-text-gray-500': !apt.user_id,
                     'tw-bg-red-200 tw-border-red-400 tw-text-red-800': apt.user_id?.startsWith('manual_'),
                     'tw-bg-white tw-border-gray-300 tw-text-gray-800': !apt.user_id?.startsWith('manual_'),
                     'tw-font-semibold': apt.user_id && apt.user_id.startsWith('manual_'),
                   }" 
-                  @click="toggleDropdown(dayData.date_info.date, time, index)">
-                  <span class="tw-truncate" :title="apt.user_name">{{ apt.user_name || '-- 未預約 --' }}</span>
+                  @click="toggleDropdown(dayData.date_info.date, time, index)"
+                  :title="apt.user_name || '未預約'">
+                  <span class="tw-truncate tw-flex-1 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-block">
+                        {{ apt.user_name || '-- 未預約 --' }}
+                  </span>
                   <!-- New Reply Status Indicator -->
                   <div v-if="apt.id" class="tw-flex tw-items-center tw-flex-shrink-0 tw-ml-2">
                     <span 
@@ -75,7 +78,7 @@
                   </div>
                   <span class="tw-ml-2 tw-text-gray-400 tw-text-xs">▼</span>
                 </div>
-                <div v-if="openSelect === `${dayData.date_info.date}-${time}`" class="tw-absolute tw-top-full tw-left-0 tw-right-0 tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mt-1">
+                <div v-if="openSelect === `${dayData.date_info.date}-${time}`" class="tw-absolute tw-top-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mt-1">
                   <div v-if="selectStep === 1">
                     <div v-if="previousUser" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-blue-600 tw-font-bold tw-border-b hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, previousUser.id, previousUser.name)">
                       ➡️ 同上 ({{ previousUser.name }})
@@ -112,7 +115,7 @@
             <div class="tw-relative tw-mt-2">
               <button @click="toggleWaitingListDropdown(dayData.date_info.date)" class="tw-w-full tw-text-xs tw-text-center tw-py-1.5 tw-bg-gray-100 hover:tw-bg-gray-200 tw-rounded-md tw-text-gray-600">+ 新增備取</button>
               <!-- Waiting List User Selection Dropdown -->
-              <div v-if="openSelect === `waiting-${dayData.date_info.date}`" class="tw-absolute tw-bottom-full tw-left-0 tw-right-0 tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mb-1">
+              <div v-if="openSelect === `waiting-${dayData.date_info.date}`" class="tw-absolute tw-bottom-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mb-1">
                 <div v-if="selectStep === 1">
                   <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
                     {{ key }}

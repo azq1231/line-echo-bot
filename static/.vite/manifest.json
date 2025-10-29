@@ -4,7 +4,7 @@
     "name": "runtime-dom.esm-bundler"
   },
   "index.html": {
-    "file": "assets/main-DPAXLoVN.js",
+    "file": "assets/main-DcqmEdCL.js",
     "name": "main",
     "src": "index.html",
     "isEntry": true,
@@ -12,7 +12,7 @@
       "_runtime-dom.esm-bundler-jAXvPR8n.js"
     ],
     "css": [
-      "assets/main-Bo7zHe5V.css"
+      "assets/main-ehHRbFtp.css"
     ]
   },
   "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff": {
