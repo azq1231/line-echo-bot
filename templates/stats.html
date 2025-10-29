@@ -148,11 +148,8 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// 準備圖表數據
-const STATS_DATA = {
-    dailyStats: JSON.parse('{{ stats.daily_stats|tojson }}'),
-    messageTypes: JSON.parse('{{ stats.message_types|tojson }}')
-};
+    // 修正：只宣告一次 STATS_DATA，並使用後端傳來的 JSON 字串進行解析
+    const STATS_DATA = JSON.parse('{{ stats_data_json|safe }}');
 
 // 頁面載入時設定篩選器的預設值
 document.getElementById('typeFilter').value = '{{ current_type or "" }}';
@@ -175,15 +172,15 @@ document.addEventListener('DOMContentLoaded', function() {
     new Chart(document.getElementById('dailyStats'), {
         type: 'line',
         data: {
-            labels: STATS_DATA.dailyStats.map(d => d.date),
+            labels: STATS_DATA.daily_stats.map(d => d.date),
             datasets: [{
                 label: '總發送',
-                data: STATS_DATA.dailyStats.map(d => d.total),
+                data: STATS_DATA.daily_stats.map(d => d.total),
                 borderColor: 'rgb(75, 192, 192)',
                 tension: 0.1
             }, {
                 label: '成功發送',
-                data: STATS_DATA.dailyStats.map(d => d.success),
+                data: STATS_DATA.daily_stats.map(d => d.success),
                 borderColor: 'rgb(54, 162, 235)',
                 tension: 0.1
             }]
@@ -202,9 +199,9 @@ document.addEventListener('DOMContentLoaded', function() {
     new Chart(document.getElementById('messageTypes'), {
         type: 'pie',
         data: {
-            labels: Object.keys(STATS_DATA.messageTypes),
+            labels: Object.keys(STATS_DATA.message_types),
             datasets: [{
-                data: Object.entries(STATS_DATA.messageTypes).map(([_, v]) => v.total),
+                data: Object.values(STATS_DATA.message_types).map(v => v.total),
                 backgroundColor: [
                     'rgb(255, 99, 132)',
                     'rgb(54, 162, 235)',

@@ -1,6 +1,8 @@
 import sqlite3
 from typing import List, Dict, Optional
 from pypinyin import pinyin, Style
+from datetime import datetime
+import pytz
 
 DB_FILE = 'appointments.db'
 
@@ -88,6 +90,18 @@ def init_database():
             FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
     ''')
+
+    # 安全地為 appointments 表添加新欄位，以支援回覆追蹤功能
+    cursor.execute("PRAGMA table_info(appointments)")
+    appointment_columns = [column[1] for column in cursor.fetchall()]
+    if 'reply_status' not in appointment_columns:
+        cursor.execute("ALTER TABLE appointments ADD COLUMN reply_status TEXT DEFAULT '未回覆'")
+    if 'last_reply' not in appointment_columns:
+        cursor.execute("ALTER TABLE appointments ADD COLUMN last_reply TEXT")
+    if 'reply_time' not in appointment_columns:
+        cursor.execute("ALTER TABLE appointments ADD COLUMN reply_time DATETIME")
+    if 'confirm_time' not in appointment_columns:
+        cursor.execute("ALTER TABLE appointments ADD COLUMN confirm_time DATETIME")
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS closed_days (
@@ -581,7 +595,7 @@ def get_pending_schedules_to_send() -> List[Dict]:
 
 # ==================== 预约管理 ====================
 
-def add_appointment(user_id: str, user_name: str, date: str, time: str, notes: Optional[str] = None) -> bool:
+def add_appointment(user_id: str, user_name: str, date: str, time: str, notes: Optional[str] = None) -> Optional[int]:
     """新增预约"""
     conn = get_db()
     cursor = conn.cursor()
@@ -590,11 +604,12 @@ def add_appointment(user_id: str, user_name: str, date: str, time: str, notes: O
             INSERT INTO appointments (user_id, user_name, date, time, notes)
             VALUES (?, ?, ?, ?, ?)
         ''', (user_id, user_name, date, time, notes))
+        new_id = cursor.lastrowid
         conn.commit()
-        return True
+        return new_id
     except sqlite3.IntegrityError:
         # 唯一性约束失败
-        return False
+        return None
     finally:
         conn.close()
 
@@ -620,6 +635,83 @@ def get_appointment_by_id(appointment_id: int) -> Optional[Dict]:
     conn.close()
     return dict(appointment) if appointment else None
 
+def get_closest_future_appointment(user_id: str) -> Optional[Dict]:
+    """
+    獲取指定用戶最近的一個未來預約。
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    # 獲取當前台北時間
+    now_in_taipei = datetime.now(pytz.timezone('Asia/Taipei'))
+    current_date = now_in_taipei.strftime('%Y-%m-%d')
+    current_time = now_in_taipei.strftime('%H:%M')
+
+    cursor.execute('''
+        SELECT * FROM appointments 
+        WHERE user_id = ? 
+        AND status = 'confirmed'
+        AND (date > ? OR (date = ? AND time >= ?))
+        ORDER BY date ASC, time ASC
+        LIMIT 1
+    ''', (user_id, current_date, current_date, current_time))
+    
+    appointment = cursor.fetchone()
+    conn.close()
+    return dict(appointment) if appointment else None
+
+def update_appointment_reply_status(appointment_id: int, status: str, last_reply: Optional[str] = None, confirm_time: Optional[datetime] = None) -> bool:
+    """
+    更新預約的回覆狀態。
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 根據狀態決定要更新哪些欄位
+    if status == '已回覆':
+        cursor.execute('''
+            UPDATE appointments 
+            SET reply_status = ?, last_reply = ?, reply_time = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (status, last_reply, appointment_id))
+    elif status == '已確認':
+        cursor.execute('''
+            UPDATE appointments SET reply_status = ?, confirm_time = ? WHERE id = ?
+        ''', (status, confirm_time, appointment_id))
+    elif status == '未回覆':
+        # 修正：新增處理「未回覆」狀態的邏輯，將相關欄位重設為 NULL
+        cursor.execute('''
+            UPDATE appointments SET reply_status = ?, last_reply = NULL, reply_time = NULL, confirm_time = NULL WHERE id = ?
+        ''', (status, appointment_id))
+    
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
+def update_user_day_reply_status(user_id: str, date: str, status: str) -> bool:
+    """
+    更新指定用戶在某一天的所有預約的回覆狀態。
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    now_str = datetime.now(pytz.timezone('Asia/Taipei')).strftime('%Y-%m-%d %H:%M:%S')
+
+    if status == '已確認':
+        cursor.execute('''
+            UPDATE appointments SET reply_status = ?, confirm_time = ? 
+            WHERE user_id = ? AND date = ?
+        ''', (status, now_str, user_id, date))
+    elif status == '未回覆':
+        cursor.execute('''
+            UPDATE appointments SET reply_status = ?, last_reply = NULL, reply_time = NULL, confirm_time = NULL 
+            WHERE user_id = ? AND date = ?
+        ''', (status, user_id, date))
+    
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
 
 def get_appointments_by_user(user_id: str) -> List[Dict]:
     """获取指定用户的所有预约"""

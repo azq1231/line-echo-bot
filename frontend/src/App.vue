@@ -14,7 +14,8 @@
       </div>
       <div class="tw-text-center tw-mt-3 tw-text-xs tw-text-gray-500 tw-space-y-1">
         <div>提醒按鈕：<span class="tw-font-semibold tw-text-gray-700">白色</span>=可發送, <span class="tw-font-semibold tw-text-blue-600">藍色</span>=已發送, <span class="tw-font-semibold tw-text-red-600">紅色</span>=無可提醒對象</div>
-        <div>預約時段：<span class="tw-px-1 tw-rounded tw-bg-red-200 tw-text-red-800 tw-font-semibold">紅色底</span> = 臨時用戶 (無法發送LINE提醒)</div>
+        <div>預約時段：<span class="tw-px-1 tw-py-0.5 tw-rounded tw-bg-red-200 tw-text-red-800 tw-font-semibold">紅色底</span> = 臨時用戶 (無法發送LINE提醒)</div>
+        <div class="tw-pt-1">狀態燈號說明：<span class="tw-font-mono">🔴</span>=未回覆, <span class="tw-font-mono">🟡</span>=已回覆(系統自動標記), <span class="tw-font-mono">🟢</span>=已確認(手動標記)。點擊燈號可手動切換狀態。</div>
       </div>
     </div>
 
@@ -49,17 +50,29 @@
                 @dragleave="handleDragLeave(dayData.date_info.date, time)"
                 @drop.prevent="handleDrop(dayData.date_info.date, time)"
                 :class="{ 'tw-bg-green-100 tw-border-green-400': isDragOver(`${dayData.date_info.date}-${time}`) }"
-              >
+              > 
                 <div 
                   class="tw-w-full tw-p-1.5 tw-border tw-text-sm tw-rounded tw-cursor-pointer tw-truncate tw-flex tw-justify-between tw-items-center" 
                   :class="{ 
                     'tw-text-gray-500': !apt.user_id,
                     'tw-bg-red-200 tw-border-red-400 tw-text-red-800': apt.user_id?.startsWith('manual_'),
                     'tw-bg-white tw-border-gray-300 tw-text-gray-800': !apt.user_id?.startsWith('manual_'),
-                    'tw-font-semibold': apt.user_id && apt.user_id.startsWith('manual_')
+                    'tw-font-semibold': apt.user_id && apt.user_id.startsWith('manual_'),
                   }" 
                   @click="toggleDropdown(dayData.date_info.date, time, index)">
-                  {{ apt.user_name || '-- 未預約 --' }}
+                  <span class="tw-truncate" :title="apt.user_name">{{ apt.user_name || '-- 未預約 --' }}</span>
+                  <!-- New Reply Status Indicator -->
+                  <div v-if="apt.id" class="tw-flex tw-items-center tw-flex-shrink-0 tw-ml-2">
+                    <span 
+                      class="tw-text-xs tw-font-mono tw-cursor-pointer" 
+                      :title="`點擊以變更狀態\n目前: ${apt.reply_status}\n內容: ${apt.last_reply || '無'}`"
+                      @click.stop="cycleReplyStatus(apt, dayData.date_info.date, time)">
+                      {{ statusIcon(apt.reply_status) }}
+                    </span>
+                    <button v-if="apt.reply_status === '已回覆'" @click.stop="confirmReply(apt.id, dayData.date_info.date, time)" title="確認回覆" class="tw-ml-1 tw-px-1.5 tw-py-0.5 tw-text-xs tw-bg-green-500 tw-text-white tw-rounded hover:tw-bg-green-600">
+                      ✅
+                    </button>
+                  </div>
                   <span class="tw-ml-2 tw-text-gray-400 tw-text-xs">▼</span>
                 </div>
                 <div v-if="openSelect === `${dayData.date_info.date}-${time}`" class="tw-absolute tw-top-full tw-left-0 tw-right-0 tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mt-1">
@@ -276,6 +289,15 @@ function dayButtonClass(dayData) {
   return 'tw-bg-white tw-text-gray-700 tw-border tw-border-gray-300 hover:tw-bg-gray-50';
 }
 
+const statusIcon = (status) => {
+  switch (status) {
+    case "未回覆": return "🔴";
+    case "已回覆": return "🟡";
+    case "已確認": return "🟢";
+    default: return "⚪️"; // Default or unknown status
+  }
+};
+
 
 // --- Methods ---
 function showStatus(message, type = 'success', duration = 3000) {
@@ -382,8 +404,19 @@ async function selectUser(date, time, userId, userName, waitingListItemId = null
 
   // Optimistically update UI
   if (weekSchedule.value[date] && weekSchedule.value[date].appointments[time]) {
-    weekSchedule.value[date].appointments[time].user_id = userId; // This might be a waiting list item ID
-    weekSchedule.value[date].appointments[time].user_name = userName;
+    const targetSlot = weekSchedule.value[date].appointments[time];
+    targetSlot.user_id = userId;
+    targetSlot.user_name = userName;
+    // 修正：當新增預約時，如果原本沒有預約，則手動賦予預設狀態以供 UI 即時更新
+    if (!originalUserId && userId) {
+      targetSlot.id = Date.now(); // 臨時 ID，儲存後會被後端 ID 取代
+      targetSlot.reply_status = '未回覆';
+    } else if (originalUserId && !userId) {
+      // 修正：當清除預約時，重設所有相關狀態
+      targetSlot.id = null;
+      targetSlot.reply_status = '未回覆';
+      targetSlot.last_reply = '';
+    }
   }
 
   showStatus('儲存中...', 'info');
@@ -395,6 +428,14 @@ async function selectUser(date, time, userId, userName, waitingListItemId = null
     });
     if (response.data.status === 'success') {
       showStatus('✅ 預約已儲存', 'success');
+      // 修正：不再重新載入整個排程，而是使用後端回傳的新預約資料來更新 UI
+      const newAppointment = response.data.appointment;
+      if (newAppointment && weekSchedule.value[date] && weekSchedule.value[date].appointments[time]) {
+        const targetSlot = weekSchedule.value[date].appointments[time];
+        targetSlot.id = newAppointment.id;
+        targetSlot.reply_status = newAppointment.reply_status;
+        targetSlot.last_reply = newAppointment.last_reply;
+      }
     } else {
       throw new Error(response.data.message || '儲存失敗');
     }
@@ -521,6 +562,86 @@ async function sendDayReminders(date, dayName) {
     showStatus('❌ 發送失敗', 'error');
   } finally {
     isSendingDay.value[date] = false;
+  }
+}
+
+async function cycleReplyStatus(appointment, date, time) {
+  // --- NEW: Smart Confirmation Logic ---
+  const dayAppointments = Object.values(weekSchedule.value[date].appointments);
+  const otherAppointments = dayAppointments.filter(apt => 
+    apt.id !== appointment.id && apt.user_id === appointment.user_id
+  );
+
+  if (otherAppointments.length > 0 && (appointment.reply_status === '未回覆' || appointment.reply_status === '已回覆')) {
+    if (confirm(`「${appointment.user_name}」在 ${date} 還有其他 ${otherAppointments.length} 個預約，要將當日所有預約一併標示為「已確認」嗎？`)) {
+      showStatus('批次確認中...', 'info');
+      try {
+        const response = await axios.post('/api/admin/confirm_user_day_replies', {
+          user_id: appointment.user_id,
+          date: date
+        });
+        if (response.data.status === 'success') {
+          // Optimistically update UI for all appointments of this user on this day
+          dayAppointments.forEach(apt => {
+            if (apt.user_id === appointment.user_id) {
+              apt.reply_status = '已確認';
+            }
+          });
+          showStatus('✅ 已批次確認完畢', 'success');
+        } else {
+          throw new Error(response.data.message || '批次確認失敗');
+        }
+      } catch (error) {
+        showStatus(`❌ 批次確認失敗: ${error.message || '未知錯誤'}`, 'error');
+      }
+      return; // End execution here
+    }
+  }
+  // --- End of new logic. Fallback to single update below. ---
+
+  const currentStatus = appointment.reply_status;
+  const statuses = ['未回覆', '已回覆', '已確認'];
+  let nextStatus;
+
+  // 定義狀態循環邏輯：未回覆 -> 已確認, 已回覆 -> 已確認, 已確認 -> 未回覆
+  if (currentStatus === '未回覆' || currentStatus === '已回覆') {
+    nextStatus = '已確認';
+  } else {
+    nextStatus = '未回覆';
+  }
+
+  showStatus('更新狀態中...', 'info');
+  try {
+    const response = await axios.put(`/api/admin/appointments/${appointment.id}/reply_status`, { status: nextStatus });
+    if (response.data.status === 'success') {
+      // Optimistically update the UI
+      if (weekSchedule.value[date] && weekSchedule.value[date].appointments[time]) {
+        weekSchedule.value[date].appointments[time].reply_status = nextStatus;
+      }
+      showStatus(`✅ 狀態已更新為「${nextStatus}」`, 'success');
+    } else {
+      throw new Error(response.data.message || '更新失敗');
+    }
+  } catch (error) {
+    showStatus(`❌ 更新狀態失敗: ${error.message || '未知錯誤'}`, 'error');
+  }
+}
+
+async function confirmReply(appointmentId, date, time) {
+  showStatus('確認中...', 'info');
+  try {
+    const response = await axios.post(`/api/admin/appointments/${appointmentId}/confirm_reply`);
+    if (response.data.status === 'success') {
+      // Optimistically update the UI
+      if (weekSchedule.value[date] && weekSchedule.value[date].appointments[time]) {
+        weekSchedule.value[date].appointments[time].reply_status = '已確認';
+      }
+      showStatus('✅ 已確認回覆', 'success');
+    } else {
+      throw new Error(response.data.message || '確認失敗');
+    }
+  } catch (error) {
+    showStatus(`❌ 確認失敗: ${error.message || '未知錯誤'}`, 'error');
   }
 }
 

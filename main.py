@@ -428,7 +428,8 @@ def stats_page():
     # 獲取統計數據
     stats_data = db.get_message_stats(
         month=current_month,
-        message_type=message_type or None, # 如果是空字串，傳遞 None 給資料庫查詢
+        # 如果是空字串，傳遞 None 給資料庫查詢
+        message_type=message_type or None,
         user_id=user_id or None
     )
     
@@ -437,8 +438,10 @@ def stats_page():
                          stats=stats_data,
                          current_month=current_month,
                          all_users=all_users,
-                         current_user=user_id,
-                         current_type=message_type)
+                         current_user_id=user_id,
+                         current_type=message_type,
+                         # 修正：將 stats_data 序列化為 JSON 字串，以便在前端安全地使用
+                         stats_data_json=json.dumps(stats_data))
 
 @app.route("/admin/configs")
 @admin_required
@@ -998,6 +1001,9 @@ def get_week_appointments():
         for time_slot in time_slots:
             apt = appointments_map.get(time_slot)
             day_appointments[time_slot] = {
+                'id': apt.get('id') if apt else None,
+                'reply_status': apt.get('reply_status', '未回覆') if apt else '未回覆',
+                'last_reply': apt.get('last_reply', '') if apt else '',
                 'user_name': apt.get('user_name', '') if apt else '',
                 'user_id': str(apt.get('user_id', '')) if apt and apt.get('user_id') is not None else ''
             }
@@ -1032,7 +1038,11 @@ def save_appointment():
     db.cancel_appointment(date, time)
     
     if user_name and user_id:
-        db.add_appointment(user_id, user_name, date, time)
+        new_appointment_id = db.add_appointment(user_id, user_name, date, time)
+        if new_appointment_id:
+            # 新增成功後，查詢並返回完整的預約物件
+            new_appointment = db.get_appointment_by_id(new_appointment_id)
+            return api_response(data={"message": "預約已儲存", "appointment": new_appointment})
     
     # 如果是從備取來的，預約成功後就從備取名單中刪除
     if waiting_list_item_id is not None:
@@ -1041,7 +1051,7 @@ def save_appointment():
         except ValueError:
             print(f"警告：無法將 waiting_list_item_id '{waiting_list_item_id}' 轉換為整數。")
 
-    return api_response()
+    return api_response(data={"message": "預約已更新"})
 
 @app.route("/api/book_appointment", methods=["POST"])
 def api_book_appointment():
@@ -1202,6 +1212,56 @@ def send_appointment_reminders():
     sent_count, failed_count = _do_send_reminders(appointments, reminder_type)
     
     return api_response(data={"sent_count": sent_count, "failed_count": failed_count})
+
+@app.route("/api/admin/appointments/<int:appointment_id>/confirm_reply", methods=["POST"])
+@admin_required
+@api_error_handler
+def confirm_appointment_reply(appointment_id):
+    """
+    API for an admin to confirm a user's reply.
+    This sets the reply_status to '已確認'.
+    """
+    success = db.update_appointment_reply_status(appointment_id, '已確認', confirm_time=datetime.now(TAIPEI_TZ))
+    if success:
+        return api_response(data={"message": "已成功確認回覆。"})
+    else:
+        return api_response(error="找不到該預約或更新失敗。", status_code=404)
+
+@app.route("/api/admin/appointments/<int:appointment_id>/reply_status", methods=["PUT"])
+@admin_required
+@api_error_handler
+def update_appointment_reply_status_manual(appointment_id):
+    """
+    API for an admin to manually update an appointment's reply status.
+    """
+    data = request.get_json()
+    new_status = data.get('status')
+
+    if not new_status or new_status not in ['未回覆', '已回覆', '已確認']:
+        return api_response(error="無效的狀態值。", status_code=400)
+
+    success = db.update_appointment_reply_status(appointment_id, new_status, confirm_time=datetime.now(TAIPEI_TZ) if new_status == '已確認' else None)
+    if success:
+        return api_response(data={"message": "回覆狀態已更新。"})
+    else:
+        return api_response(error="找不到該預約或更新失敗。", status_code=404)
+
+@app.route("/api/admin/confirm_user_day_replies", methods=["POST"])
+@admin_required
+@api_error_handler
+def confirm_user_day_replies():
+    """
+    API for an admin to confirm all appointments for a specific user on a specific day.
+    """
+    data = request.get_json()
+    user_id = data.get('user_id')
+    date = data.get('date')
+
+    if not user_id or not date:
+        return api_response(error="缺少 user_id 或 date。", status_code=400)
+
+    db.update_user_day_reply_status(user_id, date, '已確認')
+    return api_response(data={"message": "已成功確認該用戶當日所有預約。"})
 
 # ============ 休诊管理 API ============ 
 
@@ -1412,6 +1472,19 @@ def webhook():
             # 如果是文字訊息，才進一步處理內容
             if message_type == "text":
                 user_message = event["message"]["text"].strip()
+
+                # --- NEW: Handle user reply ---
+                # Find the user's closest future appointment
+                upcoming_appointment = db.get_closest_future_appointment(user_id)
+                if upcoming_appointment:
+                    # Update the appointment with the reply content and time
+                    db.update_appointment_reply_status(
+                        appointment_id=upcoming_appointment['id'],
+                        status='已回覆',
+                        last_reply=user_message
+                    )
+                # --- End of new logic ---
+
                 if user_message in ['預約', '预约', '訂位', '订位']:
                     handle_booking_start(user_id)
                 elif user_message in ['查詢', '查询', '我的預約', '我的预约']:
