@@ -337,9 +337,6 @@ def get_message_stats(month: Optional[str] = None, user_id: Optional[str] = None
     
     conn.close()
     return stats
-    conn.commit()
-    conn.close()
-    print("Database initialized.")
 
 def get_recent_message_logs(limit: int = 20):
     """獲取最近的發送記錄"""
@@ -574,10 +571,8 @@ def get_all_schedules() -> List[Dict]:
 def delete_schedule(schedule_id: int) -> bool:
     """刪除一個排程訊息"""
     conn = get_db()
-    cursor = conn.cursor()
-    # 使用列表 [schedule_id] 作為參數，確保在所有環境下都能正確傳遞
-    # 即使 (schedule_id,) 通常是正確的，但列表更為穩健
-    cursor.execute('DELETE FROM schedules WHERE id = ?', [schedule_id])
+    cursor = conn.cursor()    
+    cursor.execute('DELETE FROM schedules WHERE id = ?', (schedule_id,))
     deleted = cursor.rowcount > 0
     conn.commit()
     conn.close()

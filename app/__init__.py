@@ -62,7 +62,7 @@ def create_app():
 
     # --- 註冊藍圖 (Blueprints) ---
     from .routes.auth import auth_bp
-    from .routes.admin import admin_bp, api_admin_bp
+    from .routes.admin import admin_bp, api_admin_bp # This will now import from the new __init__.py
     from .routes.booking import booking_bp
     from .routes.webhook import webhook_bp
     from .routes.user import user_bp
