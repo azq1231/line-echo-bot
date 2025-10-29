@@ -114,7 +114,7 @@ def send_appointment_reminders():
         reminder_type = 'week'
     appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
     # 直接使用 _do_send_reminders，並傳入當前的 app 物件
-    sent_count, failed_count = _do_send_reminders(current_app._get_current_object(), appointments, reminder_type)
+    sent_count, failed_count = _do_send_reminders(current_app, appointments, reminder_type)
     return jsonify({"status": "success", "sent_count": sent_count, "failed_count": failed_count})
 
 @api_admin_bp.route("/appointments/<int:appointment_id>/confirm_reply", methods=["POST"])
