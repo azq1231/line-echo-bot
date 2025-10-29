@@ -86,6 +86,22 @@
     {% if not user %}
     <div class="alert alert-warning">請先<a href="{{ url_for('auth.login') }}">登入</a>以查看您的預約紀錄。</div>
     {% else %}
+        <!-- START: 新增使用者資訊欄 -->
+        <div class="user-profile">
+            <div class="d-flex align-items-center">
+                <img src="{{ url_for('user.user_avatar_route', user_id=user.user_id) }}" alt="User Avatar" style="width: 50px; height: 50px; border-radius: 50%; margin-right: 15px;">
+                <div>
+                    <h5 class="mb-0">歡迎，{{ user.name }}！</h5>
+                    <small class="text-muted">以下是您的預約紀錄</small>
+                </div>
+            </div>
+            <div>
+                <a href="{{ url_for('booking.booking_page') }}" class="btn btn-sm btn-outline-primary">返回預約</a>
+                <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-secondary">登出</a>
+            </div>
+        </div>
+        <!-- END: 新增使用者資訊欄 -->
+
         {% if future_appointments %}
         <h4>進行中的預約</h4>
         <ul class="appointment-list">
