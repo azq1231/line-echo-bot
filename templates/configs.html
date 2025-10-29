@@ -121,19 +121,20 @@
     <div class="config-item">
         <h5>訊息範本設定</h5>
         <div class="mb-3">
-            <label for="message_template_reminder" class="form-label"><strong>預約提醒訊息</strong></label>
-            <textarea class="form-control" id="message_template_reminder" rows="4">{{ configs.message_template_reminder }}</textarea>
+            <label for="message_template_reminder" class="form-label"><strong>預約提醒訊息範本</strong></label>
+            <textarea class="form-control" id="message_template_reminder" rows="5">{{ configs.message_template_reminder }}</textarea>
             <div class="form-text">
                 <p class="mb-1">這是發送預約提醒時的訊息內容。可用的變數：</p>
                 <ul>
-                    <li><code>{user_name}</code>: 顧客姓名 (例如：林小明)</li>
-                    <li><code>{date}</code>: 預約日期 (例如：10月27日)</li>
-                    <li><code>{weekday}</code>: 星期幾 (例如：星期一)</li>
-                    <li><code>{time}</code>: 預約時間 (例如：14:30)</li>
+                    <li><code>{user_name}</code>: 使用者的名稱 (例如：林小明)</li>
+                    <li><code>{date_keyword}</code>: 日期關鍵字 (例如：今天、明天、 週一)</li>
+                    <li><code>{date}</code>: 格式化的日期 (例如：10/29)</li>
+                    <li><code>{weekday}</code>: 與 {date_keyword} 內容相同，為向下相容保留</li>
+                    <li><code>{time_slots}</code>: 當天所有預約時段的條列式清單</li>
                 </ul>
                 <p class="mb-0"><strong>範例：</strong><br>
-                如果範本設為 <code>Hi {user_name}，提醒您預約在 {date} ({weekday}) {time}。</code><br>
-                系統將發送：<code>Hi 林小明，提醒您預約在 10月27日 (星期一) 14:30。</code></p>
+                如果範本設為 <code>您好，提醒您{date_keyword} ({date}) 有預約以下時段：<br>{time_slots}</code><br>
+                系統將發送多時段的合併提醒。</p>
             </div>
         </div>
         <button class="btn btn-primary" onclick="saveConfig('message_template_reminder', 'message_template_reminder')">儲存訊息範本</button>

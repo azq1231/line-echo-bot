@@ -460,7 +460,12 @@ def configs_page():
     configs_dict.setdefault('auto_reminder_weekly_enabled', 'false')
     configs_dict.setdefault('auto_reminder_weekly_day', 'sun')
     configs_dict.setdefault('auto_reminder_weekly_time', '21:00')
-    configs_dict.setdefault('message_template_reminder', '提醒您，{user_name}，您的預約時間是 {date} {weekday} {time}，謝謝。')
+    # 更新：提供一個新的、功能更強大的預設提醒訊息範本
+    default_reminder_template = (
+        "您好，提醒您{date_keyword} ({date}) 有預約以下時段：\n\n"
+        "{time_slots}\n\n"
+        "如果需要更改或取消，請與我們聯繫，謝謝。")
+    configs_dict.setdefault('message_template_reminder', default_reminder_template)
 
     # 獲取所有管理員列表
     admins = [u for u in db.get_all_users() if u.get('is_admin')]
@@ -1145,11 +1150,20 @@ def _do_send_reminders(appointments: list, reminder_type: str = 'daily') -> tupl
                 time_str = time_obj.strftime('%p %I:%M').replace('AM', '上午').replace('PM', '下午')
                 time_slots_str += f"• {time_str}\n"
                 
-            # 組合最終的訊息內容
-            message = (
-                f"您好，提醒您{date_keyword} ({apt_date.strftime('%m/%d')}) 有預約以下時段：\n\n"
-                f"{time_slots_str.strip()}\n\n"
-                "如果需要更改或取消，請與我們聯繫，謝謝。"
+            # 更新：從資料庫讀取訊息範本，並替換預留位置
+            default_template = (
+                "您好，提醒您{date_keyword} ({date}) 有預約以下時段：\n\n"
+                "{time_slots}\n\n"
+                "如果需要更改或取消，請與我們聯繫，謝謝。")
+            template = db.get_config('message_template_reminder', default_template) or default_template
+
+            # 使用 .format() 來替換範本中的預留位置
+            message = template.format(
+                user_name=user_name,
+                date_keyword=date_keyword,
+                date=apt_date.strftime('%m/%d'),
+                weekday=date_keyword.strip(), # weekday 預留位置現在會是 '今天', '明天' 或 '週X'
+                time_slots=time_slots_str.strip()
             )
             
             # 5. 發送訊息

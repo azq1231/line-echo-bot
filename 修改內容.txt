@@ -23,14 +23,82 @@ appointments.db 檔案是一個 SQLite 資料庫檔案，
 ✅ 休診日設定 (closed_days 資料表)
 ✅ 系統設定 (configs 資料表)
 
-1.訊息範本設定
-2.在設定中，可以編輯要發送的訊息，預約簿的發送訊息功能中的預約提醒訊息
-3.用戶回復時，可以在預約簿上點選確認
+1.用戶回復時，可以在預約簿上點選確認
+    請幫我設計一個功能，當使用者在 LINE 回覆訊息時，管理者可以在預約簿上看到並點擊確認。
+2.在設定中，可以編輯預約簿的發送訊息功能中，要發送的預約提醒訊息
+3.
 4.
 5.
 
 其他問題
 
+請幫我將專案結構模組化，拆分 `main.py`。
+初始目標（最小風險）
+
+在專案根目錄建立 app/ 資料夾，保留現有 main.py 但把它變成短小的啟動檔（只做 app init 與 run）。
+
+在 app/ 下建立 __init__.py（create_app）來初始化 Flask、logger、db、藍圖（blueprints）。
+
+把路由分到 app/routes/（例如 auth.py、admin.py、appointments.py），每個檔案只包含自己那組 route。
+
+把工具函式放 app/utils/（logger、LINE API wrapper、helpers）。
+
+把 scheduler 相關放 app/scheduler.py（或 app/scheduler/jobs.py），並只在 production 模式啟動 scheduler。
+
+更新 main.py 只做 from app import create_app，然後 app.run(...)。
+
+檔案與目錄建議（模板）
+project-root/
+├── main.py                # 啟動檔（非常小）
+├── app/
+│   ├── __init__.py        # create_app()，註冊藍圖、載入設定、初始化 logger/db
+│   ├── routes/
+│   │   ├── auth.py        # /login, /callback, /logout
+│   │   ├── admin.py       # /admin/* 與 /api/admin/*
+│   │   └── booking.py     # booking_page, booking APIs
+│   ├── utils/
+│   │   ├── logger.py      # logging 設定
+│   │   ├── db.py          # 介於你現有 db wrapper（或只是 import 既有 db）
+│   │   └── line_api.py    # get_line_profile, send_line_message 包裝
+│   ├── scheduler/
+│   │   └── jobs.py        # send_daily_reminders_job 等
+│   └── templates/         # 若你把 jinja2 模板也放在這
+└── static/
+
+每個檔案應該放什麼（簡短說明）
+
+app/__init__.py：建立 Flask app，讀設定、初始化 db、註冊藍圖 from .routes import auth, admin, booking; app.register_blueprint(...)，設定 app.permanent_session_lifetime、logging 等。
+
+app/routes/auth.py：跟登入、callback、session 有關的 route。
+
+app/routes/admin.py：包含 @admin_required 裝飾器路由（使用者管理、configs、API）。
+
+app/routes/booking.py：顯示預約頁、booking API、history 等。
+
+app/utils/logger.py：統一 logger 設定，export get_logger()。
+
+app/scheduler/jobs.py：把 send_daily_reminders_job、send_weekly_reminders_job、send_custom_schedules_job 放這裡，並提供 init_scheduler(app) 供 create_app 在 production 時呼叫。
+
+main.py：只做 app = create_app(); if __name__ == "__main__": app.run(...)。
+
+漸進搬移步驟（具體）
+
+建 app/__init__.py，把你原本 main 裡面跟「初始化」相關的程式（logger, session timeout, 讀 config）搬進來，並讓 create_app() 回傳 app。先不要動 route。
+
+修改 main.py 改成簡單啟動檔，確認 flask run 或 python main.py 能正常啟動（應該與之前行為一致）。
+
+把一個小且自包含的 route（例如 /api/admin/users）複製到 app/routes/admin.py，並在 create_app 註冊 admin blueprint。啟動，測試該 API 是否仍工作。若失敗，回退、修正。
+
+依次遷移其他路由（每次只一個檔案或一小組 route），並在遷移後執行自動測試或手動測試。
+
+把 scheduler 抽出到 app/scheduler（並保留在 production 模式下啟動）。
+
+最終把 main.py 變乾淨（少於 30 行）。
+
 這就是所有的第一階段開發了，完結灑花
+
+第二階段
+按摩的部分該怎麼處理?
+當訊息發送後，能夠自動確認嗎?如果對方說好，或是沒問題
 
 其他部分
