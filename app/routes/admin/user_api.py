@@ -9,66 +9,33 @@ import database as db
 from app.utils.decorators import admin_required, api_error_handler
 from . import api_admin_bp
 
-@api_admin_bp.route("/update_user_name", methods=["POST"])
+@api_admin_bp.route("/update_user_field", methods=["POST"])
 @admin_required
-def update_user_name():
+@api_error_handler
+def update_user_field():
+    """通用API，用於更新用戶的單一欄位（如 name, zhuyin, phone, phone2, address）。"""
     data = request.get_json()
     user_id = data.get("user_id")
-    new_name = data.get("name")
+    field = data.get("field")
+    value = data.get("value")
     
-    if not user_id or not new_name:
-        return jsonify({"status": "error", "message": "缺少必要欄位"}), 400
+    if not all([user_id, field, value is not None]):
+        return jsonify({"status": "error", "message": "缺少 user_id, field 或 value"}), 400
     
-    if db.update_user_name(user_id, new_name):
-        return jsonify({"status": "success", "message": f"已更新姓名為：{new_name}"})
-    else:
-        return jsonify({"status": "error", "message": "找不到用戶"}), 404
+    # 將欄位名稱映射到對應的資料庫更新函式
+    update_functions = {
+        'name': db.update_user_name,
+        'zhuyin': db.update_user_zhuyin,
+        'phone': lambda uid, val: db.update_user_phone_field(uid, 'phone', val),
+        'phone2': lambda uid, val: db.update_user_phone_field(uid, 'phone2', val),
+        'address': db.update_user_address
+    }
 
-@api_admin_bp.route("/update_user_zhuyin", methods=["POST"])
-@admin_required
-def update_user_zhuyin_route():
-    data = request.get_json()
-    user_id = data.get("user_id")
-    zhuyin = data.get("zhuyin")
+    if field in update_functions:
+        if update_functions[field](user_id, value):
+            return jsonify({"status": "success", "message": f"用戶 {field} 已更新"})
     
-    if not user_id or zhuyin is None:
-        return jsonify({"status": "error", "message": "缺少必要参数"}), 400
-
-    if db.update_user_zhuyin(user_id, zhuyin):
-        return jsonify({"status": "success", "message": "注音已更新"})
-    else:
-        return jsonify({"status": "error", "message": "更新失败"}), 500
-
-@api_admin_bp.route("/update_user_phone", methods=["POST"])
-@admin_required
-def update_user_phone_route():
-    data = request.get_json()
-    user_id = data.get("user_id")
-    phone = data.get("phone")
-    field = data.get("field", 'phone')
-
-    if not user_id or phone is None:
-        return jsonify({"status": "error", "message": "缺少使用者 ID 或電話號碼"}), 400
-
-    if db.update_user_phone_field(user_id, field, phone):
-        return jsonify({"status": "success", "message": "電話號碼已更新"})
-    else:
-        return jsonify({"status": "error", "message": "更新失敗"}), 500
-
-@api_admin_bp.route("/update_user_address", methods=["POST"])
-@admin_required
-def update_user_address_route():
-    data = request.get_json()
-    user_id = data.get("user_id")
-    address = data.get("address")
-
-    if not user_id or address is None:
-        return jsonify({"status": "error", "message": "缺少使用者 ID 或地址"}), 400
-
-    if db.update_user_address(user_id, address):
-        return jsonify({"status": "success", "message": "地址已更新"})
-    else:
-        return jsonify({"status": "error", "message": "更新失敗"}), 500
+    return jsonify({"status": "error", "message": "更新失敗或欄位不支援"}), 404
 
 @api_admin_bp.route("/generate_zhuyin/<user_id>", methods=["POST"])
 @admin_required

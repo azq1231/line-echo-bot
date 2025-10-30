@@ -5,25 +5,14 @@ export async function getUsers() {
 }
 
 export async function updateUser(id, field, value) {
-  const endpoint = {
-    name: '/admin/update_user_name',
-    zhuyin: '/admin/update_user_zhuyin',
-    phone: '/admin/update_user_phone',
-    phone2: '/admin/update_user_phone',
-  }[field]
-
-  const body = { user_id: id }
-  if (field === 'phone' || field === 'phone2') {
-    body.phone = value
-    body.field = field
-  } else {
-    body[field] = value
-  }
-
-  const res = await fetch(endpoint, {
+  const res = await fetch('/api/admin/update_user_field', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ 
+      user_id: id, 
+      field: field, 
+      value: value 
+    }),
     credentials: 'include'
   })
   if (!res.ok) throw new Error('Update failed')
@@ -59,7 +48,7 @@ export async function deleteUserApi(id) {
 }
 
 export async function refreshProfile(id) {
-  const res = await fetch(`/admin/refresh_user_profile/${id}`, { method: 'POST', credentials: 'include' })
+  const res = await fetch(`/api/admin/refresh_user_profile/${id}`, { method: 'POST', credentials: 'include' })
   if (!res.ok) throw new Error('Refresh failed')
   return res.json()
 }
