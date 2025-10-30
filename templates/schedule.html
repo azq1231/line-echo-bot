@@ -67,6 +67,12 @@
         align-items: start;
         transition: background-color 0.2s;
     }
+    .schedule-item .schedule-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 80px; /* 確保按鈕寬度一致 */
+    }
     .schedule-item:hover {
         background: #f0f0f0;
     }
@@ -108,8 +114,7 @@
         background: #f8d7da;
         color: #721c24;
     }
-    .delete-btn {
-        background: #dc3545;
+    .action-btn {
         color: white;
         border: none;
         padding: 8px 16px;
@@ -117,9 +122,26 @@
         cursor: pointer;
         font-size: 14px;
         transition: background 0.3s;
+        width: 100%;
+        text-align: center;
+    }
+    .delete-btn {
+        background: #dc3545;
     }
     .delete-btn:hover {
         background: #c82333;
+    }
+    .edit-btn {
+        background: #6c757d;
+    }
+    .edit-btn:hover {
+        background: #5a6268;
+    }
+    .save-btn {
+        background: #28a745;
+    }
+    .save-btn:hover {
+        background: #218838;
     }
     .message {
         padding: 12px 20px;
@@ -143,7 +165,7 @@
     @media (max-width: 768px) {
         button { width: 100%; }
         .schedule-item { flex-direction: column; align-items: flex-start; gap: 12px; }
-        .delete-btn { width: 100%; padding: 10px; }
+        .schedule-item .schedule-actions { width: 100%; }
     }
 </style>
 
@@ -175,6 +197,28 @@
     </ul>
 </div>
 
+    <!-- 編輯時間的 Modal (隱藏) -->
+    <div class="modal fade" id="editScheduleModal" tabindex="-1" aria-labelledby="editScheduleModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editScheduleModalLabel">編輯排程時間</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>正在編輯給 <strong id="editingUserName"></strong> 的排程。</p>
+                    <div class="form-group">
+                        <label for="editSendTime">新的發送時間</label>
+                        <input type="datetime-local" id="editSendTime" class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="saveTimeChangeBtn">儲存變更</button>
+                </div>
+            </div>
+        </div>
+    </div>
 <script>
     function showMessage(text, type) {
         const msgEl = document.getElementById('message');
@@ -184,6 +228,48 @@
         setTimeout(() => {
             msgEl.style.display = 'none';
         }, 3000);
+    }
+
+    function formatToTaipei(utcString) {
+        if (!utcString) return 'N/A';
+        try {
+            // 確保字串是標準 ISO 格式，並強制視為 UTC
+            let isoString = utcString.replace(' ', 'T');
+            if (!isoString.includes('Z') && !isoString.match(/[+\-]\d{2}:\d{2}$/)) {
+                isoString += 'Z';
+            }
+            const date = new Date(isoString);
+            if (isNaN(date)) throw new Error('Invalid date');
+
+            return date.toLocaleString('zh-TW', {
+                timeZone: 'Asia/Taipei',
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', hour12: false
+            }).replace(/\//g, '-');
+        } catch (e) {
+            console.error(`formatToTaipei error for string: ${utcString}`, e);
+            return utcString;
+        }
+    }
+
+    function formatForInput(utcString) {
+        if (!utcString) return '';
+        try {
+            // 確保字串是標準 ISO 格式，並強制視為 UTC
+            let isoString = utcString.replace(' ', 'T');
+            if (!isoString.includes('Z') && !isoString.match(/[+\-]\d{2}:\d{2}$/)) {
+                isoString += 'Z';
+            }
+            const date = new Date(isoString);
+            if (isNaN(date)) throw new Error('Invalid date object created');
+
+            // 轉換為本地時間以正確顯示在 datetime-local 輸入框中
+            const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+            return localDate.toISOString().slice(0, 16);
+        } catch (e) {
+            console.error(`formatForInput error for string: ${utcString}`, e);
+            return ''; // 返回空字串以避免錯誤，讓使用者可以重新選擇
+        }
     }
 
     async function loadUsers() {
@@ -218,9 +304,6 @@
             if (data.schedules && data.schedules.length > 0) {
                 listEl.innerHTML = '';
                 data.schedules.forEach(schedule => {
-                    // 偵錯：在瀏覽器控制台印出從後端收到的 schedule 物件
-                    console.log('Processing schedule object:', schedule);
-
                     const li = document.createElement('li'); // 建立 li 元素
                     li.className = 'schedule-item'; // 設定 class
 
@@ -238,27 +321,35 @@
 
                     // 使用 innerHTML 填充 infoDiv 的內容
                     infoDiv.innerHTML = `
-                        <div class="schedule-user">${schedule.user_name}</div>
-                        <div class="schedule-time">⏰ ${schedule.send_time}</div>
+                        <div class="schedule-user">${schedule.user_name || '未知用戶'}</div>
+                        <div class="schedule-time">⏰ ${formatToTaipei(schedule.send_time)}</div>
                         <div class="schedule-message">${schedule.message}</div>
                         <span class="schedule-status ${statusInfo.class}">${statusInfo.text}</span>
                     `;
 
                     // 將 infoDiv 加入 li
                     li.appendChild(infoDiv);
+                    
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'schedule-actions';
 
-                    // 如果狀態是 pending，才建立並加入刪除按鈕
+                    // 如果狀態是 pending，才建立並加入編輯和刪除按鈕
                     if (schedule.status === 'pending') {
+                        const editBtn = document.createElement('button');
+                        editBtn.className = 'action-btn edit-btn';
+                        editBtn.textContent = '編輯';
+                        editBtn.onclick = () => startEditing(schedule);
+                        actionsDiv.appendChild(editBtn);
+
                         const deleteBtn = document.createElement('button');
-                        deleteBtn.className = 'delete-btn';
+                        deleteBtn.className = 'action-btn delete-btn';
                         deleteBtn.textContent = '刪除';
-                        // 終極手段：直接將 ID 寫入 onclick 事件
-                        deleteBtn.setAttribute('onclick', `deleteSchedule(${schedule.id})`);
-                        // 將按鈕加入 li
-                        li.appendChild(deleteBtn);
+                        deleteBtn.onclick = () => deleteSchedule(schedule.id);
+                        actionsDiv.appendChild(deleteBtn);
                     }
 
                     // 最後將完整的 li 加入列表
+                    li.appendChild(actionsDiv);
                     listEl.appendChild(li);
                 });
             } else {
@@ -267,6 +358,46 @@
         } catch (error) {
             console.error('載入排程失敗:', error);
         }
+    }
+
+    let editModalInstance = null;
+
+    function startEditing(schedule) {
+        if (!editModalInstance) {
+            editModalInstance = new bootstrap.Modal(document.getElementById('editScheduleModal'));
+        }
+        document.getElementById('editingUserName').textContent = schedule.user_name;
+        document.getElementById('editSendTime').value = formatForInput(schedule.send_time);
+        
+        const saveBtn = document.getElementById('saveTimeChangeBtn');
+        // 移除舊的監聽器以防重複綁定
+        saveBtn.replaceWith(saveBtn.cloneNode(true));
+        document.getElementById('saveTimeChangeBtn').addEventListener('click', () => saveScheduleTime(schedule.id));
+
+        editModalInstance.show();
+    }
+
+    async function saveScheduleTime(scheduleId) {
+        const newTime = document.getElementById('editSendTime').value;
+        if (!newTime) {
+            showMessage('請選擇一個有效的時間', 'error');
+            return;
+        }
+        try {
+            const response = await fetch(`/api/admin/schedule/${scheduleId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ send_time: newTime })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || '更新失敗');
+            showMessage('✅ 排程時間已更新', 'success');
+            
+            // 解決 accessibility 警告：在隱藏 modal 前，將焦點移出
+            document.body.focus();
+            editModalInstance.hide();
+            loadSchedules();
+        } catch (error) { showMessage(`❌ 更新失敗: ${error.message}`, 'error'); }
     }
 
     async function addSchedule() {
@@ -287,7 +418,6 @@
             showMessage('請輸入訊息內容', 'error');
             return;
         }
-        const formattedTime = sendTime.replace('T', ' ');
         try {
             const response = await fetch('/api/admin/schedule', {
                 method: 'POST',
@@ -297,7 +427,7 @@
                 body: JSON.stringify({
                     user_id: userId,
                     user_name: userName,
-                    send_time: formattedTime,
+                    send_time: sendTime, // 直接傳遞 datetime-local 的原始值
                     message: message
                 })
             });
@@ -336,17 +466,6 @@
             showMessage('刪除失敗，請稍後再試', 'error');
         }
     }
-
-    // 由於 onclick 已直接呼叫 deleteSchedule，這個事件監聽器不再需要處理刪除邏輯
-    document.getElementById('scheduleList').addEventListener('click', function(event) {
-        // 確保點擊的是刪除按鈕
-        if (event.target.classList.contains('delete-btn')) {
-            // const scheduleId = event.target.getAttribute('data-schedule-id');
-            // if (scheduleId) {
-            //     deleteSchedule(scheduleId);
-            // }
-        }
-    });
 
     loadUsers();
     loadSchedules();

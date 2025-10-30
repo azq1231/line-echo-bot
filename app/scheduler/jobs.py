@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from collections import defaultdict
+import pytz
 
 import database as db
 from app.utils.line_api import send_line_message
@@ -89,7 +90,9 @@ def send_weekly_reminders_job(app):
 def send_custom_schedules_job(app):
     """處理自訂排程訊息的背景任務"""
     with app.app_context():
-        schedules_to_send = db.get_pending_schedules_to_send()
+        # 獲取當前的 UTC 時間，並傳遞給資料庫查詢函式
+        now_utc = datetime.now(pytz.utc)
+        schedules_to_send = db.get_pending_schedules_to_send(now_utc)
         if not schedules_to_send:
             return
 

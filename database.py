@@ -536,11 +536,13 @@ def update_user_admin_status(user_id: str, is_admin: bool) -> bool:
     finally:
         conn.close()
 
-def add_schedule(user_id: str, user_name: str, send_time: str, message: str) -> bool:
+def add_schedule(user_id: str, user_name: str, send_time: datetime, message: str) -> bool:
     """新增一個排程訊息"""
     conn = get_db()
     cursor = conn.cursor()
     try:
+        # 明確將 datetime 物件轉為 ISO 格式字串再儲存，確保時區資訊被保留
+        # 修正：直接傳遞 UTC datetime 物件，讓 DB-API 自動處理轉換
         cursor.execute('''
             INSERT INTO schedules (user_id, user_name, send_time, message)
             VALUES (?, ?, ?, ?)
@@ -578,15 +580,34 @@ def delete_schedule(schedule_id: int) -> bool:
     conn.close()
     return deleted
 
-def get_pending_schedules_to_send() -> List[Dict]:
+def get_pending_schedules_to_send(now_utc: datetime) -> List[Dict]:
     """獲取所有待發送且時間已到的排程"""
     conn = get_db()
     cursor = conn.cursor()
-    # 使用 CURRENT_TIMESTAMP 來獲取 UTC 時間
-    cursor.execute("SELECT * FROM schedules WHERE status = 'pending' AND send_time <= CURRENT_TIMESTAMP")
+    # 使用由應用程式傳入的 UTC 時間進行比較，以確保時區一致性
+    cursor.execute("SELECT * FROM schedules WHERE status = 'pending' AND send_time <= ?", (now_utc,))
     schedules = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return schedules
+
+def update_schedule_send_time(schedule_id: int, new_send_time: datetime) -> bool:
+    """更新指定排程的發送時間，僅限於 'pending' 狀態的排程"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        # 修正：直接傳遞 UTC datetime 物件
+        cursor.execute(
+            'UPDATE schedules SET send_time = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = ?',
+            (new_send_time, schedule_id, 'pending')
+        )
+        updated = cursor.rowcount > 0
+        conn.commit()
+        return updated
+    except Exception as e:
+        print(f"更新排程時間失敗: {e}")
+        return False
+    finally:
+        conn.close()
 
 # ==================== 预约管理 ====================
 
@@ -636,7 +657,7 @@ def get_closest_future_appointment(user_id: str) -> Optional[Dict]:
     """
     conn = get_db()
     cursor = conn.cursor()
-    # 獲取當前台北時間
+    # 修正：直接使用 pytz 獲取時區，避免循環匯入 app
     now_in_taipei = datetime.now(pytz.timezone('Asia/Taipei'))
     current_date = now_in_taipei.strftime('%Y-%m-%d')
     current_time = now_in_taipei.strftime('%H:%M')
