@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'), // 預約簿
         users: resolve(__dirname, 'users.html'), // 用戶管理
+        merge_users: resolve(__dirname, 'merge_users.html'), // 新增合併用戶頁面的進入點
       },
     },
     manifest: true,       // 生成 manifest.json

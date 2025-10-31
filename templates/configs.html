@@ -119,6 +119,14 @@
     </div>
 
     <div class="config-item">
+        <h5>用戶合併</h5>
+        <p class="form-text">分析手動建立的「臨時用戶」與真實的 LINE 用戶，提供合併建議，以整理用戶資料。</p>
+        <a href="{{ url_for('admin.merge_users_page') }}" class="btn btn-info text-white">
+            <i class="bi bi-person-plus-fill me-2"></i>前往用戶合併建議頁面
+        </a>
+    </div>
+
+    <div class="config-item">
         <h5>訊息範本設定</h5>
         <div class="mb-3">
             <label for="message_template_reminder" class="form-label"><strong>預約提醒訊息範本</strong></label>

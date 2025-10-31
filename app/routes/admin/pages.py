@@ -134,3 +134,11 @@ def slots_settings_page():
             slots_by_weekday[slot['weekday']].append(slot)
             
     return render_template("slots_settings.html", user=user, slots_by_weekday=slots_by_weekday)
+
+@admin_bp.route('/users/merge/')
+@admin_required
+def merge_users_page():
+    # 修正：傳入 Vite 設定檔中的入口點名稱 'merge_users.html'
+    js_path, css_path = get_vue_assets('merge_users.html')
+    # 修正：渲染新的空殼模板
+    return render_template('admin_merge_users_vue.html', js_path=js_path, css_path=css_path, user=session.get('user'))

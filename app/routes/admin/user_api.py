@@ -1,6 +1,7 @@
 from flask import (
     request, jsonify, session
 )
+import re
 import uuid
 
 import database as db
@@ -125,6 +126,51 @@ def api_merge_users():
         return jsonify({"status": "success", "message": "用戶資料已成功合併。"})
     else:
         return jsonify({"status": "error", "message": "合併用戶時發生錯誤，請檢查後台日誌。"}), 500
+
+@api_admin_bp.route('/users/merge_suggestions', methods=['GET'])
+@admin_required
+@api_error_handler
+def api_get_merge_suggestions():
+    """
+    分析用戶數據，提供臨時用戶與真實 LINE 用戶的合併建議。
+    """
+    all_users = db.get_all_users()
+    manual_users = [u for u in all_users if u['user_id'].startswith('manual_')]
+    line_users = [u for u in all_users if u['user_id'].startswith('U')]
+
+    suggestions = []
+    processed_line_users = set()
+
+    def normalize_name(name):
+        # 移除常見的手動標記和所有空格
+        return re.sub(r'[\s()（）手動]', '', name) if name else ''
+
+    # 建立 LINE 用戶的查找表以提高效率
+    line_users_by_normalized_name = {normalize_name(u['name']): u for u in line_users}
+    line_users_by_phone = {}
+    for u in line_users:
+        if u.get('phone'): line_users_by_phone[u['phone']] = u
+        if u.get('phone2'): line_users_by_phone[u['phone2']] = u
+
+    for manual_user in manual_users:
+        suggestion_found = False
+        # 規則 1：基於標準化後的姓名匹配
+        normalized_manual_name = normalize_name(manual_user['name'])
+        if normalized_manual_name in line_users_by_normalized_name:
+            line_user = line_users_by_normalized_name[normalized_manual_name]
+            if line_user['user_id'] not in processed_line_users:
+                suggestions.append({'source': dict(manual_user), 'target': dict(line_user), 'reason': '姓名相似'})
+                processed_line_users.add(line_user['user_id'])
+                suggestion_found = True
+        
+        # 規則 2：基於電話號碼匹配 (如果姓名未匹配成功)
+        if not suggestion_found and manual_user.get('phone') and manual_user['phone'] in line_users_by_phone:
+            line_user = line_users_by_phone[manual_user['phone']]
+            if line_user['user_id'] not in processed_line_users:
+                suggestions.append({'source': dict(manual_user), 'target': dict(line_user), 'reason': '電話號碼相同'})
+                processed_line_users.add(line_user['user_id'])
+
+    return jsonify({"status": "success", "suggestions": suggestions})
 
 @api_admin_bp.route('/users/<string:user_id>', methods=['DELETE'])
 @admin_required

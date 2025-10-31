@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}用戶合併建議{% endblock %}
+
+{% block header %}用戶合併建議{% endblock %}
+
+{% block content %}
+<div id="app"></div>
+{% endblock %}
+
+{% block head_styles %}
+  {% if css_path %}<link rel="stylesheet" href="{{ css_path }}">{% endif %}
+{% endblock %}
+
+{% block body_end_scripts %}
+  {% if js_path %}<script type="module" src="{{ js_path }}"></script>{% endif %}
+{% endblock %}
