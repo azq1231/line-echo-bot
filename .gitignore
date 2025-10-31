@@ -1,22 +1,37 @@
-# Python
+# Log files
+# 忽略所有 .log 結尾的檔案，包括 app.log
+*.log
+
+# Python virtual environment
+# 忽略虛擬環境目錄，避免將大量的套件檔案上傳
+venv/
+.venv/
+
+# Python cache files
+# 忽略 Python 產生的快取檔案
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env/
-venv/
 
-# IDE / Editor
-.vscode/
-.idea/
-
-# Environment
+# Environment variables
+# 絕對不要將包含密鑰的 .env 檔案上傳到 Git
 .env
 
-# Frontend
-frontend/node_modules/
-frontend/dist/
+# Frontend dependencies
+# 前端套件目錄，應由 npm install 或 yarn install 在不同環境中自行安裝
+node_modules/
 
-# Database
-appointments.db
+# Build artifacts
+# Vite 或其他打包工具的輸出目錄
+dist/
+build/
+
+# Editor configuration
+# 忽略編輯器相關的設定檔，例如 VS Code
+.vscode/
+
+# Database files
+# 忽略資料庫檔案，避免上傳用戶敏感資料
+*.db
+*.sqlite3

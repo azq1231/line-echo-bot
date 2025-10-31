@@ -496,3 +496,4 @@ Traceback (most recent call last):
   File "D:\MyProjects\line-echo-bot\venv\Lib\site-packages\flask\templating.py", line 98, in _get_source_fast
     raise TemplateNotFound(template)
 jinja2.exceptions.TemplateNotFound: base_vue.html
+2025-10-31 15:16:17,644 - app - INFO - 排程器已啟動。
