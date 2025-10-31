@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
+import json
 from datetime import datetime
 
 import database as db
@@ -35,24 +36,45 @@ def webhook():
             user_info = get_line_profile(user_id)
             db.add_user(user_id, user_info['name'], user_info['picture_url'], address=None)
             
-            if message_type == "text":
-                user_message = event["message"]["text"].strip()
-
+            # 統一處理所有需要記錄回覆的訊息類型
+            if message_type in ["text", "image", "sticker"]:
                 upcoming_appointment = db.get_closest_future_appointment(user_id)
-                if upcoming_appointment:
+                if not upcoming_appointment:
+                    # 如果沒有未來預約，則不處理回覆
+                    pass
+                else:
+                    reply_obj = {"confirmed": False}
+                    
+                    if message_type == "text":
+                        reply_obj["type"] = "text"
+                        reply_obj["content"] = event["message"]["text"].strip()
+                    
+                    elif message_type == "image":
+                        reply_obj["type"] = "image"
+                        reply_obj["content"] = "用戶傳來一張圖片"
+                    
+                    elif message_type == "sticker":
+                        reply_obj["type"] = "sticker"
+                        # 優先使用貼圖關鍵字，若無則使用通用文字
+                        keywords = event["message"].get("keywords", [])
+                        reply_obj["content"] = keywords[0] if keywords else "用戶傳來一張貼圖"
+
                     db.update_appointment_reply_status(
                         appointment_id=upcoming_appointment['id'],
                         status='已回覆',
-                        last_reply=user_message
+                        last_reply=json.dumps(reply_obj, ensure_ascii=False)
                     )
 
+            # 處理文字指令
+            if message_type == "text":
+                user_message = event["message"]["text"].strip()
                 if user_message in ['預約', '预约', '訂位', '订位']:
                     handle_booking_start(user_id)
                 elif user_message in ['查詢', '查询', '我的預約', '我的预约']:
                     handle_query_appointments(user_id)
                 elif user_message in ['取消', '取消預約', '取消预约']:
                     handle_cancel_booking(user_id)
-        
+
         elif event["type"] == "postback":
             user_id = event["source"]["userId"]
             data = event["postback"]["data"]

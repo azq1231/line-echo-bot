@@ -706,9 +706,14 @@ SET reply_status = ?, last_reply = ?, reply_time = ?
 WHERE id = ?
 ''', (status, last_reply, datetime.now(pytz.timezone('Asia/Taipei')), appointment_id))
     elif status == '已確認':
-        cursor.execute('''
-UPDATE appointments SET reply_status = ?, confirm_time = ? WHERE id = ?
-''', (status, confirm_time, appointment_id))
+        # 修正：當確認時，同時更新 reply_status, last_reply 和 confirm_time
+        # 如果 last_reply 是 None，則不更新該欄位
+        if last_reply:
+            cursor.execute('UPDATE appointments SET reply_status = ?, last_reply = ?, confirm_time = ? WHERE id = ?', 
+                           (status, last_reply, confirm_time, appointment_id))
+        else:
+            cursor.execute('UPDATE appointments SET reply_status = ?, confirm_time = ? WHERE id = ?', 
+                           (status, confirm_time, appointment_id))
     elif status == '未回覆':
         # 修正：新增處理「未回覆」狀態的邏輯，將相關欄位重設為 NULL
         cursor.execute('''

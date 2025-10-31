@@ -1,6 +1,7 @@
 from flask import (
     request, jsonify, current_app
 )
+import json
 from datetime import datetime
 
 import database as db
@@ -45,10 +46,20 @@ def get_week_appointments():
         day_appointments = {}
         for time_slot in time_slots:
             apt = appointments_map.get(time_slot)
+            
+            last_reply_obj = None
+            if apt and apt.get('last_reply'):
+                try:
+                    last_reply_obj = json.loads(apt['last_reply'])
+                except (json.JSONDecodeError, TypeError):
+                    # 根據您的說明，所有回覆都將是新的 JSON 格式。
+                    # 因此，如果解析失敗，代表資料有誤，將其視為 None 是最安全的作法。
+                    last_reply_obj = None
+
             day_appointments[time_slot] = {
                 'id': apt.get('id') if apt else None,
-                'reply_status': apt.get('reply_status', '未回覆') if apt else '未回覆',
-                'last_reply': apt.get('last_reply', '') if apt else '',
+                'reply_status': apt.get('reply_status', '未回覆') if apt else '未回覆', # 保持舊欄位以供相容
+                'last_reply': last_reply_obj, # 回傳解析後的物件
                 # 在此處截斷預約中的名稱
                 'user_name': _truncate_name(apt.get('user_name', '')) if apt else '',
                 'user_id': str(apt.get('user_id', '')) if apt and apt.get('user_id') is not None else ''
@@ -122,7 +133,25 @@ def send_appointment_reminders():
 @api_error_handler
 def confirm_appointment_reply_api(appointment_id):
     TAIPEI_TZ = current_app.config['TAIPEI_TZ']
-    success = db.update_appointment_reply_status(appointment_id, '已確認', confirm_time=datetime.now(TAIPEI_TZ))
+    
+    # 獲取當前的預約資料
+    appointment = db.get_appointment_by_id(appointment_id)
+    if not appointment:
+        return jsonify({"status": "error", "message": "找不到該預約。"}), 404
+
+    new_last_reply_str = appointment.get('last_reply')
+    # 檢查 last_reply 是否為有效的 JSON 字串
+    if new_last_reply_str:
+        try:
+            last_reply_obj = json.loads(new_last_reply_str)
+            if isinstance(last_reply_obj, dict):
+                last_reply_obj['confirmed'] = True
+                new_last_reply_str = json.dumps(last_reply_obj, ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            # 如果解析失敗，保持原樣，只更新狀態
+            pass
+
+    success = db.update_appointment_reply_status(appointment_id, '已確認', last_reply=new_last_reply_str, confirm_time=datetime.now(TAIPEI_TZ))
     if success:
         return jsonify({"status": "success", "message": "已成功確認回覆。"})
     else:

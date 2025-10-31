@@ -68,9 +68,9 @@
                   <div v-if="apt.id" class="tw-flex tw-items-center tw-flex-shrink-0 tw-ml-2">
                     <span 
                       class="tw-text-xs tw-font-mono tw-cursor-pointer" 
-                      :title="`點擊以變更狀態\n目前: ${apt.reply_status}\n內容: ${apt.last_reply || '無'}`"
+                      :title="statusTitle(apt)"
                       @click.stop="cycleReplyStatus(apt, dayData.date_info.date, time)">
-                      {{ statusIcon(apt.reply_status) }}
+                      {{ statusIcon(apt) }}
                     </span>
                     <button v-if="apt.reply_status === '已回覆'" @click.stop="confirmReply(apt.id, dayData.date_info.date, time)" title="確認回覆" class="tw-ml-1 tw-px-1.5 tw-py-0.5 tw-text-xs tw-bg-green-500 tw-text-white tw-rounded hover:tw-bg-green-600">
                       ✅
@@ -204,6 +204,8 @@ const isAddingManualUser = ref(false);
 // New loading state
 const isLoading = ref(true);
 
+const pollingIntervalId = ref(null);
+
 // --- Computed Properties ---
 const weekTitle = computed(() => {
   if (currentWeekOffset.value === 0) return '本週預約';
@@ -292,14 +294,38 @@ function dayButtonClass(dayData) {
   return 'tw-bg-white tw-text-gray-700 tw-border tw-border-gray-300 hover:tw-bg-gray-50';
 }
 
-const statusIcon = (status) => {
-  switch (status) {
-    case "未回覆": return "🔴";
-    case "已回覆": return "🟡";
+const statusIcon = (appointment) => {
+  // 優先使用 last_reply 物件
+  if (appointment.last_reply) {
+    if (appointment.last_reply.confirmed) return "🟢"; // 已確認
+    return "🟡"; // 有回覆但未確認 (圖片或文字)
+  }
+  // 備用方案：使用舊的 reply_status 字串
+  switch (appointment.reply_status) {
     case "已確認": return "🟢";
-    default: return "⚪️"; // Default or unknown status
+    case "已回覆": return "🟡";
+    case "未回覆": return "🔴";
+    default: return "⚪️"; // 無預約或未知狀態
   }
 };
+
+const statusTitle = (appointment) => {
+  let currentStatusText = "未知";
+  let contentText = "無";
+
+  // 優先使用 last_reply 物件來產生更詳細的提示
+  if (appointment.last_reply) {
+    const replyType = appointment.last_reply.type === 'image' ? '圖片' : '文字';
+    currentStatusText = appointment.last_reply.confirmed ? '已確認' : `有新的${replyType}回覆`;
+    contentText = appointment.last_reply.content || 'N/A';
+  } else if (appointment.reply_status) {
+    // 備用方案
+    currentStatusText = appointment.reply_status;
+    contentText = appointment.last_reply || '無'; // 這裡的 last_reply 可能是舊格式的字串
+  }
+
+  return `點擊以變更狀態\n目前: ${currentStatusText}\n內容: ${contentText}`;
+}
 
 
 // --- Methods ---
@@ -338,6 +364,38 @@ async function loadSchedule() {
   } finally {
     // 無論成功或失敗，最後都要將載入狀態設為 false
     isLoading.value = false;
+  }
+}
+
+async function pollForUpdates() {
+  try {
+    const response = await axios.get(`/api/admin/get_week_appointments?offset=${currentWeekOffset.value}`);
+    const newWeekSchedule = response.data.week_schedule || {};
+
+    // 智慧更新 UI，只更新有變動的燈號，避免干擾操作
+    for (const date in weekSchedule.value) {
+      if (newWeekSchedule[date]) {
+        const oldDay = weekSchedule.value[date];
+        const newDay = newWeekSchedule[date];
+        for (const time in oldDay.appointments) {
+          if (newDay.appointments[time]) {
+            const oldApt = oldDay.appointments[time];
+            const newApt = newDay.appointments[time];
+
+            // 比較 last_reply 和 reply_status 是否有變化
+            if (JSON.stringify(oldApt.last_reply) !== JSON.stringify(newApt.last_reply) || oldApt.reply_status !== newApt.reply_status) {
+              oldApt.last_reply = newApt.last_reply;
+              oldApt.reply_status = newApt.reply_status;
+            }
+          }
+        }
+      }
+    }
+    console.log('Polling update complete at', new Date().toLocaleTimeString());
+  } catch (error) {
+    console.error("Polling for updates failed:", error);
+    // 如果輪詢失敗，可以選擇停止輪詢以避免連續錯誤
+    // clearInterval(pollingIntervalId.value);
   }
 }
 
@@ -618,8 +676,15 @@ async function cycleReplyStatus(appointment, date, time) {
     const response = await axios.put(`/api/admin/appointments/${appointment.id}/reply_status`, { status: nextStatus });
     if (response.data.status === 'success') {
       // Optimistically update the UI
-      if (weekSchedule.value[date] && weekSchedule.value[date].appointments[time]) {
-        weekSchedule.value[date].appointments[time].reply_status = nextStatus;
+      const targetAppointment = weekSchedule.value[date]?.appointments[time];
+      if (targetAppointment) {
+        targetAppointment.reply_status = nextStatus;
+        // 關鍵修正：根據新的狀態，同步更新 last_reply 物件
+        if (nextStatus === '已確認' && targetAppointment.last_reply) {
+          targetAppointment.last_reply.confirmed = true;
+        } else if (nextStatus === '未回覆') {
+          targetAppointment.last_reply = null;
+        }
       }
       showStatus(`✅ 狀態已更新為「${nextStatus}」`, 'success');
     } else {
@@ -636,8 +701,13 @@ async function confirmReply(appointmentId, date, time) {
     const response = await axios.post(`/api/admin/appointments/${appointmentId}/confirm_reply`);
     if (response.data.status === 'success') {
       // Optimistically update the UI
-      if (weekSchedule.value[date] && weekSchedule.value[date].appointments[time]) {
-        weekSchedule.value[date].appointments[time].reply_status = '已確認';
+      const appointment = weekSchedule.value[date]?.appointments[time];
+      if (appointment) {
+        appointment.reply_status = '已確認';
+        // 修正：只有當 last_reply 是物件時，才更新其 confirmed 屬性
+        if (appointment.last_reply && typeof appointment.last_reply === 'object') {
+          appointment.last_reply.confirmed = true;
+        }
       }
       showStatus('✅ 已確認回覆', 'success');
     } else {
@@ -694,10 +764,14 @@ const handleClickOutside = (e) => {
 // --- Lifecycle Hooks ---
 onMounted(() => {
   loadInitialData();
+  // 每 15 秒自動在背景檢查一次更新
+  pollingIntervalId.value = setInterval(pollForUpdates, 15000);
   document.addEventListener('click', handleClickOutside);
 });
 
 onUnmounted(() => {
+  // 當元件銷毀時，清除輪詢計時器
+  clearInterval(pollingIntervalId.value);
   document.removeEventListener('click', handleClickOutside);
 });
 </script>
