@@ -140,35 +140,48 @@ def api_get_merge_suggestions():
 
     suggestions = []
     processed_line_users = set()
+    processed_manual_users = set()
 
     def normalize_name(name):
-        # 移除常見的手動標記和所有空格
-        return re.sub(r'[\s()（）手動]', '', name) if name else ''
+        """移除常見的手動標記、所有空格和數字，以提取核心姓名。"""
+        return re.sub(r'[\s()（）手動\d]', '', name) if name else ''
 
-    # 建立 LINE 用戶的查找表以提高效率
-    line_users_by_normalized_name = {normalize_name(u['name']): u for u in line_users}
     line_users_by_phone = {}
     for u in line_users:
         if u.get('phone'): line_users_by_phone[u['phone']] = u
         if u.get('phone2'): line_users_by_phone[u['phone2']] = u
 
     for manual_user in manual_users:
-        suggestion_found = False
-        # 規則 1：基於標準化後的姓名匹配
+        if manual_user['user_id'] in processed_manual_users:
+            continue
+
         normalized_manual_name = normalize_name(manual_user['name'])
-        if normalized_manual_name in line_users_by_normalized_name:
-            line_user = line_users_by_normalized_name[normalized_manual_name]
-            if line_user['user_id'] not in processed_line_users:
-                suggestions.append({'source': dict(manual_user), 'target': dict(line_user), 'reason': '姓名相似'})
-                processed_line_users.add(line_user['user_id'])
-                suggestion_found = True
-        
-        # 規則 2：基於電話號碼匹配 (如果姓名未匹配成功)
-        if not suggestion_found and manual_user.get('phone') and manual_user['phone'] in line_users_by_phone:
+        if not normalized_manual_name:
+            continue
+
+        # 規則 1：基於電話號碼匹配 (優先)
+        if manual_user.get('phone') and manual_user['phone'] in line_users_by_phone:
             line_user = line_users_by_phone[manual_user['phone']]
             if line_user['user_id'] not in processed_line_users:
                 suggestions.append({'source': dict(manual_user), 'target': dict(line_user), 'reason': '電話號碼相同'})
                 processed_line_users.add(line_user['user_id'])
+                processed_manual_users.add(manual_user['user_id'])
+                continue # 找到就往下一個 manual_user 繼續
+
+        # 規則 2：基於標準化後的姓名包含關係進行匹配
+        for line_user in line_users:
+            if line_user['user_id'] in processed_line_users:
+                continue
+            normalized_line_name = normalize_name(line_user['name'])
+            if not normalized_line_name:
+                continue
+            
+            # 檢查名稱是否相互包含
+            if normalized_manual_name in normalized_line_name or normalized_line_name in normalized_manual_name:
+                suggestions.append({'source': dict(manual_user), 'target': dict(line_user), 'reason': '姓名相似'})
+                processed_line_users.add(line_user['user_id'])
+                processed_manual_users.add(manual_user['user_id'])
+                break # 找到配對，處理下一個 manual_user
 
     return jsonify({"status": "success", "suggestions": suggestions})
 

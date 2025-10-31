@@ -140,5 +140,11 @@ def slots_settings_page():
 def merge_users_page():
     # 修正：傳入 Vite 設定檔中的入口點名稱 'merge_users.html'
     js_path, css_path = get_vue_assets('merge_users.html')
+    # 新增：產生返回用戶列表頁面的 URL
+    users_page_url = url_for('admin.users_vue_page')
     # 修正：渲染新的空殼模板
-    return render_template('admin_merge_users_vue.html', js_path=js_path, css_path=css_path, user=session.get('user'))
+    return render_template('admin_merge_users_vue.html', 
+                           js_path=js_path, 
+                           css_path=css_path, 
+                           user=session.get('user'),
+                           users_page_url=users_page_url)

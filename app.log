@@ -497,3 +497,8 @@ Traceback (most recent call last):
     raise TemplateNotFound(template)
 jinja2.exceptions.TemplateNotFound: base_vue.html
 2025-10-31 15:16:17,644 - app - INFO - 排程器已啟動。
+2025-10-31 16:15:23,867 - app - INFO - 排程器已啟動。
+2025-10-31 16:23:16,878 - app - INFO - 排程器已啟動。
+2025-10-31 16:32:55,482 - app - INFO - 排程器已啟動。
+2025-10-31 16:34:16,308 - app - INFO - 排程器已啟動。
+2025-10-31 16:36:18,433 - app - INFO - 排程器已啟動。

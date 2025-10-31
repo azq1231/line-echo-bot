@@ -490,6 +490,22 @@ def merge_users(source_user_id: str, target_user_id: str) -> bool:
 
         target_user_name = target_user['name']
 
+        # 1. (新增) 合併用戶欄位資料
+        # 如果 target_user 的欄位是空的，而 source_user 有資料，就複製過去
+        fields_to_merge = ['phone', 'phone2', 'address']
+        updates = {}
+        for field in fields_to_merge:
+            if not target_user.get(field) and source_user.get(field):
+                updates[field] = source_user[field]
+        
+        if updates:
+            set_clause = ", ".join([f"{field} = ?" for field in updates.keys()])
+            params = list(updates.values())
+            params.append(target_user_id)
+            cursor.execute(f"UPDATE users SET {set_clause} WHERE user_id = ?", tuple(params))
+            print(f"Merged user fields {list(updates.keys())} from {source_user_id} to {target_user_id}")
+
+
         # 1. 更新 appointments 表
         cursor.execute("""
             UPDATE appointments SET user_id = ?, user_name = ? WHERE user_id = ?

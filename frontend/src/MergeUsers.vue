@@ -5,7 +5,7 @@
         <i class="bi bi-person-plus-fill me-2"></i>用戶合併建議
       </h1>
       <div>
-        <a href="/admin/users" class="btn btn-outline-secondary me-2">
+        <a :href="usersPageUrl" class="btn btn-outline-secondary me-2">
           <i class="bi bi-arrow-left"></i> 返回用戶列表
         </a>
         <button class="btn btn-primary" @click="fetchSuggestions" :disabled="isLoading">
@@ -89,6 +89,7 @@ const suggestions = ref([]);
 const isLoading = ref(true);
 const isMerging = ref({});
 const status = ref({ message: '', type: 'info' });
+const usersPageUrl = ref('#'); // 返回按鈕的 URL
 
 const showStatus = (message, type = 'success', duration = 4000) => {
   status.value = { message, type };
@@ -140,6 +141,10 @@ const executeMerge = async (sourceId, targetId, index) => {
 };
 
 onMounted(() => {
+  // 從全域變數讀取後端傳來的 URL
+  if (window.appConfig && window.appConfig.usersPageUrl) {
+    usersPageUrl.value = window.appConfig.usersPageUrl;
+  }
   fetchSuggestions();
 });
 </script>

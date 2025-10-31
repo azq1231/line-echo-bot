@@ -13,5 +13,13 @@
 {% endblock %}
 
 {% block body_end_scripts %}
+  <script id="app-config" type="application/json">
+    {
+      "usersPageUrl": {{ users_page_url | tojson }}
+    }
+  </script>
+  <script>
+    window.appConfig = JSON.parse(document.getElementById('app-config').textContent);
+  </script>
   {% if js_path %}<script type="module" src="{{ js_path }}"></script>{% endif %}
 {% endblock %}
