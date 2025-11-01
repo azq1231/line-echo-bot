@@ -69,7 +69,7 @@
                     <span 
                       class="tw-text-xs tw-font-mono tw-cursor-pointer" 
                       :title="statusTitle(apt)"
-                      @click.stop="cycleReplyStatus(apt, dayData.date_info.date, time)">
+                      @click.stop="handleStatusClick(apt, dayData.date_info.date, time)">
                       {{ statusIcon(apt) }}
                     </span>
                     <button v-if="apt.reply_status === '已回覆'" @click.stop="confirmReply(apt.id, dayData.date_info.date, time)" title="確認回覆" class="tw-ml-1 tw-px-1.5 tw-py-0.5 tw-text-xs tw-bg-green-500 tw-text-white tw-rounded hover:tw-bg-green-600">
@@ -171,6 +171,40 @@
         </div>
       </div>
     </div>
+
+    <!-- Reply Content Modal -->
+    <div v-if="replyModal.show" class="tw-fixed tw-inset-0 tw-bg-gray-600 tw-bg-opacity-50 tw-overflow-y-auto tw-h-full tw-w-full tw-z-50 tw-flex tw-justify-center tw-items-center" @click.self="closeReplyModal">
+      <div class="tw-relative tw-p-5 tw-border tw-w-full sm:tw-w-96 tw-shadow-lg tw-rounded-md tw-bg-white">
+        <h3 class="tw-text-lg tw-font-bold tw-mb-4">用戶回覆內容</h3>
+        <div class="tw-bg-gray-100 tw-p-3 tw-rounded-md tw-mb-4 tw-min-h-[60px]">
+          <p class="tw-text-sm tw-text-gray-500">類型: <span class="tw-font-semibold tw-text-gray-800">{{ replyModal.type }}</span></p>
+          <p class="tw-text-sm tw-text-gray-500 tw-mt-1">內容:</p>
+          <p class="tw-text-base tw-text-gray-800 tw-break-words">{{ replyModal.content }}</p>
+        </div>
+        <div class="tw-mt-4 tw-flex tw-justify-end tw-space-x-2">
+          <button 
+            @click="closeReplyModal" 
+            class="tw-px-4 tw-py-2 tw-bg-gray-300 tw-text-gray-800 tw-rounded-md hover:tw-bg-gray-400"
+          >
+            關閉
+          </button>
+          <button 
+            v-if="!replyModal.isConfirmed"
+            @click="confirmFromModal" 
+            class="tw-px-4 tw-py-2 tw-bg-green-600 tw-text-white tw-rounded-md hover:tw-bg-green-700"
+          >
+            ✅ 確認回覆
+          </button>
+          <button 
+            v-else
+            @click="resetStatusFromModal" 
+            class="tw-px-4 tw-py-2 tw-bg-red-600 tw-text-white tw-rounded-md hover:tw-bg-red-700"
+          >
+            🔄 標示為未回覆
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -201,6 +235,15 @@ const showAddManualUserModal = ref(false);
 const newManualUserName = ref('');
 const isAddingManualUser = ref(false);
 
+const replyModal = ref({
+  show: false,
+  type: '',
+  content: '',
+  isConfirmed: false,
+  appointment: null,
+  date: null,
+  time: null,
+});
 // New loading state
 const isLoading = ref(true);
 
@@ -316,7 +359,7 @@ const statusTitle = (appointment) => {
   // 優先使用 last_reply 物件來產生更詳細的提示
   if (appointment.last_reply) {
     const replyType = appointment.last_reply.type === 'image' ? '圖片' : '文字';
-    currentStatusText = appointment.last_reply.confirmed ? '已確認' : `有新的${replyType}回覆`;
+    currentStatusText = appointment.last_reply.confirmed ? '已確認' : `有新的${replyType}回覆 (點擊查看)`;
     contentText = appointment.last_reply.content || 'N/A';
   } else if (appointment.reply_status) {
     // 備用方案
@@ -324,7 +367,7 @@ const statusTitle = (appointment) => {
     contentText = appointment.last_reply || '無'; // 這裡的 last_reply 可能是舊格式的字串
   }
 
-  return `點擊以變更狀態\n目前: ${currentStatusText}\n內容: ${contentText}`;
+  return `點擊查看或變更狀態\n目前: ${currentStatusText}\n內容: ${contentText}`;
 }
 
 
@@ -644,6 +687,12 @@ async function sendDayReminders(date, dayName) {
   }
 }
 
+function resetStatusFromModal() {
+  const { appointment, date, time } = replyModal.value;
+  cycleReplyStatus(appointment, date, time, '未回覆');
+  closeReplyModal();
+}
+
 async function cycleReplyStatus(appointment, date, time) {
   // --- NEW: Smart Confirmation Logic ---
   const dayAppointments = Object.values(weekSchedule.value[date].appointments);
@@ -678,12 +727,12 @@ async function cycleReplyStatus(appointment, date, time) {
   }
   // --- End of new logic. Fallback to single update below. ---
 
-  const currentStatus = appointment.reply_status;
-  const statuses = ['未回覆', '已回覆', '已確認'];
   let nextStatus;
 
   // 定義狀態循環邏輯：未回覆 -> 已確認, 已回覆 -> 已確認, 已確認 -> 未回覆
-  if (currentStatus === '未回覆' || currentStatus === '已回覆') {
+  if (forceStatus) {
+    nextStatus = forceStatus;
+  } else if (appointment.reply_status === '未回覆' || appointment.reply_status === '已回覆') {
     nextStatus = '已確認';
   } else {
     nextStatus = '未回覆';
