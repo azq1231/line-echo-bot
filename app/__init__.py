@@ -34,7 +34,7 @@ def create_app(start_scheduler=True):
 
     # 強化 Session 安全性
     app.config['SESSION_PERMANENT'] = True
-    app.permanent_session_lifetime = timedelta(hours=6)
+    app.permanent_session_lifetime = timedelta(days=30)
 
     # --- 全域變數 ---
     # 將這些變數附加到 app.config，以便在應用程式的其他地方（例如藍圖中）使用
