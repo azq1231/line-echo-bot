@@ -41,7 +41,15 @@ def get_week_dates(week_offset=0):
     获取指定周次的日期（週二到週六）
     """
     TAIPEI_TZ = current_app.config['TAIPEI_TZ']
-    today = datetime.now(TAIPEI_TZ).date()
+    today_raw = datetime.now(TAIPEI_TZ).date()
+
+    # 判斷是否為週日，如果是，則將計算基準日設為下一天（週一）
+    # 這樣在週日訪問時，預設就會顯示下一週的預約
+    if today_raw.weekday() == 6: # 星期一為 0, 星期日為 6
+        today = today_raw + timedelta(days=1)
+    else:
+        today = today_raw
+
     monday = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
     
     week_dates = []
