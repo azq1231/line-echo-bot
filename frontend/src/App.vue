@@ -693,7 +693,7 @@ function resetStatusFromModal() {
   closeReplyModal();
 }
 
-async function cycleReplyStatus(appointment, date, time) {
+async function cycleReplyStatus(appointment, date, time, forceStatus = null) {
   // --- NEW: Smart Confirmation Logic ---
   const dayAppointments = Object.values(weekSchedule.value[date].appointments);
   const otherAppointments = dayAppointments.filter(apt => 
