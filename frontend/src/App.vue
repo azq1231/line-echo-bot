@@ -49,7 +49,7 @@
                 @dragover.prevent="handleDragOver(dayData.date_info.date, time, apt)"
                 @dragleave="handleDragLeave(dayData.date_info.date, time)"
                 @drop.prevent="handleDrop(dayData.date_info.date, time)"
-                :class="{ 'tw-bg-green-100 tw-border-green-400': isDragOver(`${dayData.date_info.date}-${time}`) }"
+                :class="{ 'tw-bg-green-100 tw-border-2 tw-border-dashed tw-border-green-400': isDragOver(`${dayData.date_info.date}-${time}`) }"
               > 
                 <div
                   class="tw-w-full tw-p-1.5 tw-border tw-text-sm tw-rounded tw-cursor-pointer tw-flex tw-justify-between tw-items-center tw-min-w-0" 
@@ -105,9 +105,11 @@
             <div class="tw-space-y-1 tw-text-sm">
                 <div v-if="!dayData.waiting_list || dayData.waiting_list.length === 0" class="tw-text-gray-400 tw-text-xs tw-text-center tw-py-2">尚無備取</div>
                 <div v-for="item in dayData.waiting_list" :key="item.id" 
-                     class="tw-flex tw-items-center tw-justify-between tw-p-1.5 tw-bg-yellow-50 tw-border tw-border-yellow-200 tw-rounded tw-cursor-grab"
+                     class="tw-flex tw-items-center tw-justify-between tw-p-1.5 tw-bg-yellow-50 tw-border tw-border-yellow-200 tw-rounded tw-cursor-grab tw-transition-opacity"
                      draggable="true"
-                     @dragstart="handleDragStart($event, item)">
+                     @dragstart="handleDragStart($event, item)"
+                     @dragend="handleDragEnd"
+                     :class="{ 'tw-opacity-40': draggedItem && draggedItem.id === item.id }">
                     <span>{{ item.user_name }}</span>
                     <button @click="removeFromWaitingList(item.id, dayData.date_info.date)" class="tw-text-red-500 hover:tw-text-red-700 tw-text-xs">✕</button>
                 </div>
@@ -142,75 +144,39 @@
       {{ status.message }}
     </div>
 
-    <!-- Add Manual User Modal -->
-    <div v-if="showAddManualUserModal" class="tw-fixed tw-inset-0 tw-bg-gray-600 tw-bg-opacity-50 tw-overflow-y-auto tw-h-full tw-w-full tw-z-50 tw-flex tw-justify-center tw-items-center">
-      <div class="tw-relative tw-p-5 tw-border tw-w-96 tw-shadow-lg tw-rounded-md tw-bg-white">
-        <h3 class="tw-text-lg tw-font-bold tw-mb-4">新增臨時用戶</h3>
-        <input 
-          type="text" 
-          v-model="newManualUserName" 
-          placeholder="請輸入用戶姓名" 
-          class="tw-mt-1 tw-block tw-w-full tw-px-3 tw-py-2 tw-border tw-border-gray-300 tw-rounded-md tw-shadow-sm focus:tw-outline-none focus:tw-ring-indigo-500 focus:tw-border-indigo-500 sm:tw-text-sm"
-          @keyup.enter="addManualUser"
-        />
-        <div class="tw-mt-4 tw-flex tw-justify-end tw-space-x-2">
-          <button 
-            @click="closeAddManualUserModal" 
-            class="tw-px-4 tw-py-2 tw-bg-gray-300 tw-text-gray-800 tw-rounded-md hover:tw-bg-gray-400"
-          >
-            取消
-          </button>
-          <button 
-            @click="addManualUser" 
-            :disabled="isAddingManualUser || !newManualUserName.trim()"
-            class="tw-px-4 tw-py-2 tw-bg-indigo-600 tw-text-white tw-rounded-md hover:tw-bg-indigo-700 disabled:tw-opacity-50 disabled:tw-cursor-not-allowed"
-          >
-            <span v-if="isAddingManualUser">新增中...</span>
-            <span v-else>確定新增</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Lazily loaded Add Manual User Modal -->
+    <AddManualUserModal 
+      :show="showAddManualUserModal" 
+      :is-adding="isAddingManualUser"
+      @close="closeAddManualUserModal"
+      @submit="addManualUser"
+    />
 
-    <!-- Reply Content Modal -->
-    <div v-if="replyModal.show" class="tw-fixed tw-inset-0 tw-bg-gray-600 tw-bg-opacity-50 tw-overflow-y-auto tw-h-full tw-w-full tw-z-50 tw-flex tw-justify-center tw-items-center" @click.self="closeReplyModal">
-      <div class="tw-relative tw-p-5 tw-border tw-w-full sm:tw-w-96 tw-shadow-lg tw-rounded-md tw-bg-white">
-        <h3 class="tw-text-lg tw-font-bold tw-mb-4">用戶回覆內容</h3>
-        <div class="tw-bg-gray-100 tw-p-3 tw-rounded-md tw-mb-4 tw-min-h-[60px]">
-          <p class="tw-text-sm tw-text-gray-500">類型: <span class="tw-font-semibold tw-text-gray-800">{{ replyModal.type }}</span></p>
-          <p class="tw-text-sm tw-text-gray-500 tw-mt-1">內容:</p>
-          <p class="tw-text-base tw-text-gray-800 tw-break-words">{{ replyModal.content }}</p>
-        </div>
-        <div class="tw-mt-4 tw-flex tw-justify-end tw-space-x-2">
-          <button 
-            @click="closeReplyModal" 
-            class="tw-px-4 tw-py-2 tw-bg-gray-300 tw-text-gray-800 tw-rounded-md hover:tw-bg-gray-400"
-          >
-            關閉
-          </button>
-          <button 
-            v-if="!replyModal.isConfirmed"
-            @click="confirmFromModal" 
-            class="tw-px-4 tw-py-2 tw-bg-green-600 tw-text-white tw-rounded-md hover:tw-bg-green-700"
-          >
-            ✅ 確認回覆
-          </button>
-          <button 
-            v-else
-            @click="resetStatusFromModal" 
-            class="tw-px-4 tw-py-2 tw-bg-red-600 tw-text-white tw-rounded-md hover:tw-bg-red-700"
-          >
-            🔄 標示為未回覆
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Lazily loaded Reply Content Modal -->
+    <ReplyContentModal
+      :show="replyModal.show"
+      :type="replyModal.type"
+      :content="replyModal.content"
+      :is-confirmed="replyModal.isConfirmed"
+      @close="closeReplyModal"
+      @confirm="confirmFromModal"
+      @reset-status="resetStatusFromModal"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, defineAsyncComponent } from 'vue';
 import axios from 'axios';
+
+// Lazily load the modal component
+const AddManualUserModal = defineAsyncComponent(() => 
+  import('./AddManualUserModal.vue')
+);
+
+const ReplyContentModal = defineAsyncComponent(() =>
+  import('./ReplyContentModal.vue')
+);
 
 const allUsers = ref([]);
 const groupedUsers = ref({});
@@ -232,7 +198,6 @@ const dragOverTarget = ref(null);
 
 // New reactive properties for manual user modal
 const showAddManualUserModal = ref(false);
-const newManualUserName = ref('');
 const isAddingManualUser = ref(false);
 
 const replyModal = ref({
@@ -417,41 +382,45 @@ async function pollForUpdates() {
     const newWeekSchedule = newData.week_schedule || {};
     const newUsers = newData.users || [];
 
-    // 建立新的用戶名稱對照表以供比對
-    const newUserMap = new Map();
-    newUsers.forEach(user => {
-      if (user && user.id) {
-        newUserMap.set(user.id.toString(), user);
-      }
-    });
+    // --- NEW: Keep user list in sync ---
+    if (JSON.stringify(allUsers.value) !== JSON.stringify(newUsers)) {
+      allUsers.value = newUsers;
+      groupedUsers.value = groupUsersByZhuyin(allUsers.value);
+    }
 
-    // 智慧更新 UI，只更新有變動的燈號，避免干擾操作
+    // --- Smart UI Update Logic ---
+    // This logic updates the schedule without a full re-render, preserving the user's current state (e.g., open dropdowns).
     for (const date in weekSchedule.value) {
-      if (newWeekSchedule[date]) {
-        const oldDay = weekSchedule.value[date];
-        const newDay = newWeekSchedule[date];
-        for (const time in oldDay.appointments) { // 遍歷當前顯示的預約
-          const oldApt = oldDay.appointments[time];
-          const newApt = newDay.appointments[time]; // 從新資料中找到對應的預約
+      const oldDayData = weekSchedule.value[date];
+      const newDayData = newWeekSchedule[date];
 
-          if (oldApt && newApt) {
-            // 1. 檢查回覆狀態是否有變化
-            if (JSON.stringify(oldApt.last_reply) !== JSON.stringify(newApt.last_reply) || oldApt.reply_status !== newApt.reply_status) {
-              oldApt.last_reply = newApt.last_reply;
-              oldApt.reply_status = newApt.reply_status;
-            }
+      if (oldDayData && newDayData) {
+        // 1. Update appointments
+        // Using Object.keys on the new data ensures we catch newly added appointments.
+        const allTimes = new Set([...Object.keys(oldDayData.appointments), ...Object.keys(newDayData.appointments)]);
+        allTimes.forEach(time => {
+          const oldApt = oldDayData.appointments[time];
+          const newApt = newDayData.appointments[time];
 
-            // 2. 檢查用戶名稱是否有變化
-            if (oldApt.user_id) {
-              const updatedUser = newUserMap.get(oldApt.user_id.toString());
-              if (updatedUser && oldApt.user_name !== updatedUser.name) {
-                oldApt.user_name = updatedUser.name;
-              }
-            }
+          // Case 1: Appointment was added or changed
+          if (newApt && JSON.stringify(oldApt) !== JSON.stringify(newApt)) {
+            oldDayData.appointments[time] = { ...newApt };
+          } 
+          // Case 2: Appointment was cancelled
+          else if (!newApt && oldApt && oldApt.user_id) {
+             // Reset the slot instead of deleting it to maintain structure
+            oldDayData.appointments[time] = { id: oldApt.id, user_id: null, user_name: null, reply_status: '未回覆', last_reply: null };
           }
+        });
+
+        // 2. Update waiting list
+        // A simple replacement is safe here as it's less interactive than the main schedule.
+        if (JSON.stringify(oldDayData.waiting_list) !== JSON.stringify(newDayData.waiting_list)) {
+          oldDayData.waiting_list = newDayData.waiting_list;
         }
       }
     }
+
     console.log('Polling update complete at', new Date().toLocaleTimeString());
   } catch (error) {
     console.error("Polling for updates failed:", error);
@@ -553,11 +522,19 @@ async function selectUser(date, time, userId, userName, waitingListItemId = null
       // 修正：不再重新載入整個排程，而是使用後端回傳的新預約資料來更新 UI
       const newAppointment = response.data.appointment;
       if (newAppointment && weekSchedule.value[date] && weekSchedule.value[date].appointments[time]) {
+        // If a waiting list item was used, it's now deleted from the backend.
+        // We need to update the user list on the frontend to reflect this.
+        if (waitingListItemId) {
+          allUsers.value = allUsers.value.filter(u => u.id !== userId);
+          groupedUsers.value = groupUsersByZhuyin(allUsers.value);
+        }
+
         const targetSlot = weekSchedule.value[date].appointments[time];
         targetSlot.id = newAppointment.id;
         targetSlot.reply_status = newAppointment.reply_status;
         targetSlot.last_reply = newAppointment.last_reply;
       }
+      return true; // Return true on success
     } else {
       throw new Error(response.data.message || '儲存失敗');
     }
@@ -568,6 +545,7 @@ async function selectUser(date, time, userId, userName, waitingListItemId = null
       weekSchedule.value[date].appointments[time].user_id = originalUserId;
       weekSchedule.value[date].appointments[time].user_name = originalUserName;
     }
+    return false; // Return false on failure
   }
 }
 
@@ -622,6 +600,15 @@ function handleDragStart(event, item) {
   event.dataTransfer.setData('text/plain', JSON.stringify(item));
 }
 
+function handleDragEnd() {
+  // Use a short timeout to ensure the drop event has time to process `draggedItem`
+  // before it gets cleared. This prevents a race condition.
+  setTimeout(() => {
+    draggedItem.value = null;
+    dragOverTarget.value = null;
+  }, 50); // 50ms is a safe, imperceptible delay
+}
+
 function handleDragOver(date, time, apt) {
   if (draggedItem.value && !apt.user_id) {
     dragOverTarget.value = `${date}-${time}`;
@@ -636,13 +623,15 @@ function handleDragLeave(date, time) {
 
 async function handleDrop(date, time) {
   if (draggedItem.value && dragOverTarget.value === `${date}-${time}`) {
-    await selectUser(date, time, draggedItem.value.user_id, draggedItem.value.user_name, draggedItem.value.id);
-    // After successful drop and save, the backend will remove the waiting list item.
-    // We just need to update the UI.
-    weekSchedule.value[date].waiting_list = weekSchedule.value[date].waiting_list.filter(item => item.id !== draggedItem.value.id);
+    const droppedItem = { ...draggedItem.value }; // Create a copy
+    dragOverTarget.value = null;
+
+    // Perform the API call and UI update
+    const success = await selectUser(date, time, droppedItem.user_id, droppedItem.user_name, droppedItem.id);
+    if (success) {
+      weekSchedule.value[date].waiting_list = weekSchedule.value[date].waiting_list.filter(item => item.id !== droppedItem.id);
+    }
   }
-  draggedItem.value = null;
-  dragOverTarget.value = null;
 }
 
 async function sendWeekReminders() {
@@ -762,6 +751,41 @@ async function cycleReplyStatus(appointment, date, time, forceStatus = null) {
   }
 }
 
+function closeReplyModal() {
+  replyModal.value.show = false;
+}
+
+function confirmFromModal() {
+  const { appointment, date, time } = replyModal.value;
+  if (appointment && appointment.id) {
+    confirmReply(appointment.id, date, time);
+  }
+  closeReplyModal();
+}
+
+function openReplyModal(appointment, date, time) {
+  if (!appointment.last_reply) return;
+
+  replyModal.value = {
+    show: true,
+    type: appointment.last_reply.type === 'image' ? '圖片' : '文字',
+    content: appointment.last_reply.content,
+    isConfirmed: appointment.last_reply.confirmed,
+    appointment: appointment,
+    date: date,
+    time: time,
+  };
+}
+
+function handleStatusClick(appointment, date, time) {
+  // If there is an UNCONFIRMED reply (yellow light), open the modal.
+  if (appointment.last_reply && !appointment.last_reply.confirmed) {
+    openReplyModal(appointment, date, time);
+  } else { // Otherwise (no reply, or already confirmed), cycle the status.
+    cycleReplyStatus(appointment, date, time);
+  }
+}
+
 async function confirmReply(appointmentId, date, time) {
   showStatus('確認中...', 'info');
   try {
@@ -788,7 +812,6 @@ async function confirmReply(appointmentId, date, time) {
 // New methods for manual user modal
 function openAddManualUserModal() {
   showAddManualUserModal.value = true;
-  newManualUserName.value = ''; // Clear previous input
 }
 
 function closeAddManualUserModal() {
@@ -796,15 +819,14 @@ function closeAddManualUserModal() {
 }
 
 async function addManualUser() {
-  const name = newManualUserName.value.trim();
-  if (!name) {
+  if (!arguments[0]) { // name is passed from the event
     showStatus('用戶姓名不能為空。', 'error');
     return;
   }
 
   isAddingManualUser.value = true;
   try {
-    const response = await axios.post('/api/admin/users/add_manual', { name });
+    const response = await axios.post('/api/admin/users/add_manual', { name: arguments[0] });
     if (response.data.status === 'success') {
       const newUser = response.data.user;
       allUsers.value.push(newUser); // Add to allUsers
@@ -822,8 +844,12 @@ async function addManualUser() {
 }
 
 const handleClickOutside = (e) => {
-    // Close dropdown if click is outside of any dropdown container
-    if (!e.target.closest('.tw-relative')) {
+    // Find the closest dropdown container or draggable element
+    const dropdownContainer = e.target.closest('.tw-relative');
+    const draggableElement = e.target.closest('[draggable="true"]');
+
+    // If the click is outside a dropdown AND not on a draggable item, close selects.
+    if (!dropdownContainer && !draggableElement) {
         closeAllSelects();
     }
 };
