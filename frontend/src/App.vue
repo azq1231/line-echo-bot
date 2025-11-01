@@ -370,22 +370,40 @@ async function loadSchedule() {
 async function pollForUpdates() {
   try {
     const response = await axios.get(`/api/admin/get_week_appointments?offset=${currentWeekOffset.value}`);
-    const newWeekSchedule = response.data.week_schedule || {};
+    const newData = response.data;
+    const newWeekSchedule = newData.week_schedule || {};
+    const newUsers = newData.users || [];
+
+    // 建立新的用戶名稱對照表以供比對
+    const newUserMap = new Map();
+    newUsers.forEach(user => {
+      if (user && user.id) {
+        newUserMap.set(user.id.toString(), user);
+      }
+    });
 
     // 智慧更新 UI，只更新有變動的燈號，避免干擾操作
     for (const date in weekSchedule.value) {
       if (newWeekSchedule[date]) {
         const oldDay = weekSchedule.value[date];
         const newDay = newWeekSchedule[date];
-        for (const time in oldDay.appointments) {
-          if (newDay.appointments[time]) {
-            const oldApt = oldDay.appointments[time];
-            const newApt = newDay.appointments[time];
+        for (const time in oldDay.appointments) { // 遍歷當前顯示的預約
+          const oldApt = oldDay.appointments[time];
+          const newApt = newDay.appointments[time]; // 從新資料中找到對應的預約
 
-            // 比較 last_reply 和 reply_status 是否有變化
+          if (oldApt && newApt) {
+            // 1. 檢查回覆狀態是否有變化
             if (JSON.stringify(oldApt.last_reply) !== JSON.stringify(newApt.last_reply) || oldApt.reply_status !== newApt.reply_status) {
               oldApt.last_reply = newApt.last_reply;
               oldApt.reply_status = newApt.reply_status;
+            }
+
+            // 2. 檢查用戶名稱是否有變化
+            if (oldApt.user_id) {
+              const updatedUser = newUserMap.get(oldApt.user_id.toString());
+              if (updatedUser && oldApt.user_name !== updatedUser.name) {
+                oldApt.user_name = updatedUser.name;
+              }
             }
           }
         }
