@@ -43,7 +43,11 @@ def webhook():
                     # 如果沒有未來預約，則不處理回覆
                     pass
                 else:
-                    reply_obj = {"confirmed": False}
+                    reply_obj = {
+                        "type": "",
+                        "content": "",
+                        "confirmed": False
+                    }
                     
                     if message_type == "text":
                         reply_obj["type"] = "text"
