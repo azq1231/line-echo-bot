@@ -27,15 +27,22 @@ def _do_send_reminders(app, appointments: list, reminder_type: str = 'daily') ->
             user_name = daily_apt_list[0]['user_name']
             TAIPEI_TZ = app.config['TAIPEI_TZ']
             apt_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-            today = datetime.now(TAIPEI_TZ).date()
+            today_in_taipei = datetime.now(TAIPEI_TZ).date()
             
-            if apt_date == today:
+            # 計算本週日的日期，用來判斷是否為「下週」
+            this_sunday = today_in_taipei - timedelta(days=today_in_taipei.weekday()) + timedelta(days=6)
+            
+            weekday_names = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
+            weekday_name = weekday_names[apt_date.weekday()]
+
+            if apt_date == today_in_taipei:
                 date_keyword = "今天"
-            elif apt_date == today + timedelta(days=1):
+            elif apt_date == today_in_taipei + timedelta(days=1):
                 date_keyword = "明天"
+            elif apt_date > this_sunday:
+                date_keyword = f"下{weekday_name}"
             else:
-                weekday_names = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
-                date_keyword = f" {weekday_names[apt_date.weekday()]}"
+                date_keyword = weekday_name
 
             time_slots_str = ""
             for apt in daily_apt_list:
@@ -46,7 +53,7 @@ def _do_send_reminders(app, appointments: list, reminder_type: str = 'daily') ->
             default_template = ("您好，提醒您{date_keyword} ({date}) 有預約以下時段：\n\n""{time_slots}\n\n""如果需要更改或取消，請與我們聯繫，謝謝。")
             template = db.get_config('message_template_reminder', default_template) or default_template
 
-            message = template.format(user_name=user_name, date_keyword=date_keyword, date=apt_date.strftime('%m/%d'), weekday=date_keyword.strip(), time_slots=time_slots_str.strip())
+            message = template.format(user_name=user_name, date_keyword=date_keyword, date=apt_date.strftime('%m/%d'), weekday=weekday_name, time_slots=time_slots_str.strip())
             
             success = send_line_message(user_id=user_id, messages=[{"type": "text", "text": message}], message_type=f'reminder_{reminder_type}', target_name=user_name)
             if success:
