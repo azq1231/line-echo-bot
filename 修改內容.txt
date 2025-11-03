@@ -24,9 +24,7 @@ appointments.db 檔案是一個 SQLite 資料庫檔案，
 ✅ 系統設定 (configs 資料表)
 
 1.如果當天前面有人取消，可以安排人提前看，
-2.在設定中，可以編輯預約簿的發送訊息功能中，要發送的預約提醒訊息
-    更改顯示訊息，日期在前，周數在後
-    另外下一周的周數，應該是寫下周五，而不是寫周五
+2.
 3.
 4.
 5.排程管理的導覽列base是不是跟其他的不一樣?
@@ -35,7 +33,6 @@ appointments.db 檔案是一個 SQLite 資料庫檔案，
 其他問題
 
 請幫我將專案結構模組化，拆分 `main.py`。
-初始目標（最小風險）
 
 在專案根目錄建立 app/ 資料夾，保留現有 main.py 但把它變成短小的啟動檔（只做 app init 與 run）。
 
@@ -83,19 +80,6 @@ app/scheduler/jobs.py：把 send_daily_reminders_job、send_weekly_reminders_job
 
 main.py：只做 app = create_app(); if __name__ == "__main__": app.run(...)。
 
-漸進搬移步驟（具體）
-
-建 app/__init__.py，把你原本 main 裡面跟「初始化」相關的程式（logger, session timeout, 讀 config）搬進來，並讓 create_app() 回傳 app。先不要動 route。
-
-修改 main.py 改成簡單啟動檔，確認 flask run 或 python main.py 能正常啟動（應該與之前行為一致）。
-
-把一個小且自包含的 route（例如 /api/admin/users）複製到 app/routes/admin.py，並在 create_app 註冊 admin blueprint。啟動，測試該 API 是否仍工作。若失敗，回退、修正。
-
-依次遷移其他路由（每次只一個檔案或一小組 route），並在遷移後執行自動測試或手動測試。
-
-把 scheduler 抽出到 app/scheduler（並保留在 production 模式下啟動）。
-
-最終把 main.py 變乾淨（少於 30 行）。
 
 這就是所有的第一階段開發了，完結灑花
 
