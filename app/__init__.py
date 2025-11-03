@@ -91,6 +91,11 @@ def create_app(start_scheduler=True):
             'feature_booking_enabled': db.get_config('feature_booking_enabled', 'true') != 'false',
         }
 
+    # --- 註冊自訂指令 ---
+    # 從 commands.py 導入初始化函式並執行
+    from . import commands
+    commands.init_commands(app)
+
     # --- 初始化排程器 ---
     # 根據傳入的參數決定是否啟動排程器
     if start_scheduler:
