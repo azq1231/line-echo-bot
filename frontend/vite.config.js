@@ -5,6 +5,11 @@ import { resolve } from 'path'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [vue()],
+
+  // --- 關鍵修正 ---
+  // 設定基礎路徑，讓打包後的所有資源引用都以 /static/ 開頭
+  base: '/static/',
+
   build: {
     rollupOptions: {
       input: {
@@ -27,11 +32,6 @@ export default defineConfig({
       },
       // 如果您還有其他需要代理的路徑，也可以一併加入
       // 例如，頭像路徑
-
-      '/admin': {
-        target: 'http://127.0.0.1:5000',
-        changeOrigin: true,
-      },
       '/user_avatar': {
         target: 'http://localhost:5000',
         changeOrigin: true,

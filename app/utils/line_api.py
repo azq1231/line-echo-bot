@@ -107,7 +107,11 @@ def send_line_message(user_id, messages, message_type="message", target_name=Non
 def user_avatar(user_id):
     user = db.get_user_by_id(user_id)
     if not user or not user.get('picture_url') or user_id.startswith('manual_'):
-        return send_from_directory('static', 'nohead.png')
+        # 確保 static_folder 存在，以滿足類型檢查
+        static_folder = current_app.static_folder
+        if static_folder:
+            return send_from_directory(static_folder, 'nohead.png')
+        return "Static folder not configured", 500
     try:
         picture_response = requests.get(user['picture_url'], timeout=5)
         picture_response.raise_for_status()
@@ -116,7 +120,10 @@ def user_avatar(user_id):
         return response
     except requests.RequestException as e:
         current_app.logger.error(f"下載頭像失敗 for user {user_id}: {e}")
-        return send_from_directory('static', 'nohead.png')
+        static_folder = current_app.static_folder
+        if static_folder:
+            return send_from_directory(static_folder, 'nohead.png')
+        return "Static folder not configured", 500
 
 def refresh_user_profile(user_id):
     user_info = get_line_profile(user_id)

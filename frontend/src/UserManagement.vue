@@ -40,7 +40,7 @@
           <tbody>
             <tr v-for="user in filteredUsers" :key="user.id">
               <td class="text-center">
-                <img :src="`/user_avatar/${user.id}`" alt="avatar" class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;" @error="onAvatarError">
+                <img :src="`/users/user_avatar/${user.id}`" alt="avatar" class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;" @error="onAvatarError">
               </td>
               <td class="user-details">
                 <div class="d-flex align-items-center">
