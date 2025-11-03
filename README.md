@@ -156,20 +156,21 @@ npm run build
         venv\Scripts\activate
         ```
     *   執行以下指令來設定管理員：
-        > **注意**：在 Windows 中，您需要分兩步執行：先設定環境變數，再執行指令。
-        ```powershell
-        # 如果您使用傳統的命令提示字元 (cmd.exe)，請用 'set'
-        set FLASK_APP=main.py
-        flask set-admin
-
-        # 如果您使用 PowerShell (建議)，請用 '$env:'
-        $env:FLASK_APP = "main.py"
-        flask set-admin
+        > **建議**：使用 `python -m flask` 的方式執行，這能確保 Python 正確找到您的專案路徑，避免 `No such command` 錯誤。
+        ```bash
+        # 此指令在 Windows, macOS, Linux 上通用
+        python -m flask set-admin
         ```
     *   程式會列出所有已存在的使用者。根據提示，輸入您自己帳號對應的數字編號，然後按下 Enter。
 
 3.  **完成設定**：
     *   完成後，您就可以使用該 LINE 帳號登入後台管理頁面 (例如 `http://localhost:5173/admin/users_vue`)，並擁有管理員權限。
+
+4.  **Linux/VPS 權限錯誤排解**：
+    *   如果在 Linux 或 VPS 上執行指令時遇到 `Permission denied` 錯誤，代表 `flask` 檔案缺少執行權限。請執行以下指令授予權限（此操作只需執行一次）：
+        ```bash
+        chmod +x venv/bin/flask
+        ```
 
 ---
 
