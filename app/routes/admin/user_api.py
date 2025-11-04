@@ -155,8 +155,9 @@ def api_get_merge_suggestions():
         if manual_user['user_id'] in processed_manual_users:
             continue
 
-        normalized_manual_name = normalize_name(manual_user['name'])
-        if not normalized_manual_name:
+        # 將可能包含多個姓名的 manual_user.name 拆分成多個 token 進行比對
+        name_tokens = [t for t in re.split(r'[,\n/;，；\s]+', manual_user.get('name') or '') if t]
+        if not name_tokens:
             continue
 
         # 規則 1：基於電話號碼匹配 (優先)
@@ -169,19 +170,26 @@ def api_get_merge_suggestions():
                 continue # 找到就往下一個 manual_user 繼續
 
         # 規則 2：基於標準化後的姓名包含關係進行匹配
-        for line_user in line_users:
-            if line_user['user_id'] in processed_line_users:
+        for token in name_tokens:
+            normalized_manual_name = normalize_name(token)
+            if not normalized_manual_name:
                 continue
-            normalized_line_name = normalize_name(line_user['name'])
-            if not normalized_line_name:
-                continue
-            
-            # 檢查名稱是否相互包含
-            if normalized_manual_name in normalized_line_name or normalized_line_name in normalized_manual_name:
-                suggestions.append({'source': dict(manual_user), 'target': dict(line_user), 'reason': '姓名相似'})
-                processed_line_users.add(line_user['user_id'])
-                processed_manual_users.add(manual_user['user_id'])
-                break # 找到配對，處理下一個 manual_user
+
+            for line_user in line_users:
+                if line_user['user_id'] in processed_line_users:
+                    continue
+                normalized_line_name = normalize_name(line_user['name'])
+                if not normalized_line_name:
+                    continue
+
+                # 檢查名稱是否相互包含
+                if normalized_manual_name in normalized_line_name or normalized_line_name in normalized_manual_name:
+                    suggestions.append({'source': dict(manual_user), 'target': dict(line_user), 'reason': '姓名相似'})
+                    processed_line_users.add(line_user['user_id'])
+                    processed_manual_users.add(manual_user['user_id'])
+                    break # 找到配對，處理下一個 manual_user
+            if manual_user['user_id'] in processed_manual_users:
+                break
 
     return jsonify({"status": "success", "suggestions": suggestions})
 
