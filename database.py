@@ -424,19 +424,39 @@ def add_user(user_id: str, name: str, picture_url: Optional[str] = None, phone: 
     conn.close()
 
 def update_user_name(user_id: str, new_name: str) -> bool:
-    """更新用户名和注音"""
+    """更新用戶名和注音，並同步更新所有相關的預約記錄。"""
     conn = get_db()
     cursor = conn.cursor()
-    zhuyin = _name_to_zhuyin(new_name)
-    cursor.execute('''
-        UPDATE users 
-        SET name = ?, zhuyin = ?, manual_update = TRUE, updated_at = CURRENT_TIMESTAMP 
-        WHERE user_id = ?
-    ''', (new_name, zhuyin, user_id))
-    updated = cursor.rowcount > 0
-    conn.commit()
-    conn.close()
-    return updated
+    try:
+        # 開始交易
+        conn.execute('BEGIN')
+
+        # 1. 更新 users 表
+        zhuyin = _name_to_zhuyin(new_name)
+        cursor.execute('''
+            UPDATE users 
+            SET name = ?, zhuyin = ?, manual_update = TRUE, updated_at = CURRENT_TIMESTAMP 
+            WHERE user_id = ?
+        ''', (new_name, zhuyin, user_id))
+        
+        updated = cursor.rowcount > 0
+        if not updated:
+            raise Exception("User not found or name is the same.")
+
+        # 2. 同步更新 appointments 表中的 user_name
+        cursor.execute('''
+            UPDATE appointments SET user_name = ? WHERE user_id = ?
+        ''', (new_name, user_id))
+
+        # 提交交易
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback() # 如果任何一步出錯，就回滾所有操作
+        print(f"更新用戶姓名時發生錯誤: {e}")
+        return False
+    finally:
+        conn.close()
 
 def delete_user(user_id: str) -> bool:
     """删除用户"""
@@ -627,15 +647,31 @@ def update_schedule_send_time(schedule_id: int, new_send_time: datetime) -> bool
 
 # ==================== 预约管理 ====================
 
-def add_appointment(user_id: str, user_name: str, date: str, time: str, notes: Optional[str] = None) -> Optional[int]:
-    """新增预约"""
+def add_appointment(user_id: str, date: str, time: str, notes: Optional[str] = None, user_name: Optional[str] = None) -> Optional[int]:
+    """新增預約。
+    
+    為了確保資料一致性，此函數會優先從 users 表中查詢最新的 user_name。
+    前端傳遞的 user_name 僅作為備用，以相容舊的呼叫方式。
+    """
     conn = get_db()
     cursor = conn.cursor()
     try:
+        # 1. 查詢最新的用戶姓名，確保資料正確性
+        cursor.execute('SELECT name FROM users WHERE user_id = ?', (user_id,))
+        user_row = cursor.fetchone()
+        
+        # 如果找不到用戶或前端未提供備用名稱，則無法新增
+        if not user_row and not user_name:
+            print(f"錯誤：新增預約失敗，找不到用戶 user_id: {user_id}，且未提供備用名稱。")
+            return None
+        
+        # 優先使用資料庫中的最新名稱，如果找不到，則使用前端傳來的名稱作為備用
+        final_user_name = user_row['name'] if user_row else user_name
+
         cursor.execute('''
             INSERT INTO appointments (user_id, user_name, date, time, notes)
             VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, user_name, date, time, notes))
+        ''', (user_id, final_user_name, date, time, notes))
         new_id = cursor.lastrowid
         conn.commit()
         return new_id

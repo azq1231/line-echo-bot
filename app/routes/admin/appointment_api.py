@@ -93,18 +93,31 @@ def save_appointment():
     user_name = data.get('user_name')
     user_id = data.get('user_id', '')
     waiting_list_item_id = data.get('waiting_list_item_id')
+
+    # 1. 先刪除該時段的現有預約，為新增或清空做準備
     db.cancel_appointment(date, time)
-    if user_name and user_id:
-        new_appointment_id = db.add_appointment(user_id, user_name, date, time)
+
+    # 2. 如果提供了 user_id，代表是「新增」或「更新」操作
+    if user_id:
+        # 修正：使用關鍵字參數 (keyword arguments) 呼叫 add_appointment，確保參數正確對應
+        new_appointment_id = db.add_appointment(
+            user_id=user_id, 
+            date=date, 
+            time=time, 
+            user_name=user_name # 將 user_name 作為備用名稱傳遞
+        )
         if new_appointment_id:
+            # 如果是從備取名單拖曳過來的，則從備取名單中移除
+            if waiting_list_item_id is not None:
+                try:
+                    db.remove_from_waiting_list(int(waiting_list_item_id))
+                except (ValueError, TypeError):
+                    current_app.logger.warning(f"警告：無法將 waiting_list_item_id '{waiting_list_item_id}' 轉換為整數。")
             new_appointment = db.get_appointment_by_id(new_appointment_id)
             return jsonify({"status": "success", "message": "預約已儲存", "appointment": new_appointment})
-    if waiting_list_item_id is not None:
-        try:
-            db.remove_from_waiting_list(int(waiting_list_item_id))
-        except ValueError:
-            current_app.logger.warning(f"警告：無法將 waiting_list_item_id '{waiting_list_item_id}' 轉換為整數。")
-    return jsonify({"status": "success", "message": "預約已更新"})
+
+    # 3. 如果沒有提供 user_id，代表是「取消」操作，前面已經刪除完畢，直接回傳成功即可
+    return jsonify({"status": "success", "message": "預約已清空"})
 
 @api_admin_bp.route("/send_appointment_reminders", methods=["POST"])
 @admin_required

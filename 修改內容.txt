@@ -24,68 +24,19 @@ appointments.db 檔案是一個 SQLite 資料庫檔案，
 ✅ 系統設定 (configs 資料表)
 
 1.如果當天前面有人取消，可以安排人提前看，
-2.
+2.姓名超過一定字數時，會導致撐破邊框，如何處理?
 3.
 4.
-5.排程管理的導覽列base是不是跟其他的不一樣?
+5.
 6.
 
 其他問題
-
-請幫我將專案結構模組化，拆分 `main.py`。
-
-在專案根目錄建立 app/ 資料夾，保留現有 main.py 但把它變成短小的啟動檔（只做 app init 與 run）。
-
-在 app/ 下建立 __init__.py（create_app）來初始化 Flask、logger、db、藍圖（blueprints）。
-
-把路由分到 app/routes/（例如 auth.py、admin.py、appointments.py），每個檔案只包含自己那組 route。
-
-把工具函式放 app/utils/（logger、LINE API wrapper、helpers）。
-
-把 scheduler 相關放 app/scheduler.py（或 app/scheduler/jobs.py），並只在 production 模式啟動 scheduler。
-
-更新 main.py 只做 from app import create_app，然後 app.run(...)。
-
-檔案與目錄建議（模板）
-project-root/
-├── main.py                # 啟動檔（非常小）
-├── app/
-│   ├── __init__.py        # create_app()，註冊藍圖、載入設定、初始化 logger/db
-│   ├── routes/
-│   │   ├── auth.py        # /login, /callback, /logout
-│   │   ├── admin.py       # /admin/* 與 /api/admin/*
-│   │   └── booking.py     # booking_page, booking APIs
-│   ├── utils/
-│   │   ├── logger.py      # logging 設定
-│   │   ├── db.py          # 介於你現有 db wrapper（或只是 import 既有 db）
-│   │   └── line_api.py    # get_line_profile, send_line_message 包裝
-│   ├── scheduler/
-│   │   └── jobs.py        # send_daily_reminders_job 等
-│   └── templates/         # 若你把 jinja2 模板也放在這
-└── static/
-
-每個檔案應該放什麼（簡短說明）
-
-app/__init__.py：建立 Flask app，讀設定、初始化 db、註冊藍圖 from .routes import auth, admin, booking; app.register_blueprint(...)，設定 app.permanent_session_lifetime、logging 等。
-
-app/routes/auth.py：跟登入、callback、session 有關的 route。
-
-app/routes/admin.py：包含 @admin_required 裝飾器路由（使用者管理、configs、API）。
-
-app/routes/booking.py：顯示預約頁、booking API、history 等。
-
-app/utils/logger.py：統一 logger 設定，export get_logger()。
-
-app/scheduler/jobs.py：把 send_daily_reminders_job、send_weekly_reminders_job、send_custom_schedules_job 放這裡，並提供 init_scheduler(app) 供 create_app 在 production 時呼叫。
-
-main.py：只做 app = create_app(); if __name__ == "__main__": app.run(...)。
-
 
 這就是所有的第一階段開發了，完結灑花
 
 第二階段
 按摩的部分該怎麼處理?
-當訊息發送後，能夠自動確認嗎?如果對方說好，或是沒問題
+
 
 其他部分
 [WARNING] Invalid request from ip=3.131.215.38: Invalid HTTP request line: 'SSH-2.0-Go'
