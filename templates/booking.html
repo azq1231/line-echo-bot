@@ -206,15 +206,25 @@
             const result = await response.json();
 
             if (response.ok) {
-                showAlert(result.message, 'success');
+                showAlert('✅ 恭喜！預約成功，頁面將在 2 秒後重新整理。', 'success');
                 // 預約成功後重新載入頁面以更新狀態
                 setTimeout(() => window.location.reload(), 2000);
             } else {
-                showAlert(result.message || '預約失敗，請重試。', 'danger');
+                // 預約失敗，顯示更詳細的錯誤訊息與重試選項
+                const errorMsg = result.message || '預約失敗，請重試。';
+                console.error('Booking failed:', result);
+                
+                // 檢查是否因為時段已被預約（409 Conflict 狀態）
+                if (response.status === 409) {
+                    showAlert(`❌ ${errorMsg} 頁面將在 3 秒後重新整理以顯示最新狀態。`, 'warning');
+                    setTimeout(() => window.location.reload(), 3000);
+                } else {
+                    showAlert(`❌ ${errorMsg}`, 'danger');
+                }
             }
         } catch (error) {
             console.error('Booking error:', error);
-            showAlert('發生網路錯誤，請稍後再試。', 'danger');
+            showAlert('❌ 發生網路錯誤，請檢查您的網路連線並重試。若多次失敗，請稍候後重新整理頁面。', 'danger');
         }
     }
 

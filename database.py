@@ -662,21 +662,28 @@ def add_appointment(user_id: str, date: str, time: str, notes: Optional[str] = N
         
         # 如果找不到用戶或前端未提供備用名稱，則無法新增
         if not user_row and not user_name:
-            print(f"錯誤：新增預約失敗，找不到用戶 user_id: {user_id}，且未提供備用名稱。")
+            print(f"[APPOINTMENT ERROR] 新增預約失敗：找不到用戶 user_id={user_id}，備用名稱={user_name}")
             return None
         
         # 優先使用資料庫中的最新名稱，如果找不到，則使用前端傳來的名稱作為備用
         final_user_name = user_row['name'] if user_row else user_name
 
+        print(f"[APPOINTMENT DEBUG] 嘗試新增預約：user_id={user_id}, user_name={final_user_name}, date={date}, time={time}")
         cursor.execute('''
             INSERT INTO appointments (user_id, user_name, date, time, notes)
             VALUES (?, ?, ?, ?, ?)
         ''', (user_id, final_user_name, date, time, notes))
         new_id = cursor.lastrowid
         conn.commit()
+        print(f"[APPOINTMENT SUCCESS] 預約成功建立：appointment_id={new_id}, {date} {time}")
         return new_id
-    except sqlite3.IntegrityError:
-        # 唯一性约束失败
+    except sqlite3.IntegrityError as e:
+        # 唯一性约束失败 - 通常表示此 (user_id, date, time) 的時段已被預約
+        print(f"[APPOINTMENT CONFLICT] 唯一性約束失敗（該時段可能已被預約）：user_id={user_id}, date={date}, time={time}, detail={str(e)}")
+        return None
+    except Exception as e:
+        # 其他異常
+        print(f"[APPOINTMENT ERROR] 新增預約時發生異常：{type(e).__name__}: {str(e)}")
         return None
     finally:
         conn.close()
@@ -699,6 +706,18 @@ def get_appointment_by_id(appointment_id: int) -> Optional[Dict]:
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM appointments WHERE id = ?', (appointment_id,))
+    appointment = cursor.fetchone()
+    conn.close()
+    return dict(appointment) if appointment else None
+
+def get_appointment_by_date_and_time(date: str, time: str) -> Optional[Dict]:
+    """透過日期與時間檢查是否存在預約（用於防止衝突）"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT * FROM appointments WHERE date = ? AND time = ? AND status = ?',
+        (date, time, 'confirmed')
+    )
     appointment = cursor.fetchone()
     conn.close()
     return dict(appointment) if appointment else None

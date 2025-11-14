@@ -115,17 +115,29 @@ def api_book_appointment():
         return api_response(error="預約資料不完整", status_code=400)
 
     user = session['user']
+    user_id = user['user_id']
+    
+    # 在新增之前，先檢查該時段是否已被預約（避免重複提交或競態條件）
+    existing_apt = db.get_appointment_by_date_and_time(date, time)
+    if existing_apt:
+        print(f"[BOOKING API] 時段衝突：user_id={user_id} 試圖預約 {date} {time}，但已被 {existing_apt.get('user_name')} 預約。")
+        return api_response(error=f"抱歉，{date} {time} 的時段已被預約，請選擇其他時段。", status_code=409)
+    
+    # 嘗試新增預約
     success = db.add_appointment(
-        user_id=user['user_id'],
+        user_id=user_id,
         user_name=user['name'],
         date=date,
         time=time
     )
 
     if success:
+        print(f"[BOOKING API] 預約成功：user_id={user_id}, {date} {time}")
         return api_response(data={"message": f"恭喜！您已成功預約 {date} {time} 的時段。"})
     else:
-        return api_response(error=f"抱歉，{date} {time} 的時段已被預約，請選擇其他時段。", status_code=409)
+        # 新增失敗，可能是唯一性約束或其他原因
+        print(f"[BOOKING API] 預約失敗：user_id={user_id}, {date} {time} (可能是重複或系統錯誤)")
+        return api_response(error=f"預約失敗，{date} {time} 的時段可能已被預約或系統發生錯誤。請重新整理頁面後重試。", status_code=409)
 
 @booking_bp.route("/api/cancel_my_appointment", methods=["POST"])
 def api_cancel_my_appointment():
