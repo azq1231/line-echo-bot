@@ -73,13 +73,20 @@ def _do_send_reminders(app, appointments: list, reminder_type: str = 'daily') ->
             
     return sent_count, failed_count
 
-def send_daily_reminders_job(app):
+def send_daily_reminders_job(app, fake_today_str=None):
     """每日提醒的排程任務"""
     with app.app_context():
         if db.get_config('auto_reminder_daily_enabled', 'false') == 'true':
             app.logger.info("執行每日自動提醒...")
             TAIPEI_TZ = app.config['TAIPEI_TZ']
-            tomorrow = datetime.now(TAIPEI_TZ) + timedelta(days=1)
+
+            if fake_today_str:
+                today = datetime.strptime(fake_today_str, '%Y-%m-%d').date()
+                app.logger.info(f"使用偽裝日期進行測試: {today}")
+            else:
+                today = datetime.now(TAIPEI_TZ).date()
+
+            tomorrow = today + timedelta(days=1)
             tomorrow_str = tomorrow.strftime('%Y-%m-%d')
             
             appointments = db.get_appointments_by_date_range(tomorrow_str, tomorrow_str)
@@ -92,12 +99,19 @@ def send_daily_reminders_job(app):
             else:
                 app.logger.info("明日無符合每日提醒條件的預約。")
 
-def send_weekly_reminders_job(app):
+def send_weekly_reminders_job(app, fake_today_str=None):
     """每週提醒的排程任務"""
     with app.app_context():
         if db.get_config('auto_reminder_weekly_enabled', 'false') == 'true':
             app.logger.info("執行每週自動提醒...")
-            week_dates = get_week_dates_for_scheduler(week_offset=1) # 預設為下週的預約
+
+            if fake_today_str:
+                base_date = datetime.strptime(fake_today_str, '%Y-%m-%d').date()
+                app.logger.info(f"使用偽裝日期進行測試: {base_date}")
+            else:
+                base_date = None # 讓 utils 使用當前日期
+
+            week_dates = get_week_dates_for_scheduler(week_offset=1, base_date=base_date) # 預設為下週的預約
             start_date = week_dates[0]['date']
             end_date = week_dates[-1]['date']
             appointments = db.get_appointments_by_date_range(start_date, end_date)

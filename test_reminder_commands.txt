@@ -1,0 +1,13 @@
+# 測試「每日提醒 (前一天)」：
+# 請將 http://localhost:5000 替換為您實際的伺服器網址
+curl -X POST -H "Content-Type: application/json" -d '{"fake_date": "2025-11-24"}' http://localhost:5000/api/admin/trigger_job/daily_reminder_job
+curl -X POST -H "Content-Type: application/json" --cookie "session=.eJxNj19v2jAUxb_K5GdS7MRx4ryV_qHrYLAy2klLFdnxNfHkBhbbpQjx3WeqVerLuUdX9_x07hE12grXgUPV7yP64uNAezH0pt-gEapDKVpZh5zQsg4FK949y-tAAaLmMo_7PFOsDkwyWgdeYhK1YGkdMoxT9HwafXBdaFtw7p37mcVSgqNPua6D1pjEzPMIbUXwXeO88IAqJIliipMiKYDnCSUEJ5xwlUiuUo1zKPIii-DgYEDVERnXCPVielSREerFyxkRa2FQ56LZWXPJY2BnWh8GaMJg40nn_c5V4_Fu2Gpj4cKaHhLXqv6iBz_G3XazmIpXe5jfdGZpimu6eVh8f7sP88P95GdqxYN9a2b7x0Fc7Z6uD5fi7tE23_aXbLkql1eHr-3KOje7veEL48Ns3QY9_TPX0_VC_rIwyX48reyk_Lv5_0djVKy05qqlkmFaaAFZSUGVgAkRBEBzKWmJTqd_TGuPkg.aQYNug.Cg0WkEu_0TJmy74uOvtqNNOOSRQ" -d '{"fake_date": "2025-11-24"}' https://app.monyangood.com/api/admin/trigger_job/daily_reminder_job
+
+
+# 測試「每週提醒」：
+# 請將 http://localhost:5000 替換為您實際的伺服器網址
+curl -X POST -H "Content-Type: application/json" -d '{"fake_date": "2025-11-18"}' http://localhost:5000/api/admin/trigger_job/weekly_reminder_job
+
+# 測試完成後，請記得移除 app/routes/admin/test_api.py 檔案，
+# 並從 app/routes/admin/__init__.py 中移除對 test_api 的引用，
+# 以避免在生產環境中暴露不必要的測試端點。
