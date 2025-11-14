@@ -14,9 +14,11 @@ def init_scheduler(app):
     """初始化並啟動排程器"""
     with app.app_context():
         # 讀取資料庫中的設定
+        # 每日提醒時間:如果資料庫中沒有設定，預設早上 9 點
         daily_time_str = db.get_config('auto_reminder_daily_time', '09:00') or '09:00'
         daily_hour, daily_minute = map(int, daily_time_str.split(':'))
 
+        # 每週提醒時間:如果資料庫中沒有設定，預設週日 晚上 9 點    
         weekly_day = db.get_config('auto_reminder_weekly_day', 'sun') or 'sun'        
         weekly_time_str = db.get_config('auto_reminder_weekly_time', '21:00') or '21:00'
         weekly_hour, weekly_minute = map(int, weekly_time_str.split(':'))

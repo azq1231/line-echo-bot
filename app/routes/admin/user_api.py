@@ -61,7 +61,8 @@ def api_get_users():
             "is_admin": user.get('is_admin', False),
             "zhuyin": user.get('zhuyin', ''),
             "phone": user.get('phone', ''),
-            "phone2": user.get('phone2', '')
+            "phone2": user.get('phone2', ''),
+            "reminder_schedule": user.get('reminder_schedule', 'weekly')
         } 
         for user in users
     ]
@@ -84,6 +85,22 @@ def api_toggle_admin(user_id):
         return jsonify({"status": "success", "message": f"已成功為使用者 {user_to_modify['name']} {action}管理員權限。", "new_status": new_admin_status})
     else:
         return jsonify({"status": "error", "message": "更新管理員權限失敗。"}), 500
+
+@api_admin_bp.route('/users/<string:user_id>/update_reminder_schedule', methods=['POST'])
+@admin_required
+@api_error_handler
+def api_update_reminder_schedule(user_id):
+    data = request.get_json()
+    schedule_type = data.get('schedule_type')
+
+    if schedule_type not in ['daily', 'weekly']:
+        return jsonify({"status": "error", "message": "無效的排程類型"}), 400
+
+    success = db.update_user_reminder_schedule(user_id, schedule_type)
+    if success:
+        return jsonify({"status": "success", "message": "提醒排程已更新"})
+    else:
+        return jsonify({"status": "error", "message": "更新提醒排程失敗"}), 500
 
 @api_admin_bp.route('/users/add_manual', methods=['POST'])
 @admin_required

@@ -52,3 +52,14 @@ export async function refreshProfile(id) {
   if (!res.ok) throw new Error('Refresh failed')
   return res.json()
 }
+
+export async function updateUserReminderSchedule(id, scheduleType) {
+  const res = await fetch(`/api/admin/users/${id}/update_reminder_schedule`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ schedule_type: scheduleType }),
+    credentials: 'include'
+  })
+  if (!res.ok) throw new Error('Update failed')
+  return res.json()
+}

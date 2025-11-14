@@ -60,6 +60,13 @@
                     <i class="bi bi-phone-fill me-1"></i>{{ user.phone2 || '手機' }}
                   </span>
                 </div>
+                <div class="mt-2">
+                  <label class="form-label-sm me-2">提醒設定：</label>
+                  <select class="form-select-sm" :value="user.reminder_schedule" @change="updateReminderSchedule(user, $event)">
+                    <option value="weekly">每週提醒</option>
+                    <option value="daily">每日提醒 (前一天)</option>
+                  </select>
+                </div>
               </td>
               <td class="text-center">
                 <div class="d-flex flex-column gap-1">
@@ -136,7 +143,7 @@
 
 <script setup>
 import { ref, onMounted, computed, nextTick } from 'vue';
-import { getUsers, updateUser, addManual, mergeUsers, deleteUserApi } from './api';
+import { getUsers, updateUser, addManual, mergeUsers, deleteUserApi, updateUserReminderSchedule } from './api';
 
 const users = ref([]);
 const loading = ref(true);
@@ -320,6 +327,19 @@ const deleteUser = async (userId) => {
     } catch (error) {
         showStatus(`❌ 刪除失敗: ${error.message || '未知錯誤'}`, 'error');
     }
+};
+
+const updateReminderSchedule = async (user, event) => {
+  const newSchedule = event.target.value;
+  try {
+    await updateUserReminderSchedule(user.id, newSchedule);
+    user.reminder_schedule = newSchedule;
+    showStatus('✅ 提醒設定已更新', 'success');
+  } catch (error) {
+    showStatus(`❌ 更新失敗: ${error.message || '未知錯誤'}`, 'error');
+    // 如果更新失敗，將選擇還原
+    event.target.value = user.reminder_schedule;
+  }
 };
 
 </script>

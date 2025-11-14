@@ -9,11 +9,21 @@ from .utils import get_week_dates_for_scheduler
 def _do_send_reminders(app, appointments: list, reminder_type: str = 'daily') -> tuple[int, int]:
     sent_count = 0
     failed_count = 0
-    if not appointments:
+
+    # 根據提醒類型過濾預約
+    if reminder_type == 'daily':
+        appointments_to_send = [apt for apt in appointments if apt.get('reminder_schedule') == 'daily']
+    elif reminder_type == 'week':
+        # 每週提醒只發送給沒有設定為「每日」的用戶
+        appointments_to_send = [apt for apt in appointments if apt.get('reminder_schedule') != 'daily']
+    else:
+        appointments_to_send = appointments
+
+    if not appointments_to_send:
         return 0, 0
 
     user_appointments = defaultdict(list)
-    for apt in appointments:
+    for apt in appointments_to_send:
         if apt.get('user_id') and apt['user_id'].startswith('U'):
             user_appointments[apt['user_id']].append(apt)
 
@@ -69,14 +79,18 @@ def send_daily_reminders_job(app):
         if db.get_config('auto_reminder_daily_enabled', 'false') == 'true':
             app.logger.info("執行每日自動提醒...")
             TAIPEI_TZ = app.config['TAIPEI_TZ']
-            today_str = datetime.now(TAIPEI_TZ).strftime('%Y-%m-%d')
-            appointments = db.get_appointments_by_date_range(today_str, today_str)
-            appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
-            if appointments:
-                sent, failed = _do_send_reminders(app, appointments, 'daily')
+            tomorrow = datetime.now(TAIPEI_TZ) + timedelta(days=1)
+            tomorrow_str = tomorrow.strftime('%Y-%m-%d')
+            
+            appointments = db.get_appointments_by_date_range(tomorrow_str, tomorrow_str)
+            
+            appointments_to_send = [apt for apt in appointments if apt['status'] == 'confirmed']
+            
+            if appointments_to_send:
+                sent, failed = _do_send_reminders(app, appointments_to_send, 'daily')
                 app.logger.info(f"每日提醒發送完成: {sent} 成功, {failed} 失敗。")
             else:
-                app.logger.info("今日無預約，不執行提醒。")
+                app.logger.info("明日無符合每日提醒條件的預約。")
 
 def send_weekly_reminders_job(app):
     """每週提醒的排程任務"""
@@ -87,12 +101,14 @@ def send_weekly_reminders_job(app):
             start_date = week_dates[0]['date']
             end_date = week_dates[-1]['date']
             appointments = db.get_appointments_by_date_range(start_date, end_date)
-            appointments = [apt for apt in appointments if apt['status'] == 'confirmed']
-            if appointments:
-                sent, failed = _do_send_reminders(app, appointments, 'weekly')
+            
+            appointments_to_send = [apt for apt in appointments if apt['status'] == 'confirmed']
+
+            if appointments_to_send:
+                sent, failed = _do_send_reminders(app, appointments_to_send, 'week')
                 app.logger.info(f"每週提醒發送完成: {sent} 成功, {failed} 失敗。")
             else:
-                app.logger.info("下週無預約，不執行提醒。")
+                app.logger.info("下週無符合每週提醒條件的預約。")
 
 def send_custom_schedules_job(app):
     """處理自訂排程訊息的背景任務"""

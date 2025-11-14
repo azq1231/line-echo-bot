@@ -58,6 +58,9 @@ def init_database():
     # 安全地為 users 表添加 is_admin 字段
     if 'is_admin' not in columns:
         cursor.execute("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE")
+    # 安全地為 users 表添加 reminder_schedule 字段
+    if 'reminder_schedule' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN reminder_schedule TEXT DEFAULT 'weekly'")
 
 
     # 预约表
@@ -572,6 +575,21 @@ def update_user_admin_status(user_id: str, is_admin: bool) -> bool:
     finally:
         conn.close()
 
+def update_user_reminder_schedule(user_id: str, schedule_type: str) -> bool:
+    """更新指定用戶的提醒排程"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('UPDATE users SET reminder_schedule = ? WHERE user_id = ?', (schedule_type, user_id))
+        updated = cursor.rowcount > 0
+        conn.commit()
+        return updated
+    except Exception as e:
+        print(f"更新用戶提醒排程時發生錯誤: {e}")
+        return False
+    finally:
+        conn.close()
+
 def add_schedule(user_id: str, user_name: str, send_time: datetime, message: str) -> bool:
     """新增一個排程訊息"""
     conn = get_db()
@@ -689,13 +707,18 @@ def add_appointment(user_id: str, date: str, time: str, notes: Optional[str] = N
         conn.close()
 
 def get_appointments_by_date_range(start_date: str, end_date: str) -> List[Dict]:
-    """获取指定日期范围内的预约"""
+    """获取指定日期范围内的预约，并包含用户的提醒设置"""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT * FROM appointments 
-        WHERE date BETWEEN ? AND ?
-        ORDER BY date, time
+        SELECT 
+            a.*, 
+            u.reminder_schedule,
+            u.is_admin
+        FROM appointments a
+        LEFT JOIN users u ON a.user_id = u.user_id
+        WHERE a.date BETWEEN ? AND ?
+        ORDER BY a.date, a.time
     ''', (start_date, end_date))
     appointments = [dict(row) for row in cursor.fetchall()]
     conn.close()
