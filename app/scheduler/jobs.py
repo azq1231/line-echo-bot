@@ -76,7 +76,7 @@ def _do_send_reminders(app, appointments: list, reminder_type: str = 'daily') ->
 def send_daily_reminders_job(app, fake_today_str=None):
     """每日提醒的排程任務"""
     with app.app_context():
-        if db.get_config('auto_reminder_daily_enabled', 'false') == 'true':
+        if db.get_config('auto_reminder_daily_enabled', 'false') == 'true' or fake_today_str:
             app.logger.info("執行每日自動提醒...")
             TAIPEI_TZ = app.config['TAIPEI_TZ']
 
