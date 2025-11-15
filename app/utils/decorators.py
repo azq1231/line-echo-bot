@@ -1,5 +1,5 @@
 from functools import wraps
-from flask import request, session, redirect, url_for, flash
+from flask import request, session, redirect, url_for, flash, current_app
 import traceback
 
 import database as db
@@ -8,11 +8,25 @@ from .helpers import api_response # We will move api_response later
 def admin_required(f):
     """
     一個裝飾器，用來驗證使用者是否為登入的管理員。
+    現在也支援透過 X-Admin-Token 進行 API 驗證。
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         is_api_request = request.path.startswith('/api/')
 
+        # --- API Token 驗證 (優先於 Session 驗證) ---
+        if is_api_request:
+            admin_token = request.headers.get("X-Admin-Token")
+            if admin_token:
+                if admin_token == current_app.config.get("ADMIN_API_TOKEN"):
+                    # Token 有效，直接授權
+                    return f(*args, **kwargs)
+                else:
+                    # Token 無效
+                    return api_response(error="API Token 無效。", status_code=401)
+            # 如果沒有提供 API Token，則繼續執行 Session 驗證
+
+        # --- Session 驗證 (針對網頁請求或未提供 API Token 的 API 請求) ---
         if 'user' not in session or 'user_id' not in session['user']:
             if is_api_request:
                 return api_response(error="未授權或登入逾時，請重新整理頁面並登入。", status_code=401)

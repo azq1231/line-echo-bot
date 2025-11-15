@@ -43,6 +43,7 @@ def create_app(start_scheduler=True):
     app.config['LINE_LOGIN_CHANNEL_ID'] = os.getenv("LINE_LOGIN_CHANNEL_ID")
     app.config['LINE_LOGIN_CHANNEL_SECRET'] = os.getenv("LINE_LOGIN_CHANNEL_SECRET")
     app.config['TAIPEI_TZ'] = pytz.timezone('Asia/Taipei')
+    app.config['ADMIN_API_TOKEN'] = os.getenv("ADMIN_API_TOKEN")
 
     # --- 初始化資料庫 ---
     with app.app_context():
