@@ -1234,20 +1234,34 @@ def delete_available_slot(slot_id: int) -> bool:
     conn.close()
     return deleted
 
-def copy_slots(source_weekday: int, target_weekdays: List[int]) -> tuple[int, int]:
-    """將指定來源星期的時段設定複製到多個目標星期"""
+def copy_slots(source_weekday: int, target_weekdays: List[int], types: List[str] = None) -> tuple[int, int]:
+    """將指定來源星期的時段設定複製到多個目標星期
+    
+    Args:
+        source_weekday: 來源星期 (1-5)
+        target_weekdays: 目標星期列表
+        types: 要複製的類型列表，例如 ['consultation', 'massage']。如果為 None，則複製所有類型
+    """
+    if types is None:
+        types = ['consultation', 'massage']  # 預設複製所有類型
+    
     conn = get_db()
     cursor = conn.cursor()
     try:
-        # 1. 獲取來源星期的所有時段
-        cursor.execute('SELECT start_time, end_time, active, note, type FROM available_slots WHERE weekday = ?', (source_weekday,))
+        # 1. 獲取來源星期的指定類型時段
+        placeholders = ','.join('?' for _ in types)
+        query = f'SELECT start_time, end_time, active, note, type FROM available_slots WHERE weekday = ? AND type IN ({placeholders})'
+        cursor.execute(query, (source_weekday, *types))
         source_slots = cursor.fetchall()
         
         if not source_slots:
             return 0, 0 # 沒有可複製的時段
 
-        # 2. 刪除目標星期的所有時段
-        cursor.execute(f'DELETE FROM available_slots WHERE weekday IN ({",".join("?" for _ in target_weekdays)})', target_weekdays)
+        # 2. 刪除目標星期的指定類型時段
+        weekday_placeholders = ','.join('?' for _ in target_weekdays)
+        type_placeholders = ','.join('?' for _ in types)
+        delete_query = f'DELETE FROM available_slots WHERE weekday IN ({weekday_placeholders}) AND type IN ({type_placeholders})'
+        cursor.execute(delete_query, (*target_weekdays, *types))
         deleted_count = cursor.rowcount
 
         # 3. 準備要插入的新時段

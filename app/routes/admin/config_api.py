@@ -110,9 +110,12 @@ def api_copy_slots_api():
     data = request.get_json()
     source_weekday = data.get('source_weekday')
     target_weekdays = data.get('target_weekdays')
+    types = data.get('types')  # 獲取類型參數
+    
     if not source_weekday or not target_weekdays:
         return jsonify({"status": "error", "message": "來源或目標星期未選擇"}), 400
-    inserted_count, _ = db.copy_slots(int(source_weekday), target_weekdays)
+        
+    inserted_count, _ = db.copy_slots(int(source_weekday), target_weekdays, types)
     if inserted_count > 0:
         return jsonify({"status": "success", "message": f"已成功複製設定，共新增 {inserted_count} 個時段。"})
     else:

@@ -80,20 +80,51 @@
                       </div>
                       <span class="tw-ml-2 tw-text-gray-400 tw-text-xs">▼</span>
                     </div>
-                    <div v-if="openSelect === `${dayData.date_info.date}-${time}-consultation`" class="tw-absolute tw-top-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mt-1">
-                      <div v-if="selectStep === 1">
-                        <div v-if="previousUser" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-blue-600 tw-font-bold tw-border-b hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, previousUser.id, previousUser.name, null, 'consultation')">
-                          ➡️ 同上 ({{ previousUser.name }})
-                        </div>
-                        <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --', null, 'consultation')">-- 未預約 --</div>
-                        <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
-                          {{ key }}
-                        </div>
+                    <div v-if="openSelect === `${dayData.date_info.date}-${time}-consultation`" class="tw-absolute tw-top-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-64 tw-overflow-hidden tw-z-10 tw-shadow-lg tw-mt-1">
+                      <!-- 搜尋框 -->
+                      <div class="tw-sticky tw-top-0 tw-bg-white tw-border-b tw-border-gray-200 tw-p-2">
+                        <input 
+                          v-model="searchQuery"
+                          type="text"
+                          placeholder="🔍 搜尋用戶名稱..."
+                          class="tw-w-full tw-px-2 tw-py-1.5 tw-text-sm tw-border tw-border-gray-300 tw-rounded focus:tw-outline-none focus:tw-border-indigo-500"
+                          @click.stop
+                          ref="searchInput"
+                        />
                       </div>
-                      <div v-if="selectStep === 2">
-                        <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
-                        <div v-for="user in usersInGroup" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user, 'consultation')">
-                          {{ user.name }}
+                      
+                      <!-- 搜尋結果或原有選單 -->
+                      <div class="tw-max-h-48 tw-overflow-y-auto">
+                        <!-- 如果有搜尋關鍵字，顯示過濾結果 -->
+                        <div v-if="searchQuery.trim()">
+                          <div v-if="filteredUsers.length === 0" class="tw-px-2.5 tw-py-3 tw-text-sm tw-text-gray-500 tw-text-center">
+                            找不到符合的用戶
+                          </div>
+                          <div v-else>
+                            <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --', null, 'consultation')">-- 未預約 --</div>
+                            <div v-for="user in filteredUsers" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user, 'consultation')">
+                              {{ user.name }}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <!-- 沒有搜尋時，顯示原有的注音選單 -->
+                        <div v-else>
+                          <div v-if="selectStep === 1">
+                            <div v-if="previousUser" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-blue-600 tw-font-bold tw-border-b hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, previousUser.id, previousUser.name, null, 'consultation')">
+                              ➡️ 同上 ({{ previousUser.name }})
+                            </div>
+                            <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --', null, 'consultation')">-- 未預約 --</div>
+                            <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
+                              {{ key }}
+                            </div>
+                          </div>
+                          <div v-if="selectStep === 2">
+                            <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                            <div v-for="user in usersInGroup" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user, 'consultation')">
+                              {{ user.name }}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -140,20 +171,50 @@
                       </div>
                       <span class="tw-ml-2 tw-text-gray-400 tw-text-xs">▼</span>
                     </div>
-                    <div v-if="openSelect === `${dayData.date_info.date}-${time}-massage`" class="tw-absolute tw-top-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mt-1">
-                      <div v-if="selectStep === 1">
-                        <div v-if="previousUser" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-blue-600 tw-font-bold tw-border-b hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, previousUser.id, previousUser.name, null, 'massage')">
-                          ➡️ 同上 ({{ previousUser.name }})
-                        </div>
-                        <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --', null, 'massage')">-- 未預約 --</div>
-                        <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
-                          {{ key }}
-                        </div>
+                    <div v-if="openSelect === `${dayData.date_info.date}-${time}-massage`" class="tw-absolute tw-top-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-64 tw-overflow-hidden tw-z-10 tw-shadow-lg tw-mt-1">
+                      <!-- 搜尋框 -->
+                      <div class="tw-sticky tw-top-0 tw-bg-white tw-border-b tw-border-gray-200 tw-p-2">
+                        <input 
+                          v-model="searchQuery"
+                          type="text"
+                          placeholder="🔍 搜尋用戶名稱..."
+                          class="tw-w-full tw-px-2 tw-py-1.5 tw-text-sm tw-border tw-border-gray-300 tw-rounded focus:tw-outline-none focus:tw-border-indigo-500"
+                          @click.stop
+                        />
                       </div>
-                      <div v-if="selectStep === 2">
-                        <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
-                        <div v-for="user in usersInGroup" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user, 'massage')">
-                          {{ user.name }}
+                      
+                      <!-- 搜尋結果或原有選單 -->
+                      <div class="tw-max-h-48 tw-overflow-y-auto">
+                        <!-- 如果有搜尋關鍵字，顯示過濾結果 -->
+                        <div v-if="searchQuery.trim()">
+                          <div v-if="filteredUsers.length === 0" class="tw-px-2.5 tw-py-3 tw-text-sm tw-text-gray-500 tw-text-center">
+                            找不到符合的用戶
+                          </div>
+                          <div v-else>
+                            <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --', null, 'massage')">-- 未預約 --</div>
+                            <div v-for="user in filteredUsers" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user, 'massage')">
+                              {{ user.name }}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <!-- 沒有搜尋時，顯示原有的注音選單 -->
+                        <div v-else>
+                          <div v-if="selectStep === 1">
+                            <div v-if="previousUser" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-blue-600 tw-font-bold tw-border-b hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, previousUser.id, previousUser.name, null, 'massage')">
+                              ➡️ 同上 ({{ previousUser.name }})
+                            </div>
+                            <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --', null, 'massage')">-- 未預約 --</div>
+                            <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
+                              {{ key }}
+                            </div>
+                          </div>
+                          <div v-if="selectStep === 2">
+                            <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                            <div v-for="user in usersInGroup" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user, 'massage')">
+                              {{ user.name }}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -248,6 +309,7 @@ const currentWeekOffset = ref(0);
 const openSelect = ref(null); // Stores "date-time" string
 const selectStep = ref(1); // 1 for zhuyin, 2 for users
 const usersInGroup = ref([]);
+const searchQuery = ref(''); // 搜尋關鍵字
 
 const previousUser = ref(null); // To store user from the slot above
 const status = ref({ show: false, message: '', type: 'info' });
@@ -307,6 +369,19 @@ const sortedZhuyinKeys = computed(() => {
     return zhuyinOrder.indexOf(a) - zhuyinOrder.indexOf(b);
   });
 });
+
+// 過濾用戶列表（根據搜尋關鍵字）
+const filteredUsers = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return allUsers.value;
+  }
+  const query = searchQuery.value.toLowerCase();
+  return allUsers.value.filter(user => 
+    user.name.toLowerCase().includes(query) ||
+    (user.zhuyin && user.zhuyin.toLowerCase().includes(query))
+  );
+});
+
 
 const weekHasRemindable = computed(() => {
   for (const date in weekSchedule.value) {
@@ -521,6 +596,7 @@ function closeAllSelects() {
   openSelect.value = null;
   selectStep.value = 1;
   usersInGroup.value = [];
+  searchQuery.value = ''; // 清空搜尋框
 }
 
 function toggleDropdown(date, time, index, type = 'consultation') {
@@ -531,6 +607,7 @@ function toggleDropdown(date, time, index, type = 'consultation') {
   } else {
     openSelect.value = selectId;
     selectStep.value = 1; // Reset to zhuyin selection
+    searchQuery.value = ''; // 清空搜尋框
 
     // Find previous user for the "copy from above" feature
     previousUser.value = null;

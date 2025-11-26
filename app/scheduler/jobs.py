@@ -50,21 +50,6 @@ def _do_send_reminders(app, appointments: list, reminder_type: str = 'daily') ->
             elif apt_date == today_in_taipei + timedelta(days=1):
                 date_keyword = "明天"
             elif apt_date > this_sunday:
-                date_keyword = f"下{weekday_name}"
-            else:
-                date_keyword = weekday_name
-
-            time_slots_str = ""
-            for apt in daily_apt_list:
-                time_obj = datetime.strptime(apt['time'], '%H:%M')
-                time_str = time_obj.strftime('%p %I:%M').replace('AM', '上午').replace('PM', '下午')
-                time_slots_str += f"• {time_str}\n"
-                
-            default_template = ("您好，提醒您{date_keyword} ({date}) 有預約以下時段：\n\n""{time_slots}\n\n""如果需要更改或取消，請與我們聯繫，謝謝。")
-            template = db.get_config('message_template_reminder', default_template) or default_template
-
-            message = template.format(user_name=user_name, date_keyword=date_keyword, date=apt_date.strftime('%m/%d'), weekday=weekday_name, time_slots=time_slots_str.strip())
-            
             success = send_line_message(user_id=user_id, messages=[{"type": "text", "text": message}], message_type=f'reminder_{reminder_type}', target_name=user_name)
             if success:
                 sent_count += 1
