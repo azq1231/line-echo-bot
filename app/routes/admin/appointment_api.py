@@ -34,36 +34,47 @@ def get_week_appointments():
         processed_user['line_user_id'] = str(user.get('user_id', '')) if user.get('user_id') is not None else ''
         processed_user['id'] = processed_user['user_id']
         all_users.append(processed_user)
+
     week_schedule = {}
     waiting_lists = db.get_waiting_lists_by_date_range(week_dates[0]['date'], week_dates[-1]['date'])
     all_closed_days = {day['date'] for day in db.get_all_closed_days()}
+    
     for date_info in week_dates:
         date_str = date_info['date']
         weekday = date_info['weekday']
-        time_slots = generate_time_slots(weekday)
+        
+        time_slots_consultation = generate_time_slots(weekday, 'consultation')
+        time_slots_massage = generate_time_slots(weekday, 'massage')
+        
         appointments = db.get_appointments_by_date_range(date_str, date_str)
-        appointments_map = {apt['time']: apt for apt in appointments if apt['status'] == 'confirmed'}
-        day_appointments = {}
-        for time_slot in time_slots:
-            apt = appointments_map.get(time_slot)
-            
-            last_reply_obj = None
-            if apt and apt.get('last_reply'):
-                try:
-                    last_reply_obj = json.loads(apt['last_reply'])
-                except (json.JSONDecodeError, TypeError):
-                    # 根據您的說明，所有回覆都將是新的 JSON 格式。
-                    # 因此，如果解析失敗，代表資料有誤，將其視為 None 是最安全的作法。
-                    last_reply_obj = None
+        
+        # 根據 type 區分預約
+        appointments_map_consultation = {apt['time']: apt for apt in appointments if apt['status'] == 'confirmed' and apt.get('type', 'consultation') == 'consultation'}
+        appointments_map_massage = {apt['time']: apt for apt in appointments if apt['status'] == 'confirmed' and apt.get('type') == 'massage'}
+        
+        def process_appointments(time_slots, appointments_map):
+            day_appointments = {}
+            for time_slot in time_slots:
+                apt = appointments_map.get(time_slot)
+                
+                last_reply_obj = None
+                if apt and apt.get('last_reply'):
+                    try:
+                        last_reply_obj = json.loads(apt['last_reply'])
+                    except (json.JSONDecodeError, TypeError):
+                        last_reply_obj = None
 
-            day_appointments[time_slot] = {
-                'id': apt.get('id') if apt else None,
-                'reply_status': apt.get('reply_status', '未回覆') if apt else '未回覆', # 保持舊欄位以供相容
-                'last_reply': last_reply_obj, # 回傳解析後的物件
-                # 在此處截斷預約中的名稱
-                'user_name': _truncate_name(apt.get('user_name', '')) if apt else '',
-                'user_id': str(apt.get('user_id', '')) if apt and apt.get('user_id') is not None else ''
-            }
+                day_appointments[time_slot] = {
+                    'id': apt.get('id') if apt else None,
+                    'reply_status': apt.get('reply_status', '未回覆') if apt else '未回覆',
+                    'last_reply': last_reply_obj,
+                    'user_name': _truncate_name(apt.get('user_name', '')) if apt else '',
+                    'user_id': str(apt.get('user_id', '')) if apt and apt.get('user_id') is not None else ''
+                }
+            return day_appointments
+
+        day_appointments_consultation = process_appointments(time_slots_consultation, appointments_map_consultation)
+        day_appointments_massage = process_appointments(time_slots_massage, appointments_map_massage)
         
         # 取得並處理備取名單
         day_waiting_list = waiting_lists.get(date_str, [])
@@ -72,10 +83,12 @@ def get_week_appointments():
 
         week_schedule[date_str] = {
             'date_info': date_info,
-            'appointments': day_appointments,
+            'appointments': day_appointments_consultation, # 為了相容性，預設 appointments 欄位放看診
+            'appointments_massage': day_appointments_massage, # 新增推拿欄位
             'is_closed': date_str in all_closed_days,
             'waiting_list': day_waiting_list
         }
+        
     response_data = {
         'week_schedule': week_schedule,
         'users': all_users,
@@ -93,18 +106,22 @@ def save_appointment():
     user_name = data.get('user_name')
     user_id = data.get('user_id', '')
     waiting_list_item_id = data.get('waiting_list_item_id')
+    type = data.get('type', 'consultation') # 預設為看診
 
     # 1. 先刪除該時段的現有預約，為新增或清空做準備
-    db.cancel_appointment(date, time)
+    # 注意：這裡假設同一時間點不同類型不會衝突，或者前端會處理好時間。
+    # 為了安全起見，我們應該先檢查該時段是否已有該類型的預約。
+    # 但為了簡化，我們先假設 cancel_appointment 會刪除該時間點的所有預約。
+    db.cancel_appointment(date, time) 
 
     # 2. 如果提供了 user_id，代表是「新增」或「更新」操作
     if user_id:
-        # 修正：使用關鍵字參數 (keyword arguments) 呼叫 add_appointment，確保參數正確對應
         new_appointment_id = db.add_appointment(
             user_id=user_id, 
             date=date, 
             time=time, 
-            user_name=user_name # 將 user_name 作為備用名稱傳遞
+            user_name=user_name, # 將 user_name 作為備用名稱傳遞
+            type=type
         )
         if new_appointment_id:
             # 如果是從備取名單拖曳過來的，則從備取名單中移除

@@ -105,6 +105,8 @@ def init_database():
         cursor.execute("ALTER TABLE appointments ADD COLUMN reply_time DATETIME")
     if 'confirm_time' not in appointment_columns:
         cursor.execute("ALTER TABLE appointments ADD COLUMN confirm_time DATETIME")
+    if 'type' not in appointment_columns:
+        cursor.execute("ALTER TABLE appointments ADD COLUMN type TEXT DEFAULT 'consultation'")
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS closed_days (
@@ -122,11 +124,18 @@ def init_database():
             end_time TEXT NOT NULL,
             active BOOLEAN DEFAULT TRUE,
             note TEXT,
+            type TEXT DEFAULT 'consultation',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(weekday, start_time)
+            UNIQUE(weekday, start_time, type)
         )
     ''')
+    
+    # 安全地為 available_slots 表添加 type 字段
+    cursor.execute("PRAGMA table_info(available_slots)")
+    available_slots_columns = [column[1] for column in cursor.fetchall()]
+    if 'type' not in available_slots_columns:
+        cursor.execute("ALTER TABLE available_slots ADD COLUMN type TEXT DEFAULT 'consultation'")
 
     # 排程訊息表
     cursor.execute('''
@@ -665,7 +674,7 @@ def update_schedule_send_time(schedule_id: int, new_send_time: datetime) -> bool
 
 # ==================== 预约管理 ====================
 
-def add_appointment(user_id: str, date: str, time: str, notes: Optional[str] = None, user_name: Optional[str] = None) -> Optional[int]:
+def add_appointment(user_id: str, date: str, time: str, notes: Optional[str] = None, user_name: Optional[str] = None, type: str = 'consultation') -> Optional[int]:
     """新增預約。
     
     為了確保資料一致性，此函數會優先從 users 表中查詢最新的 user_name。
@@ -688,16 +697,16 @@ def add_appointment(user_id: str, date: str, time: str, notes: Optional[str] = N
 
         print(f"[APPOINTMENT DEBUG] 嘗試新增預約：user_id={user_id}, user_name={final_user_name}, date={date}, time={time}")
         cursor.execute('''
-            INSERT INTO appointments (user_id, user_name, date, time, notes)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, final_user_name, date, time, notes))
+            INSERT INTO appointments (user_id, user_name, date, time, notes, type)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, final_user_name, date, time, notes, type))
         new_id = cursor.lastrowid
         conn.commit()
         print(f"[APPOINTMENT SUCCESS] 預約成功建立：appointment_id={new_id}, {date} {time}")
         return new_id
     except sqlite3.IntegrityError as e:
         # 唯一性约束失败 - 通常表示此 (user_id, date, time) 的時段已被預約
-        print(f"[APPOINTMENT CONFLICT] 唯一性約束失敗（該時段可能已被預約）：user_id={user_id}, date={date}, time={time}, detail={str(e)}")
+        print(f"[APPOINTMENT CONFLICT] 唯一性約束失敗（該時段可能已被預約）：user_id={user_id}, date={date}, time={time}, type={type}, detail={str(e)}")
         return None
     except Exception as e:
         # 其他異常
@@ -797,6 +806,266 @@ WHERE id = ?
         cursor.execute('''
             UPDATE appointments SET reply_status = ?, last_reply = NULL, reply_time = NULL, confirm_time = NULL WHERE id = ?
         ''', (status, appointment_id))
+
+def get_active_slots_by_weekday(weekday: int, type: Optional[str] = None) -> List[Dict]:
+    """獲取指定星期和類型的可用時段"""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    query = "SELECT * FROM available_slots WHERE weekday = ? AND active = TRUE"
+    params = [weekday]
+    
+    if type:
+        query += " AND type = ?"
+        params.append(type)
+        
+    query += " ORDER BY start_time"
+    
+    cursor.execute(query, tuple(params))
+    slots = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return slots
+
+def get_all_available_slots() -> List[Dict]:
+    """獲取所有設定的可用時段"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM available_slots ORDER BY weekday, start_time')
+    slots = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return slots
+
+def add_available_slot(weekday: int, start_time: str, end_time: str, note: Optional[str] = None, type: str = 'consultation') -> bool:
+    """新增可用時段"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO available_slots (weekday, start_time, end_time, note, type)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (weekday, start_time, end_time, note, type))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+def update_available_slot(slot_id: int, weekday: int, start_time: str, end_time: str, note: Optional[str] = None, active: bool = True, type: str = 'consultation') -> bool:
+    """更新可用時段"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            UPDATE available_slots 
+            SET weekday = ?, start_time = ?, end_time = ?, note = ?, active = ?, type = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (weekday, start_time, end_time, note, active, type, slot_id))
+        updated = cursor.rowcount > 0
+        conn.commit()
+        return updated
+    except Exception as e:
+        print(f"Update slot error: {e}")
+        return False
+    finally:
+        conn.close()
+
+def delete_available_slot(slot_id: int) -> bool:
+    """刪除可用時段"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM available_slots WHERE id = ?', (slot_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+def is_closed_day(date_str: str) -> bool:
+    """檢查指定日期是否為休診日"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT 1 FROM closed_days WHERE date = ?', (date_str,))
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
+
+def get_all_closed_days() -> List[Dict]:
+    """獲取所有休診日"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM closed_days ORDER BY date')
+    days = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return days
+
+def add_closed_day(date: str, reason: Optional[str] = None) -> bool:
+    """新增休診日"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('INSERT INTO closed_days (date, reason) VALUES (?, ?)', (date, reason))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+def delete_closed_day(date: str) -> bool:
+    """刪除休診日"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM closed_days WHERE date = ?', (date,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+def get_waiting_lists_by_date_range(start_date: str, end_date: str) -> Dict[str, List[Dict]]:
+    """獲取指定日期範圍內的備取名單，回傳以日期為 key 的字典"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM waiting_list 
+        WHERE date BETWEEN ? AND ?
+        ORDER BY date, created_at
+    ''', (start_date, end_date))
+    
+    result = {}
+    for row in cursor.fetchall():
+        item = dict(row)
+        date = item['date']
+        if date not in result:
+            result[date] = []
+        result[date].append(item)
+        
+    conn.close()
+    return result
+
+def add_to_waiting_list(date: str, user_id: str, user_name: str) -> Optional[int]:
+    """新增至備取名單"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO waiting_list (date, user_id, user_name)
+            VALUES (?, ?, ?)
+        ''', (date, user_id, user_name))
+        new_id = cursor.lastrowid
+        conn.commit()
+        return new_id
+    except Exception as e:
+        print(f"Add to waiting list error: {e}")
+        return None
+    finally:
+        conn.close()
+
+def remove_from_waiting_list(item_id: int) -> bool:
+    """從備取名單移除"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM waiting_list WHERE id = ?', (item_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+def get_waiting_list_item(item_id: int) -> Optional[Dict]:
+    """獲取單個備取項目"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM waiting_list WHERE id = ?', (item_id,))
+    item = cursor.fetchone()
+    conn.close()
+    return dict(item) if item else None
+
+def cancel_appointment(date: str, time: str) -> bool:
+    """取消預約（刪除）"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM appointments WHERE date = ? AND time = ?', (date, time))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+def update_user_day_reply_status(user_id: str, date: str, status: str) -> bool:
+    """更新用戶在特定日期的所有預約回覆狀態"""
+    conn = get_db()
+    cursor = conn.cursor()
+    TAIPEI_TZ = pytz.timezone('Asia/Taipei')
+    now = datetime.now(TAIPEI_TZ)
+    
+    try:
+        if status == '已確認':
+            cursor.execute('''
+                UPDATE appointments 
+                SET reply_status = ?, confirm_time = ?
+                WHERE user_id = ? AND date = ?
+            ''', (status, now, user_id, date))
+        else:
+            cursor.execute('''
+                UPDATE appointments 
+                SET reply_status = ?
+                WHERE user_id = ? AND date = ?
+            ''', (status, user_id, date))
+            
+        updated = cursor.rowcount > 0
+        conn.commit()
+        return updated
+    except Exception as e:
+        print(f"Update user day reply status error: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_all_configs() -> List[Dict]:
+    """獲取所有系統配置"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM configs')
+    configs = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return configs
+
+def get_config(key: str, default: str = None) -> str:
+    """獲取單個配置值"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT value FROM configs WHERE key = ?', (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row['value'] if row else default
+
+def set_config(key: str, value: str, description: Optional[str] = None) -> bool:
+    """設定配置值"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        if description:
+            cursor.execute('''
+                INSERT INTO configs (key, value, description, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                description = excluded.description,
+                updated_at = CURRENT_TIMESTAMP
+            ''', (key, value, description))
+        else:
+            cursor.execute('''
+                INSERT INTO configs (key, value, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = CURRENT_TIMESTAMP
+            ''', (key, value))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Set config error: {e}")
+        return False
+    finally:
+        conn.close()
     
     updated = cursor.rowcount > 0
     conn.commit()
@@ -913,28 +1182,28 @@ def get_all_available_slots() -> List[Dict]:
     conn.close()
     return slots
 
-def get_active_slots_by_weekday(weekday: int) -> List[Dict]:
+def get_active_slots_by_weekday(weekday: int, type: str = 'consultation') -> List[Dict]:
     """根據星期獲取所有啟用的時段"""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('''
         SELECT * FROM available_slots 
-        WHERE weekday = ? AND active = TRUE 
+        WHERE weekday = ? AND active = TRUE AND type = ?
         ORDER BY start_time
-    ''', (weekday,))
+    ''', (weekday, type))
     slots = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return slots
 
-def add_available_slot(weekday: int, start_time: str, end_time: str, note: Optional[str] = None) -> bool:
+def add_available_slot(weekday: int, start_time: str, end_time: str, note: Optional[str] = None, type: str = 'consultation') -> bool:
     """新增一個可預約時段"""
     conn = get_db()
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            INSERT INTO available_slots (weekday, start_time, end_time, note)
-            VALUES (?, ?, ?, ?)
-        ''', (weekday, start_time, end_time, note))
+            INSERT INTO available_slots (weekday, start_time, end_time, note, type)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (weekday, start_time, end_time, note, type))
         conn.commit()
         return True
     except sqlite3.IntegrityError:
@@ -942,14 +1211,14 @@ def add_available_slot(weekday: int, start_time: str, end_time: str, note: Optio
     finally:
         conn.close()
 
-def update_available_slot(slot_id: int, weekday: int, start_time: str, end_time: str, active: bool, note: Optional[str]) -> bool:
+def update_available_slot(slot_id: int, weekday: int, start_time: str, end_time: str, active: bool, note: Optional[str], type: str = 'consultation') -> bool:
     """更新一個可預約時段"""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute('''
-        UPDATE available_slots SET weekday=?, start_time=?, end_time=?, active=?, note=?, updated_at=CURRENT_TIMESTAMP
+        UPDATE available_slots SET weekday=?, start_time=?, end_time=?, active=?, note=?, type=?, updated_at=CURRENT_TIMESTAMP
         WHERE id=?
-    ''', (weekday, start_time, end_time, active, note, slot_id))
+    ''', (weekday, start_time, end_time, active, note, type, slot_id))
     updated = cursor.rowcount > 0
     conn.commit()
     conn.close()
@@ -971,7 +1240,7 @@ def copy_slots(source_weekday: int, target_weekdays: List[int]) -> tuple[int, in
     cursor = conn.cursor()
     try:
         # 1. 獲取來源星期的所有時段
-        cursor.execute('SELECT start_time, end_time, active, note FROM available_slots WHERE weekday = ?', (source_weekday,))
+        cursor.execute('SELECT start_time, end_time, active, note, type FROM available_slots WHERE weekday = ?', (source_weekday,))
         source_slots = cursor.fetchall()
         
         if not source_slots:
@@ -985,9 +1254,9 @@ def copy_slots(source_weekday: int, target_weekdays: List[int]) -> tuple[int, in
         slots_to_insert = []
         for slot in source_slots:
             for weekday in target_weekdays:
-                slots_to_insert.append((weekday, slot['start_time'], slot['end_time'], slot['active'], slot['note']))
+                slots_to_insert.append((weekday, slot['start_time'], slot['end_time'], slot['active'], slot['note'], slot['type']))
         
-        cursor.executemany('INSERT INTO available_slots (weekday, start_time, end_time, active, note) VALUES (?, ?, ?, ?, ?)', slots_to_insert)
+        cursor.executemany('INSERT INTO available_slots (weekday, start_time, end_time, active, note, type) VALUES (?, ?, ?, ?, ?, ?)', slots_to_insert)
         inserted_count = cursor.rowcount
         conn.commit()
         return inserted_count, deleted_count # 回傳新增數量和刪除數量

@@ -65,9 +65,12 @@ def get_week_dates(week_offset=0):
     
     return week_dates
 
-def generate_time_slots(weekday):
-    """根据星期生成时间段"""
-    active_slots = db.get_active_slots_by_weekday(weekday)
+def generate_time_slots(weekday, type='consultation'):
+    """根据星期和類型生成时间段"""
+    active_slots = db.get_active_slots_by_weekday(weekday, type)
+    
+    # 根據類型設定時段間隔：看診15分鐘，推拿30分鐘
+    interval_minutes = 30 if type == 'massage' else 15
     
     generated_slots = []
     for slot_setting in active_slots:
@@ -77,20 +80,21 @@ def generate_time_slots(weekday):
         current = start
         while current <= end:
             generated_slots.append(current.strftime('%H:%M'))
-            current += timedelta(minutes=15)
+            current += timedelta(minutes=interval_minutes)
             
     slots = sorted(list(set(generated_slots)))
     return slots
 
-def get_available_slots(date, weekday):
+def get_available_slots(date, weekday, type='consultation'):
     """获取某日期的可用时段（过滤掉已过去的时间）"""
-    all_slots = generate_time_slots(weekday)
+    all_slots = generate_time_slots(weekday, type)
     
     if db.is_closed_day(date):
         return []
     
     appointments = db.get_appointments_by_date_range(date, date)
-    booked_times = [apt['time'] for apt in appointments if apt['status'] == 'confirmed']
+    # 修正：過濾時也要考慮 type
+    booked_times = [apt['time'] for apt in appointments if apt['status'] == 'confirmed' and apt.get('type', 'consultation') == type]
     
     TAIPEI_TZ = current_app.config['TAIPEI_TZ']
     now = datetime.now(TAIPEI_TZ)

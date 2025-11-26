@@ -75,7 +75,9 @@ def remove_closed_day_api():
 @api_error_handler
 def api_add_slot_api():
     data = request.get_json()
-    if db.add_available_slot(data['weekday'], data['start_time'], data['end_time'], data.get('note')):
+    # 修正：將 type 作為位置參數傳遞
+    slot_type = data.get('type', 'consultation')
+    if db.add_available_slot(data['weekday'], data['start_time'], data['end_time'], data.get('note'), slot_type):
         return jsonify({"status": "success", "message": "時段已新增"})
     else:
         return jsonify({"status": "error", "message": "新增失敗，該時段可能已存在"}), 409
@@ -85,7 +87,9 @@ def api_add_slot_api():
 @api_error_handler
 def api_update_slot(slot_id):
     data = request.get_json()
-    if db.update_available_slot(slot_id, data['weekday'], data['start_time'], data['end_time'], data['active'], data.get('note')):
+    # 修正：將 type 作為位置參數傳遞
+    slot_type = data.get('type', 'consultation')
+    if db.update_available_slot(slot_id, data['weekday'], data['start_time'], data['end_time'], data['active'], data.get('note'), slot_type):
         return jsonify({"status": "success", "message": "時段已更新"})
     else:
         return jsonify({"status": "error", "message": "更新失敗"}), 500

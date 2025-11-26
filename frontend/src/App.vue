@@ -41,61 +41,124 @@
             😴<br>本日休診
           </div>
           <template v-else>
+            <!-- Consultation Section -->
+            <div class="tw-mb-2">
+                <div class="tw-text-xs tw-font-bold tw-text-gray-500 tw-mb-1 tw-border-b tw-pb-1">看診時段</div>
+                <div v-for="(apt, time, index) in dayData.appointments" :key="'consultation-' + time" class="tw-flex tw-items-center tw-gap-2 tw-mb-1">
+                  <span class="tw-w-12 tw-text-right tw-text-sm tw-font-medium tw-text-gray-600">{{ time }}</span>
+                  <div 
+                    class="tw-relative tw-flex-1"
+                    @dragover.prevent="handleDragOver(dayData.date_info.date, time, apt, 'consultation')"
+                    @dragleave="handleDragLeave(dayData.date_info.date, time, 'consultation')"
+                    @drop.prevent="handleDrop(dayData.date_info.date, time, 'consultation')"
+                    :class="{ 'tw-bg-green-100 tw-border-2 tw-border-dashed tw-border-green-400': isDragOver(`${dayData.date_info.date}-${time}-consultation`) }"
+                  > 
+                    <div
+                      class="tw-w-full tw-p-1.5 tw-border tw-text-sm tw-rounded tw-cursor-pointer tw-flex tw-justify-between tw-items-center tw-min-w-0" 
+                      :class="{ 
+                        'tw-text-gray-500': !apt.user_id,
+                        'tw-bg-red-200 tw-border-red-400 tw-text-red-800': apt.user_id?.startsWith('manual_'),
+                        'tw-bg-white tw-border-gray-300 tw-text-gray-800': !apt.user_id?.startsWith('manual_'),
+                        'tw-font-semibold': apt.user_id && apt.user_id.startsWith('manual_'),
+                      }" 
+                      @click="toggleDropdown(dayData.date_info.date, time, index, 'consultation')"
+                      :title="apt.user_name || '未預約'">
+                      <span class="tw-truncate tw-flex-1 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-block">
+                            {{ apt.user_name || '-- 未預約 --' }}
+                      </span>
+                      <!-- New Reply Status Indicator -->
+                      <div v-if="apt.id" class="tw-flex tw-items-center tw-flex-shrink-0 tw-ml-2">
+                        <span 
+                          class="tw-text-xs tw-font-mono tw-cursor-pointer" 
+                          :title="statusTitle(apt)"
+                          @click.stop="handleStatusClick(apt, dayData.date_info.date, time, 'consultation')">
+                          {{ statusIcon(apt) }}
+                        </span>
+                        <button v-if="apt.reply_status === '已回覆'" @click.stop="confirmReply(apt.id, dayData.date_info.date, time, 'consultation')" title="確認回覆" class="tw-ml-1 tw-px-1.5 tw-py-0.5 tw-text-xs tw-bg-green-500 tw-text-white tw-rounded hover:tw-bg-green-600">
+                          ✅
+                        </button>
+                      </div>
+                      <span class="tw-ml-2 tw-text-gray-400 tw-text-xs">▼</span>
+                    </div>
+                    <div v-if="openSelect === `${dayData.date_info.date}-${time}-consultation`" class="tw-absolute tw-top-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mt-1">
+                      <div v-if="selectStep === 1">
+                        <div v-if="previousUser" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-blue-600 tw-font-bold tw-border-b hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, previousUser.id, previousUser.name, null, 'consultation')">
+                          ➡️ 同上 ({{ previousUser.name }})
+                        </div>
+                        <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --', null, 'consultation')">-- 未預約 --</div>
+                        <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
+                          {{ key }}
+                        </div>
+                      </div>
+                      <div v-if="selectStep === 2">
+                        <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                        <div v-for="user in usersInGroup" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user, 'consultation')">
+                          {{ user.name }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+            </div>
 
-            <div v-for="(apt, time, index) in dayData.appointments" :key="time" class="tw-flex tw-items-center tw-gap-2">
-              <span class="tw-w-12 tw-text-right tw-text-sm tw-font-medium tw-text-gray-600">{{ time }}</span>
-              <div 
-                class="tw-relative tw-flex-1"
-                @dragover.prevent="handleDragOver(dayData.date_info.date, time, apt)"
-                @dragleave="handleDragLeave(dayData.date_info.date, time)"
-                @drop.prevent="handleDrop(dayData.date_info.date, time)"
-                :class="{ 'tw-bg-green-100 tw-border-2 tw-border-dashed tw-border-green-400': isDragOver(`${dayData.date_info.date}-${time}`) }"
-              > 
-                <div
-                  class="tw-w-full tw-p-1.5 tw-border tw-text-sm tw-rounded tw-cursor-pointer tw-flex tw-justify-between tw-items-center tw-min-w-0" 
-                  :class="{ 
-                    'tw-text-gray-500': !apt.user_id,
-                    'tw-bg-red-200 tw-border-red-400 tw-text-red-800': apt.user_id?.startsWith('manual_'),
-                    'tw-bg-white tw-border-gray-300 tw-text-gray-800': !apt.user_id?.startsWith('manual_'),
-                    'tw-font-semibold': apt.user_id && apt.user_id.startsWith('manual_'),
-                  }" 
-                  @click="toggleDropdown(dayData.date_info.date, time, index)"
-                  :title="apt.user_name || '未預約'">
-                  <span class="tw-truncate tw-flex-1 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-block">
-                        {{ apt.user_name || '-- 未預約 --' }}
-                  </span>
-                  <!-- New Reply Status Indicator -->
-                  <div v-if="apt.id" class="tw-flex tw-items-center tw-flex-shrink-0 tw-ml-2">
-                    <span 
-                      class="tw-text-xs tw-font-mono tw-cursor-pointer" 
-                      :title="statusTitle(apt)"
-                      @click.stop="handleStatusClick(apt, dayData.date_info.date, time)">
-                      {{ statusIcon(apt) }}
-                    </span>
-                    <button v-if="apt.reply_status === '已回覆'" @click.stop="confirmReply(apt.id, dayData.date_info.date, time)" title="確認回覆" class="tw-ml-1 tw-px-1.5 tw-py-0.5 tw-text-xs tw-bg-green-500 tw-text-white tw-rounded hover:tw-bg-green-600">
-                      ✅
-                    </button>
+            <!-- Massage Section -->
+            <div class="tw-mt-3">
+                <div class="tw-text-xs tw-font-bold tw-text-gray-500 tw-mb-1 tw-border-b tw-pb-1">推拿時段</div>
+                <div v-for="(apt, time, index) in dayData.appointments_massage" :key="'massage-' + time" class="tw-flex tw-items-center tw-gap-2 tw-mb-1">
+                  <span class="tw-w-12 tw-text-right tw-text-sm tw-font-medium tw-text-gray-600">{{ time }}</span>
+                  <div 
+                    class="tw-relative tw-flex-1"
+                    @dragover.prevent="handleDragOver(dayData.date_info.date, time, apt, 'massage')"
+                    @dragleave="handleDragLeave(dayData.date_info.date, time, 'massage')"
+                    @drop.prevent="handleDrop(dayData.date_info.date, time, 'massage')"
+                    :class="{ 'tw-bg-green-100 tw-border-2 tw-border-dashed tw-border-green-400': isDragOver(`${dayData.date_info.date}-${time}-massage`) }"
+                  > 
+                    <div
+                      class="tw-w-full tw-p-1.5 tw-border tw-text-sm tw-rounded tw-cursor-pointer tw-flex tw-justify-between tw-items-center tw-min-w-0" 
+                      :class="{ 
+                        'tw-text-gray-500': !apt.user_id,
+                        'tw-bg-red-200 tw-border-red-400 tw-text-red-800': apt.user_id?.startsWith('manual_'),
+                        'tw-bg-white tw-border-gray-300 tw-text-gray-800': !apt.user_id?.startsWith('manual_'),
+                        'tw-font-semibold': apt.user_id && apt.user_id.startsWith('manual_'),
+                      }" 
+                      @click="toggleDropdown(dayData.date_info.date, time, index, 'massage')"
+                      :title="apt.user_name || '未預約'">
+                      <span class="tw-truncate tw-flex-1 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-block">
+                            {{ apt.user_name || '-- 未預約 --' }}
+                      </span>
+                      <!-- New Reply Status Indicator -->
+                      <div v-if="apt.id" class="tw-flex tw-items-center tw-flex-shrink-0 tw-ml-2">
+                        <span 
+                          class="tw-text-xs tw-font-mono tw-cursor-pointer" 
+                          :title="statusTitle(apt)"
+                          @click.stop="handleStatusClick(apt, dayData.date_info.date, time, 'massage')">
+                          {{ statusIcon(apt) }}
+                        </span>
+                        <button v-if="apt.reply_status === '已回覆'" @click.stop="confirmReply(apt.id, dayData.date_info.date, time, 'massage')" title="確認回覆" class="tw-ml-1 tw-px-1.5 tw-py-0.5 tw-text-xs tw-bg-green-500 tw-text-white tw-rounded hover:tw-bg-green-600">
+                          ✅
+                        </button>
+                      </div>
+                      <span class="tw-ml-2 tw-text-gray-400 tw-text-xs">▼</span>
+                    </div>
+                    <div v-if="openSelect === `${dayData.date_info.date}-${time}-massage`" class="tw-absolute tw-top-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mt-1">
+                      <div v-if="selectStep === 1">
+                        <div v-if="previousUser" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-blue-600 tw-font-bold tw-border-b hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, previousUser.id, previousUser.name, null, 'massage')">
+                          ➡️ 同上 ({{ previousUser.name }})
+                        </div>
+                        <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --', null, 'massage')">-- 未預約 --</div>
+                        <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
+                          {{ key }}
+                        </div>
+                      </div>
+                      <div v-if="selectStep === 2">
+                        <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                        <div v-for="user in usersInGroup" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user, 'massage')">
+                          {{ user.name }}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <span class="tw-ml-2 tw-text-gray-400 tw-text-xs">▼</span>
                 </div>
-                <div v-if="openSelect === `${dayData.date_info.date}-${time}`" class="tw-absolute tw-top-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mt-1">
-                  <div v-if="selectStep === 1">
-                    <div v-if="previousUser" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-blue-600 tw-font-bold tw-border-b hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, previousUser.id, previousUser.name)">
-                      ➡️ 同上 ({{ previousUser.name }})
-                    </div>
-                    <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --')">-- 未預約 --</div>
-                    <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
-                      {{ key }}
-                    </div>
-                  </div>
-                  <div v-if="selectStep === 2">
-                    <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
-                    <div v-for="user in usersInGroup" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user)">
-                      {{ user.name }}
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           </template>
         </div>
@@ -207,7 +270,10 @@ const replyModal = ref({
   isConfirmed: false,
   appointment: null,
   date: null,
+  appointment: null,
+  date: null,
   time: null,
+  type: 'consultation', // Added type
 });
 // New loading state
 const isLoading = ref(true);
@@ -271,19 +337,23 @@ function isDragOver(targetId) {
 
 
 function dayHasRemindable(dayData) {
-  if (!dayData || dayData.is_closed || !dayData.appointments) return false;
-  for (const time in dayData.appointments) {
-    const apt = dayData.appointments[time];
-    if (apt.user_id) {
-      // Reliably check the userMap for the line_id.
-      const user = userMap.value.get(apt.user_id.toString());
-      // The backend API sends 'line_user_id'. We check for that and ensure it starts with 'U' for a real LINE user.
-      if (user && user.line_user_id && user.line_user_id.startsWith('U')) { 
-        return true; // Found at least one user with a line_id
+  if (!dayData || dayData.is_closed) return false;
+  
+  const checkAppointments = (appointments) => {
+      if (!appointments) return false;
+      for (const time in appointments) {
+        const apt = appointments[time];
+        if (apt.user_id) {
+          const user = userMap.value.get(apt.user_id.toString());
+          if (user && user.line_user_id && user.line_user_id.startsWith('U')) { 
+            return true;
+          }
+        }
       }
-    }
-  }
-  return false;
+      return false;
+  };
+
+  return checkAppointments(dayData.appointments) || checkAppointments(dayData.appointments_massage);
 }
 
 function dayButtonText(dayData) {
@@ -395,23 +465,29 @@ async function pollForUpdates() {
       const newDayData = newWeekSchedule[date];
 
       if (oldDayData && newDayData) {
-        // 1. Update appointments
-        // Using Object.keys on the new data ensures we catch newly added appointments.
-        const allTimes = new Set([...Object.keys(oldDayData.appointments), ...Object.keys(newDayData.appointments)]);
-        allTimes.forEach(time => {
-          const oldApt = oldDayData.appointments[time];
-          const newApt = newDayData.appointments[time];
+        // 1. Update appointments (Consultation)
+        const updateAppointments = (targetDict, sourceDict) => {
+            if (!targetDict) return;
+            const allTimes = new Set([...Object.keys(targetDict), ...Object.keys(sourceDict || {})]);
+            allTimes.forEach(time => {
+              const oldApt = targetDict[time];
+              const newApt = sourceDict ? sourceDict[time] : null;
 
-          // Case 1: Appointment was added or changed
-          if (newApt && JSON.stringify(oldApt) !== JSON.stringify(newApt)) {
-            oldDayData.appointments[time] = { ...newApt };
-          } 
-          // Case 2: Appointment was cancelled
-          else if (!newApt && oldApt && oldApt.user_id) {
-             // Reset the slot instead of deleting it to maintain structure
-            oldDayData.appointments[time] = { id: oldApt.id, user_id: null, user_name: null, reply_status: '未回覆', last_reply: null };
-          }
-        });
+              if (newApt && JSON.stringify(oldApt) !== JSON.stringify(newApt)) {
+                targetDict[time] = { ...newApt };
+              } 
+              else if (!newApt && oldApt && oldApt.user_id) {
+                targetDict[time] = { id: oldApt.id, user_id: null, user_name: null, reply_status: '未回覆', last_reply: null };
+              }
+            });
+        };
+
+        updateAppointments(oldDayData.appointments, newDayData.appointments);
+        
+        // 1.1 Update appointments (Massage)
+        // Ensure appointments_massage exists in oldDayData
+        if (!oldDayData.appointments_massage) oldDayData.appointments_massage = {};
+        updateAppointments(oldDayData.appointments_massage, newDayData.appointments_massage);
 
         // 2. Update waiting list
         // A simple replacement is safe here as it's less interactive than the main schedule.
@@ -447,8 +523,8 @@ function closeAllSelects() {
   usersInGroup.value = [];
 }
 
-function toggleDropdown(date, time, index) {
-  const selectId = `${date}-${time}`;
+function toggleDropdown(date, time, index, type = 'consultation') {
+  const selectId = `${date}-${time}-${type}`;
   if (openSelect.value === selectId) {
     closeAllSelects();
     previousUser.value = null;
@@ -460,10 +536,13 @@ function toggleDropdown(date, time, index) {
     previousUser.value = null;
     if (index > 0) {
       const daySchedule = weekSchedule.value[date];
-      if (daySchedule && daySchedule.appointments) {
-        const timeSlots = Object.keys(daySchedule.appointments);
+      // Select the correct appointments dictionary based on type
+      const appointments = type === 'massage' ? daySchedule.appointments_massage : daySchedule.appointments;
+      
+      if (daySchedule && appointments) {
+        const timeSlots = Object.keys(appointments);
         const prevTime = timeSlots[index - 1];
-        const prevApt = daySchedule.appointments[prevTime];
+        const prevApt = appointments[prevTime];
         if (prevApt && prevApt.user_id) {
           previousUser.value = { id: prevApt.user_id, name: prevApt.user_name };
         }
@@ -487,15 +566,16 @@ function renderUserOptions(zhuyinInitial) {
   selectStep.value = 2;
 }
 
-async function selectUser(date, time, userId, userName, waitingListItemId = null) {
-  const originalUserId = weekSchedule.value[date]?.appointments[time]?.user_id;
-  const originalUserName = weekSchedule.value[date]?.appointments[time]?.user_name;
+async function selectUser(date, time, userId, userName, waitingListItemId = null, type = 'consultation') {
+  const appointmentsDict = type === 'massage' ? weekSchedule.value[date]?.appointments_massage : weekSchedule.value[date]?.appointments;
+  const originalUserId = appointmentsDict?.[time]?.user_id;
+  const originalUserName = appointmentsDict?.[time]?.user_name;
 
   closeAllSelects();
 
   // Optimistically update UI
-  if (weekSchedule.value[date] && weekSchedule.value[date].appointments[time]) {
-    const targetSlot = weekSchedule.value[date].appointments[time];
+  if (weekSchedule.value[date] && appointmentsDict?.[time]) {
+    const targetSlot = appointmentsDict[time];
     targetSlot.user_id = userId;
     targetSlot.user_name = userName;
     // 修正：當新增預約時，如果原本沒有預約，則手動賦予預設狀態以供 UI 即時更新
@@ -515,24 +595,25 @@ async function selectUser(date, time, userId, userName, waitingListItemId = null
     const response = await axios.post('/api/admin/save_appointment', {
       date, time, user_id: userId, user_name: userName, 
       // 修正：確保 waiting_list_item_id 是一個數字或 null
-      waiting_list_item_id: typeof waitingListItemId === 'number' ? waitingListItemId : null
+      waiting_list_item_id: typeof waitingListItemId === 'number' ? waitingListItemId : null,
+      type: type // Pass the type to the backend
     });
     if (response.data.status === 'success') {
       showStatus('✅ 預約已儲存', 'success');
-      // 修正：不再重新載入整個排程，而是使用後端回傳的新預約資料來更新 UI
+      
       const newAppointment = response.data.appointment;
-      if (newAppointment && weekSchedule.value[date] && weekSchedule.value[date].appointments[time]) {
+      if (newAppointment && weekSchedule.value[date] && appointmentsDict?.[time]) {
+        const targetSlot = appointmentsDict[time];
+        targetSlot.id = newAppointment.id;
+        targetSlot.reply_status = newAppointment.reply_status;
+        targetSlot.last_reply = newAppointment.last_reply;
+        
         // If a waiting list item was used, it's now deleted from the backend.
         // We need to update the user list on the frontend to reflect this.
         if (waitingListItemId) {
           allUsers.value = allUsers.value.filter(u => u.id !== userId);
           groupedUsers.value = groupUsersByZhuyin(allUsers.value);
         }
-
-        const targetSlot = weekSchedule.value[date].appointments[time];
-        targetSlot.id = newAppointment.id;
-        targetSlot.reply_status = newAppointment.reply_status;
-        targetSlot.last_reply = newAppointment.last_reply;
       }
       return true; // Return true on success
     } else {
@@ -541,9 +622,9 @@ async function selectUser(date, time, userId, userName, waitingListItemId = null
   } catch (error) {
     showStatus(`❌ 儲存失敗: ${error.message || '未知錯誤'}`, 'error');
     // Revert optimistic update on failure
-    if (weekSchedule.value[date] && weekSchedule.value[date].appointments[time]) {
-      weekSchedule.value[date].appointments[time].user_id = originalUserId;
-      weekSchedule.value[date].appointments[time].user_name = originalUserName;
+    if (weekSchedule.value[date] && appointmentsDict?.[time]) {
+      appointmentsDict[time].user_id = originalUserId;
+      appointmentsDict[time].user_name = originalUserName;
     }
     return false; // Return false on failure
   }
@@ -586,11 +667,11 @@ async function removeFromWaitingList(itemId, date) {
     }
 }
 
-function handleUserSelection(date, time, user) {
+function handleUserSelection(date, time, user, type = 'consultation') {
   if (openSelect.value.startsWith('waiting-')) {
     addToWaitingList(date, user);
   } else {
-    selectUser(date, time, user.id, user.name);
+    selectUser(date, time, user.id, user.name, null, type);
   }
 }
 
@@ -609,25 +690,25 @@ function handleDragEnd() {
   }, 50); // 50ms is a safe, imperceptible delay
 }
 
-function handleDragOver(date, time, apt) {
+function handleDragOver(date, time, apt, type = 'consultation') {
   if (draggedItem.value && !apt.user_id) {
-    dragOverTarget.value = `${date}-${time}`;
+    dragOverTarget.value = `${date}-${time}-${type}`;
   }
 }
 
-function handleDragLeave(date, time) {
-  if (dragOverTarget.value === `${date}-${time}`) {
+function handleDragLeave(date, time, type = 'consultation') {
+  if (dragOverTarget.value === `${date}-${time}-${type}`) {
     dragOverTarget.value = null;
   }
 }
 
-async function handleDrop(date, time) {
-  if (draggedItem.value && dragOverTarget.value === `${date}-${time}`) {
+async function handleDrop(date, time, type = 'consultation') {
+  if (draggedItem.value && dragOverTarget.value === `${date}-${time}-${type}`) {
     const droppedItem = { ...draggedItem.value }; // Create a copy
     dragOverTarget.value = null;
 
     // Perform the API call and UI update
-    const success = await selectUser(date, time, droppedItem.user_id, droppedItem.user_name, droppedItem.id);
+    const success = await selectUser(date, time, droppedItem.user_id, droppedItem.user_name, droppedItem.id, type);
     if (success) {
       weekSchedule.value[date].waiting_list = weekSchedule.value[date].waiting_list.filter(item => item.id !== droppedItem.id);
     }
@@ -677,14 +758,16 @@ async function sendDayReminders(date, dayName) {
 }
 
 function resetStatusFromModal() {
-  const { appointment, date, time } = replyModal.value;
-  cycleReplyStatus(appointment, date, time, '未回覆');
+  const { appointment, date, time, type } = replyModal.value;
+  cycleReplyStatus(appointment, date, time, type, '未回覆');
   closeReplyModal();
 }
 
-async function cycleReplyStatus(appointment, date, time, forceStatus = null) {
+async function cycleReplyStatus(appointment, date, time, type = 'consultation', forceStatus = null) {
   // --- NEW: Smart Confirmation Logic ---
-  const dayAppointments = Object.values(weekSchedule.value[date].appointments);
+  const daySchedule = weekSchedule.value[date];
+  const appointmentsDict = type === 'massage' ? daySchedule.appointments_massage : daySchedule.appointments;
+  const dayAppointments = Object.values(appointmentsDict);
   const otherAppointments = dayAppointments.filter(apt => 
     apt.id !== appointment.id && apt.user_id === appointment.user_id
   );
@@ -732,7 +815,7 @@ async function cycleReplyStatus(appointment, date, time, forceStatus = null) {
     const response = await axios.put(`/api/admin/appointments/${appointment.id}/reply_status`, { status: nextStatus });
     if (response.data.status === 'success') {
       // Optimistically update the UI
-      const targetAppointment = weekSchedule.value[date]?.appointments[time];
+      const targetAppointment = appointmentsDict[time];
       if (targetAppointment) {
         targetAppointment.reply_status = nextStatus;
         // 關鍵修正：根據新的狀態，同步更新 last_reply 物件
@@ -756,14 +839,14 @@ function closeReplyModal() {
 }
 
 function confirmFromModal() {
-  const { appointment, date, time } = replyModal.value;
+  const { appointment, date, time, type } = replyModal.value;
   if (appointment && appointment.id) {
-    confirmReply(appointment.id, date, time);
+    confirmReply(appointment.id, date, time, type);
   }
   closeReplyModal();
 }
 
-function openReplyModal(appointment, date, time) {
+function openReplyModal(appointment, date, time, type = 'consultation') {
   if (!appointment.last_reply) return;
 
   replyModal.value = {
@@ -774,25 +857,28 @@ function openReplyModal(appointment, date, time) {
     appointment: appointment,
     date: date,
     time: time,
+    type: type // Pass type
   };
 }
 
-function handleStatusClick(appointment, date, time) {
+function handleStatusClick(appointment, date, time, type = 'consultation') {
   // If there is an UNCONFIRMED reply (yellow light), open the modal.
   if (appointment.last_reply && !appointment.last_reply.confirmed) {
-    openReplyModal(appointment, date, time);
+    openReplyModal(appointment, date, time, type);
   } else { // Otherwise (no reply, or already confirmed), cycle the status.
-    cycleReplyStatus(appointment, date, time);
+    cycleReplyStatus(appointment, date, time, type);
   }
 }
 
-async function confirmReply(appointmentId, date, time) {
+async function confirmReply(appointmentId, date, time, type = 'consultation') {
   showStatus('確認中...', 'info');
   try {
     const response = await axios.post(`/api/admin/appointments/${appointmentId}/confirm_reply`);
     if (response.data.status === 'success') {
       // Optimistically update the UI
-      const appointment = weekSchedule.value[date]?.appointments[time];
+      const daySchedule = weekSchedule.value[date];
+      const appointmentsDict = type === 'massage' ? daySchedule.appointments_massage : daySchedule.appointments;
+      const appointment = appointmentsDict?.[time];
       if (appointment) {
         appointment.reply_status = '已確認';
         // 修正：只有當 last_reply 是物件時，才更新其 confirmed 屬性

@@ -7,6 +7,7 @@
     .weekday-group {
         margin-bottom: 30px;
     }
+
     .weekday-header {
         font-size: 1.5rem;
         font-weight: bold;
@@ -15,6 +16,7 @@
         border-bottom: 2px solid #e0e0e0;
         padding-bottom: 10px;
     }
+
     .slot-item {
         display: flex;
         align-items: center;
@@ -24,23 +26,34 @@
         margin-bottom: 8px;
         gap: 15px;
     }
+
     .slot-time {
         font-weight: 500;
         min-width: 120px;
     }
+
     .slot-note {
         color: #6c757d;
         flex-grow: 1;
     }
+
     .slot-status {
         font-weight: bold;
     }
-    .status-active { color: #28a745; }
-    .status-inactive { color: #dc3545; }
+
+    .status-active {
+        color: #28a745;
+    }
+
+    .status-inactive {
+        color: #dc3545;
+    }
+
     .btn-action {
         padding: 4px 8px;
         font-size: 12px;
     }
+
     #message-container {
         position: fixed;
         top: 20px;
@@ -69,21 +82,26 @@
     <div class="weekday-group">
         <div class="weekday-header">{{ weekday_names[weekday] }}</div>
         {% if slots %}
-            {% for slot in slots %}
-            <div class="slot-item">
-                <div class="slot-time">{{ slot.start_time }} - {{ slot.end_time }}</div>
-                <div class="slot-note">{{ slot.note or '' }}</div>
-                <div class="slot-status {{ 'status-active' if slot.active else 'status-inactive' }}">
-                    {{ '啟用' if slot.active else '停用' }}
-                </div>
-                <div>
-                    <button class="btn btn-sm btn-outline-secondary btn-action" data-bs-toggle="modal" data-bs-target="#slotModal" data-action="edit" data-slot='{{ slot|tojson }}'>✏️ 編輯</button>
-                    <button class="btn btn-sm btn-outline-danger btn-action" data-action="delete" data-slot-id="{{ slot.id }}">🗑️ 刪除</button>
-                </div>
+        {% for slot in slots %}
+        <div class="slot-item">
+            <div class="slot-time">{{ slot.start_time }} - {{ slot.end_time }}</div>
+            <div class="slot-note">{{ slot.note or '' }}</div>
+            <span class="badge bg-{{ 'info' if slot.get('type') == 'massage' else 'primary' }}">
+                {{ '推拿' if slot.get('type') == 'massage' else '看診' }}
+            </span>
+            <div class="slot-status {{ 'status-active' if slot.active else 'status-inactive' }}">
+                {{ '啟用' if slot.active else '停用' }}
             </div>
-            {% endfor %}
+            <div>
+                <button class="btn btn-sm btn-outline-secondary btn-action" data-bs-toggle="modal"
+                    data-bs-target="#slotModal" data-action="edit" data-slot='{{ slot|tojson }}'>✏️ 編輯</button>
+                <button class="btn btn-sm btn-outline-danger btn-action" data-action="delete"
+                    data-slot-id="{{ slot.id }}">🗑️ 刪除</button>
+            </div>
+        </div>
+        {% endfor %}
         {% else %}
-            <div class="text-muted">本日無設定時段</div>
+        <div class="text-muted">本日無設定時段</div>
         {% endif %}
     </div>
     {% endfor %}
@@ -101,6 +119,13 @@
                 <form id="slotForm">
                     <input type="hidden" id="slotId">
                     <div class="mb-3">
+                        <label for="typeSelect" class="form-label">類型</label>
+                        <select class="form-select" id="typeSelect" required>
+                            <option value="consultation">看診</option>
+                            <option value="massage">推拿</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label for="weekday" class="form-label">星期</label>
                         <select class="form-select" id="weekday" required>
                             <option value="1">週二</option>
@@ -114,20 +139,32 @@
                         <div class="col">
                             <label for="startTime" class="form-label">開始時間</label>
                             <div class="input-group">
-                                <select class="form-select" id="startPeriod"><option value="am">上午</option><option value="pm">下午</option></select>
+                                <select class="form-select" id="startPeriod">
+                                    <option value="am">上午</option>
+                                    <option value="pm">下午</option>
+                                </select>
                                 <select class="form-select" id="startHour"></select>
                                 <select class="form-select" id="startMinute">
-                                    <option value="00">00</option><option value="15">15</option><option value="30">30</option><option value="45">45</option>
+                                    <option value="00">00</option>
+                                    <option value="15">15</option>
+                                    <option value="30">30</option>
+                                    <option value="45">45</option>
                                 </select>
                             </div>
                         </div>
                         <div class="col">
                             <label for="endTime" class="form-label">結束時間</label>
                             <div class="input-group">
-                                <select class="form-select" id="endPeriod"><option value="am">上午</option><option value="pm">下午</option></select>
+                                <select class="form-select" id="endPeriod">
+                                    <option value="am">上午</option>
+                                    <option value="pm">下午</option>
+                                </select>
                                 <select class="form-select" id="endHour"></select>
                                 <select class="form-select" id="endMinute">
-                                    <option value="00">00</option><option value="15">15</option><option value="30">30</option><option value="45">45</option>
+                                    <option value="00">00</option>
+                                    <option value="15">15</option>
+                                    <option value="30">30</option>
+                                    <option value="45">45</option>
                                 </select>
                             </div>
                         </div>
@@ -162,17 +199,26 @@
                 <div class="mb-3">
                     <label for="sourceWeekday" class="form-label">從哪個星期複製？</label>
                     <select class="form-select" id="sourceWeekday">
-                        <option value="1">週二</option><option value="2">週三</option><option value="3">週四</option><option value="4">週五</option><option value="5">週六</option>
+                        <option value="1">週二</option>
+                        <option value="2">週三</option>
+                        <option value="3">週四</option>
+                        <option value="4">週五</option>
+                        <option value="5">週六</option>
                     </select>
                 </div>
                 <div>
                     <label class="form-label">複製到哪些星期？ (將會覆蓋)</label>
                     <div id="targetWeekdays">
-                        <div class="form-check"><input class="form-check-input" type="checkbox" value="1" id="target-1"><label class="form-check-label" for="target-1">週二</label></div>
-                        <div class="form-check"><input class="form-check-input" type="checkbox" value="2" id="target-2"><label class="form-check-label" for="target-2">週三</label></div>
-                        <div class="form-check"><input class="form-check-input" type="checkbox" value="3" id="target-3"><label class="form-check-label" for="target-3">週四</label></div>
-                        <div class="form-check"><input class="form-check-input" type="checkbox" value="4" id="target-4"><label class="form-check-label" for="target-4">週五</label></div>
-                        <div class="form-check"><input class="form-check-input" type="checkbox" value="5" id="target-5"><label class="form-check-label" for="target-5">週六</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" value="1"
+                                id="target-1"><label class="form-check-label" for="target-1">週二</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" value="2"
+                                id="target-2"><label class="form-check-label" for="target-2">週三</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" value="3"
+                                id="target-3"><label class="form-check-label" for="target-3">週四</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" value="4"
+                                id="target-4"><label class="form-check-label" for="target-4">週五</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" value="5"
+                                id="target-5"><label class="form-check-label" for="target-5">週六</label></div>
                     </div>
                 </div>
             </div>
@@ -204,6 +250,7 @@
     function prepareAddModal() {
         document.getElementById('slotForm').reset();
         document.getElementById('slotId').value = '';
+        document.getElementById('typeSelect').value = 'consultation';
         document.getElementById('slotModalLabel').textContent = '新增時段';
         document.getElementById('active').checked = true;
     }
@@ -211,11 +258,12 @@
     function prepareEditModal(slot) {
         document.getElementById('slotForm').reset();
         document.getElementById('slotId').value = slot.id;
-        document.getElementById('weekday').value = slot.weekday;        
+        document.getElementById('typeSelect').value = slot.type || 'consultation';
+        document.getElementById('weekday').value = slot.weekday;
         document.getElementById('note').value = slot.note || '';
         document.getElementById('active').checked = slot.active;
         document.getElementById('slotModalLabel').textContent = '編輯時段';
-        
+
         setTimeSelectors('start', slot.start_time);
         setTimeSelectors('end', slot.end_time);
     }
@@ -231,7 +279,7 @@
         } else if (period === 'am' && hour === 12) { // 12 AM is 00:xx
             h24 = 0;
         }
-        
+
         return `${String(h24).padStart(2, '0')}:${minute}`;
     }
 
@@ -243,7 +291,7 @@
         if (period === 'am' && hour === 0) displayHour = 12; // 00:xx is 12 AM
 
         document.getElementById(`${prefix}Period`).value = period;
-        updateHourOptions(prefix, period); // 更新小時選項
+        updateHourOptions(prefix, period);
         document.getElementById(`${prefix}Hour`).value = displayHour;
         document.getElementById(`${prefix}Minute`).value = String(minute).padStart(2, '0');
     }
@@ -256,6 +304,7 @@
             end_time: getCombinedTime('end'),
             note: document.getElementById('note').value,
             active: document.getElementById('active').checked,
+            type: document.getElementById('typeSelect').value
         };
 
         if (data.start_time >= data.end_time) {
@@ -277,7 +326,7 @@
                 showAlert(result.message, 'success');
                 const modal = bootstrap.Modal.getInstance(document.getElementById('slotModal'));
                 modal.hide();
-                setTimeout(() => window.location.reload(), 1000);
+                setTimeout(() => window.location.reload(), 800);
             } else {
                 showAlert(result.message || '儲存失敗', 'danger');
             }
@@ -296,7 +345,7 @@
             const result = await response.json();
             if (response.ok) {
                 showAlert(result.message, 'success');
-                setTimeout(() => window.location.reload(), 1000);
+                setTimeout(() => window.location.reload(), 800);
             } else {
                 showAlert(result.message || '刪除失敗', 'danger');
             }
@@ -327,7 +376,7 @@
                 showAlert(result.message, 'success');
                 const modal = bootstrap.Modal.getInstance(document.getElementById('copyModal'));
                 modal.hide();
-                setTimeout(() => window.location.reload(), 1500);
+                setTimeout(() => window.location.reload(), 1000);
             } else {
                 showAlert(result.message || '複製失敗', 'danger');
             }
@@ -339,9 +388,7 @@
     function updateHourOptions(prefix, period) {
         const hourSelect = document.getElementById(`${prefix}Hour`);
         hourSelect.innerHTML = '';
-        const hours = (period === 'am') ?
-            [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : // AM hours
-            [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];  // PM hours
+        const hours = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
         hours.forEach(h => {
             const option = document.createElement('option');
@@ -361,7 +408,7 @@
 
         // 事件委派
         const container = document.querySelector('.container');
-        container.addEventListener('click', function(event) {
+        container.addEventListener('click', function (event) {
             const target = event.target;
             if (target.matches('.btn-action[data-action="edit"]')) {
                 const slotData = JSON.parse(target.dataset.slot);
@@ -372,7 +419,7 @@
             }
         });
 
-        document.getElementById('page-actions').addEventListener('click', function(event) {
+        document.getElementById('page-actions').addEventListener('click', function (event) {
             const target = event.target.closest('button');
             if (!target) return;
             if (target.dataset.bsTarget === '#slotModal') {
