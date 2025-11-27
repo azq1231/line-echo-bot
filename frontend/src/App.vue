@@ -35,6 +35,14 @@
           :class="dayData.is_closed ? 'tw-bg-gray-400' : 'tw-bg-gradient-to-r tw-from-indigo-600 tw-to-purple-700'">
           <h3 class="tw-text-base tw-font-bold">{{ dayData.date_info.day_name }}</h3>
           <p class="tw-text-sm tw-opacity-90">{{ dayData.date_info.display }}</p>
+          <button 
+            v-if="!dayData.is_closed"
+            class="tw-mt-2 tw-px-2 tw-py-1 tw-text-xs tw-bg-white/20 hover:tw-bg-white/30 tw-text-white tw-rounded tw-transition"
+            @click="sendDayReminders(dayData.date_info.date, dayData.date_info.day_name)"
+            :disabled="isSendingDay[dayData.date_info.date]"
+          >
+            {{ dayReminderSent[dayData.date_info.date] ? '已發送' : '發送提醒' }}
+          </button>
         </div>
         <div class="tw-flex-grow tw-space-y-1">
           <div v-if="dayData.is_closed" class="tw-flex-grow tw-flex tw-items-center tw-justify-center tw-text-center tw-text-gray-500 tw-font-bold tw-p-5 tw-bg-gray-200 tw-rounded-md">

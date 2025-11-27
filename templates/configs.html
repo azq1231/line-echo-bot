@@ -97,12 +97,12 @@
                         <label for="dailyTime" class="form-label">本日提醒時間</label>
                         <select class="form-select" id="dailyTime"
                             onchange="saveConfig('auto_reminder_daily_time', 'dailyTime')">
-                            {% for i in range(7, 13) %}
+                            {% for i in range(7, 24) %}
                             <option value="{{ '%02d:00'|format(i) }}" {% if configs.auto_reminder_daily_time=='%02d:00'
                                 |format(i) %}selected{% endif %}>{{ '%02d:00'|format(i) }}</option>
                             {% endfor %}
                         </select>
-                        <div class="form-text mt-2">每日自動發送「當天」的預約提醒。</div>
+                        <div class="form-text mt-2">每日自動發送「明天」的預約提醒。</div>
                     </div>
                 </div>
             </div>

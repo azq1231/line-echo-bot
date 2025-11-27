@@ -109,10 +109,8 @@ def save_appointment():
     type = data.get('type', 'consultation') # 預設為看診
 
     # 1. 先刪除該時段的現有預約，為新增或清空做準備
-    # 注意：這裡假設同一時間點不同類型不會衝突，或者前端會處理好時間。
-    # 為了安全起見，我們應該先檢查該時段是否已有該類型的預約。
-    # 但為了簡化，我們先假設 cancel_appointment 會刪除該時間點的所有預約。
-    db.cancel_appointment(date, time) 
+    # 使用 type 參數確保只刪除正確類型的預約
+    db.cancel_appointment(date, time, type) 
 
     # 2. 如果提供了 user_id，代表是「新增」或「更新」操作
     if user_id:
@@ -132,6 +130,8 @@ def save_appointment():
                     current_app.logger.warning(f"警告：無法將 waiting_list_item_id '{waiting_list_item_id}' 轉換為整數。")
             new_appointment = db.get_appointment_by_id(new_appointment_id)
             return jsonify({"status": "success", "message": "預約已儲存", "appointment": new_appointment})
+        else:
+            return jsonify({"status": "error", "message": "預約儲存失敗，該時段可能已被佔用或資料庫錯誤。"}), 500
 
     # 3. 如果沒有提供 user_id，代表是「取消」操作，前面已經刪除完畢，直接回傳成功即可
     return jsonify({"status": "success", "message": "預約已清空"})

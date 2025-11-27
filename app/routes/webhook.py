@@ -206,7 +206,7 @@ def handle_cancel_booking(user_id):
         send_line_message(user_id, [{"type": "text", "text": msg}], message_type="cancel_booking_error")
     else:
         apt = sorted(future_apts, key=lambda x: (x['date'], x['time']))[0]
-        db.cancel_appointment(apt['date'], apt['time'])
+        db.cancel_appointment(apt['date'], apt['time'], apt.get('type', 'consultation'))
         
         date_obj = datetime.strptime(apt['date'], '%Y-%m-%d')
         weekday_names = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']

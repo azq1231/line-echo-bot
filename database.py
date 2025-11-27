@@ -22,13 +22,16 @@ def _name_to_zhuyin(name: str) -> str:
 
 def get_db():
     """获取数据库连接"""
-    conn = sqlite3.connect(DB_FILE)
+    # 增加 timeout 到 30 秒，以減少 database is locked 錯誤
+    conn = sqlite3.connect(DB_FILE, timeout=30)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_database():
     """初始化数据库结构，并安全地添加新字段"""
     conn = get_db()
+    # 啟用 WAL 模式以提高並發性能
+    conn.execute('PRAGMA journal_mode=WAL')
     cursor = conn.cursor()
     
     # 用户表
@@ -979,15 +982,7 @@ def get_waiting_list_item(item_id: int) -> Optional[Dict]:
     conn.close()
     return dict(item) if item else None
 
-def cancel_appointment(date: str, time: str) -> bool:
-    """取消預約（刪除）"""
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM appointments WHERE date = ? AND time = ?', (date, time))
-    deleted = cursor.rowcount > 0
-    conn.commit()
-    conn.close()
-    return deleted
+
 
 def update_user_day_reply_status(user_id: str, date: str, status: str) -> bool:
     """更新用戶在特定日期的所有預約回覆狀態"""
@@ -1108,11 +1103,11 @@ def get_appointments_by_user(user_id: str) -> List[Dict]:
     conn.close()
     return appointments
 
-def cancel_appointment(date: str, time: str) -> bool:
-    """取消指定日期的预约"""
+def cancel_appointment(date: str, time: str, type: str = 'consultation') -> bool:
+    """取消指定日期和類型的預約"""
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM appointments WHERE date = ? AND time = ?", (date, time))
+    cursor.execute("DELETE FROM appointments WHERE date = ? AND time = ? AND type = ?", (date, time, type))
     deleted = cursor.rowcount > 0
     conn.commit()
     conn.close()
@@ -1277,7 +1272,7 @@ def copy_slots(source_weekday: int, target_weekdays: List[int], types: List[str]
     except Exception as e:
         conn.rollback()
         print(f"複製時段時發生錯誤: {e}")
-        return 0, 0
+        raise e
     finally:
         conn.close()
 
@@ -1314,6 +1309,19 @@ def update_user_address(user_id: str, address: str) -> bool:
     conn.commit()
     conn.close()
     return updated
+
+def get_pending_schedules_to_send(current_time: datetime) -> List[Dict]:
+    """獲取待發送的排程"""
+    conn = get_db()
+    cursor = conn.cursor()
+    # 假設 schedules 表有 scheduled_time 欄位
+    cursor.execute('''
+        SELECT * FROM schedules 
+        WHERE status = 'pending' AND scheduled_time <= ?
+    ''', (current_time,))
+    schedules = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return schedules
 
 def update_schedule_status(schedule_id: int, status: str) -> bool:
     """更新排程的狀態"""
