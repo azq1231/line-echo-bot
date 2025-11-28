@@ -625,7 +625,7 @@ function toggleDropdown(date, time, index, type = 'consultation') {
       const appointments = type === 'massage' ? daySchedule.appointments_massage : daySchedule.appointments;
       
       if (daySchedule && appointments) {
-        const timeSlots = Object.keys(appointments);
+        const timeSlots = Object.keys(appointments).sort();
         const prevTime = timeSlots[index - 1];
         const prevApt = appointments[prevTime];
         if (prevApt && prevApt.user_id) {
@@ -680,7 +680,7 @@ async function selectUser(date, time, userId, userName, waitingListItemId = null
     const response = await axios.post('/api/admin/save_appointment', {
       date, time, user_id: userId, user_name: userName, 
       // 修正：確保 waiting_list_item_id 是一個數字或 null
-      waiting_list_item_id: typeof waitingListItemId === 'number' ? waitingListItemId : null,
+      waiting_list_item_id: waitingListItemId ? Number(waitingListItemId) : null,
       type: type // Pass the type to the backend
     });
     if (response.data.status === 'success') {

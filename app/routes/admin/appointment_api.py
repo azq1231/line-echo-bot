@@ -101,6 +101,7 @@ def get_week_appointments():
 @api_error_handler
 def save_appointment():
     data = request.get_json()
+    print(f"[DEBUG] save_appointment data: {data}")
     date = data.get('date')
     time = data.get('time')
     user_name = data.get('user_name')
@@ -121,6 +122,7 @@ def save_appointment():
             user_name=user_name, # 將 user_name 作為備用名稱傳遞
             type=type
         )
+        print(f"[DEBUG] new_appointment_id: {new_appointment_id}")
         if new_appointment_id:
             # 如果是從備取名單拖曳過來的，則從備取名單中移除
             if waiting_list_item_id is not None:
@@ -131,6 +133,7 @@ def save_appointment():
             new_appointment = db.get_appointment_by_id(new_appointment_id)
             return jsonify({"status": "success", "message": "預約已儲存", "appointment": new_appointment})
         else:
+            print("[DEBUG] add_appointment returned None")
             return jsonify({"status": "error", "message": "預約儲存失敗，該時段可能已被佔用或資料庫錯誤。"}), 500
 
     # 3. 如果沒有提供 user_id，代表是「取消」操作，前面已經刪除完畢，直接回傳成功即可

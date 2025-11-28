@@ -687,16 +687,31 @@ def add_appointment(user_id: str, date: str, time: str, notes: Optional[str] = N
     cursor = conn.cursor()
     try:
         # 1. 查詢最新的用戶姓名，確保資料正確性
+        # 1. 查詢最新的用戶姓名，確保資料正確性
         cursor.execute('SELECT name FROM users WHERE user_id = ?', (user_id,))
         user_row = cursor.fetchone()
         
-        # 如果找不到用戶或前端未提供備用名稱，則無法新增
-        if not user_row and not user_name:
-            print(f"[APPOINTMENT ERROR] 新增預約失敗：找不到用戶 user_id={user_id}，備用名稱={user_name}")
-            return None
-        
-        # 優先使用資料庫中的最新名稱，如果找不到，則使用前端傳來的名稱作為備用
-        final_user_name = user_row['name'] if user_row else user_name
+        final_user_name = user_name
+
+        # 如果找不到用戶
+        if not user_row:
+            if user_id.startswith('manual_') and user_name:
+                # 自動修復：如果手動用戶不存在但有提供名稱，則重新建立
+                print(f"[APPOINTMENT INFO] 自動建立缺失的手動用戶: {user_name} ({user_id})")
+                zhuyin = _name_to_zhuyin(user_name)
+                try:
+                    cursor.execute("""
+                        INSERT INTO users (user_id, name, zhuyin, manual_update, is_admin)
+                        VALUES (?, ?, ?, TRUE, FALSE)
+                    """, (user_id, user_name, zhuyin))
+                except sqlite3.IntegrityError:
+                    pass # 應該不會發生，因為剛查過不存在
+                final_user_name = user_name
+            elif not user_name:
+                print(f"[APPOINTMENT ERROR] 新增預約失敗：找不到用戶 user_id={user_id}，備用名稱={user_name}")
+                return None
+        else:
+            final_user_name = user_row['name']
 
         print(f"[APPOINTMENT DEBUG] 嘗試新增預約：user_id={user_id}, user_name={final_user_name}, date={date}, time={time}")
         cursor.execute('''
@@ -1243,14 +1258,19 @@ def copy_slots(source_weekday: int, target_weekdays: List[int], types: List[str]
     conn = get_db()
     cursor = conn.cursor()
     try:
-        # 1. 獲取來源星期的指定類型時段
+        # 1. 獲取來源星期的指定類型時段，並立即轉換為普通的 tuple 列表
+        # 這樣即使之後刪除了來源資料，這些資料也不會受影響
         placeholders = ','.join('?' for _ in types)
         query = f'SELECT start_time, end_time, active, note, type FROM available_slots WHERE weekday = ? AND type IN ({placeholders})'
         cursor.execute(query, (source_weekday, *types))
-        source_slots = cursor.fetchall()
+        source_slots_raw = cursor.fetchall()
         
-        if not source_slots:
+        if not source_slots_raw:
             return 0, 0 # 沒有可複製的時段
+        
+        # 將 Row 物件轉換為普通的 tuple，避免在刪除操作後資料失效
+        source_slots = [(row['start_time'], row['end_time'], row['active'], row['note'], row['type']) 
+                        for row in source_slots_raw]
 
         # 2. 刪除目標星期的指定類型時段
         weekday_placeholders = ','.join('?' for _ in target_weekdays)
@@ -1262,8 +1282,9 @@ def copy_slots(source_weekday: int, target_weekdays: List[int], types: List[str]
         # 3. 準備要插入的新時段
         slots_to_insert = []
         for slot in source_slots:
+            start_time, end_time, active, note, slot_type = slot
             for weekday in target_weekdays:
-                slots_to_insert.append((weekday, slot['start_time'], slot['end_time'], slot['active'], slot['note'], slot['type']))
+                slots_to_insert.append((weekday, start_time, end_time, active, note, slot_type))
         
         cursor.executemany('INSERT INTO available_slots (weekday, start_time, end_time, active, note, type) VALUES (?, ?, ?, ?, ?, ?)', slots_to_insert)
         inserted_count = cursor.rowcount
@@ -1317,7 +1338,7 @@ def get_pending_schedules_to_send(current_time: datetime) -> List[Dict]:
     # 假設 schedules 表有 scheduled_time 欄位
     cursor.execute('''
         SELECT * FROM schedules 
-        WHERE status = 'pending' AND scheduled_time <= ?
+        WHERE status = 'pending' AND send_time <= ?
     ''', (current_time,))
     schedules = [dict(row) for row in cursor.fetchall()]
     conn.close()
