@@ -1025,8 +1025,52 @@ const handleClickOutside = (e) => {
     }
 };
 
+// --- LIFF Logic ---
+async function initLiff() {
+  try {
+    // VITE_LIFF_ID 必須在 .env 中設定 (以 VITE_ 開頭才能在前端存取)
+    const liffId = import.meta.env.VITE_LIFF_ID;
+    if (!liffId) {
+      console.warn('VITE_LIFF_ID is not defined. LIFF initialization skipped.');
+      return;
+    }
+    
+    if (!window.liff) {
+        console.warn('LIFF SDK not loaded.');
+        return;
+    }
+
+    await window.liff.init({ liffId });
+    console.log('LIFF initialized');
+    
+    if (window.liff.isLoggedIn()) {
+      const idToken = window.liff.getIDToken();
+      if (idToken) {
+        console.log('LIFF User Logged In, verifying with backend...');
+        try {
+            const response = await axios.post('/api/auth/liff_login', { idToken });
+            if (response.data.status === 'success') {
+                console.log('LIFF backend login success:', response.data.user);
+                showStatus(`✅ LINE 自動登入成功: ${response.data.user.name}`, 'success');
+            }
+        } catch (e) {
+            console.error('LIFF backend login failed:', e);
+        }
+      }
+    } else {
+        // 如果在 LINE App 內開啟但未登入，則自動觸發登入
+        if (window.liff.isInClient()) {
+            window.liff.login();
+        }
+    }
+  } catch (error) {
+    console.error('LIFF initialization failed:', error);
+  }
+}
+
 // --- Lifecycle Hooks ---
 onMounted(() => {
+  initLiff(); // Initialize LIFF
   loadInitialData();
   // 每 15 秒自動在背景檢查一次更新
   pollingIntervalId.value = setInterval(pollForUpdates, 15000);
