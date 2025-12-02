@@ -8,10 +8,10 @@ export async function updateUser(id, field, value) {
   const res = await fetch('/api/admin/update_user_field', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      user_id: id, 
-      field: field, 
-      value: value 
+    body: JSON.stringify({
+      user_id: id,
+      field: field,
+      value: value
     }),
     credentials: 'include'
   })
@@ -61,5 +61,13 @@ export async function updateUserReminderSchedule(id, scheduleType) {
     credentials: 'include'
   })
   if (!res.ok) throw new Error('Update failed')
+  return res.json()
+}
+
+export async function getUserAppointments(id) {
+  const res = await fetch(`/api/admin/users/${id}/appointments`, {
+    credentials: 'include'
+  })
+  if (!res.ok) throw new Error('Fetch appointments failed')
   return res.json()
 }

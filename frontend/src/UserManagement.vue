@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="user-management-page container py-3">
     <!-- Info & Header Section -->
     <div class="p-3 mb-4 rounded" style="background-color: #e9ecef;">
@@ -70,6 +70,9 @@
               </td>
               <td class="text-center">
                 <div class="d-flex flex-column gap-1">
+                    <button @click="viewUserHistory(user)" class="btn btn-sm btn-outline-primary px-2 icon-btn" title="查看歷史紀錄">
+                        <i class="bi bi-calendar-check" style="font-size: 1.1rem;"></i>
+                    </button>
                     <button v-if="user.id.startsWith('manual_')" @click="openMergeModal(user)" class="btn btn-sm btn-outline-success px-2 icon-btn" title="合併用戶">
                         <i class="bi bi-person-plus-fill" style="font-size: 1.1rem;"></i>
                     </button>
@@ -116,6 +119,57 @@
       </div>
     </div>
 
+    <!-- History Modal -->
+    <div class="modal fade" id="historyModal" tabindex="-1" aria-labelledby="historyModalLabel" aria-hidden="true" ref="historyModalRef">
+      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="historyModalLabel">📅 {{ historyUser?.name }} 的預約歷史</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div v-if="loadingHistory" class="text-center py-4">
+              <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">載入中...</span>
+              </div>
+            </div>
+            <div v-else-if="historyError" class="alert alert-danger">{{ historyError }}</div>
+            <div v-else>
+              <div class="mb-3 p-2 bg-light rounded">
+                <strong>統計：</strong> 總計 {{ appointmentStats.total }} 次預約 | 
+                <span class="text-primary">尚有 {{ appointmentStats.future }} 次</span> | 
+                <span class="text-muted">過去 {{ appointmentStats.past }} 次</span>
+              </div>
+              <div v-if="userAppointments.length === 0" class="text-center text-muted py-4">
+                此用戶尚無預約紀錄
+              </div>
+              <table v-else class="table table-sm table-hover">
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>時間</th>
+                    <th>類型</th>
+                    <th>狀態</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="apt in userAppointments" :key="apt.id" :class="{ 'table-primary': isFutureAppointment(apt) }">
+                    <td>{{ apt.date }}</td>
+                    <td>{{ apt.time }}</td>
+                    <td><span class="badge" :class="apt.type === 'massage' ? 'bg-success' : 'bg-info'">{{ apt.type === 'massage' ? '推拿' : '看診' }}</span></td>
+                    <td><span class="badge bg-secondary">{{ apt.status === 'confirmed' ? '已確認' : apt.status }}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Merge Modal -->
     <div class="modal fade" id="mergeUserModal" tabindex="-1" aria-labelledby="mergeUserModalLabel" aria-hidden="true" ref="mergeModalRef">
       <div class="modal-dialog modal-dialog-centered">
@@ -143,7 +197,7 @@
 
 <script setup>
 import { ref, onMounted, computed, nextTick } from 'vue';
-import { getUsers, updateUser, addManual, mergeUsers, deleteUserApi, updateUserReminderSchedule } from './api';
+import { getUsers, updateUser, addManual, mergeUsers, deleteUserApi, updateUserReminderSchedule, getUserAppointments } from './api';
 
 const users = ref([]);
 const loading = ref(true);
@@ -161,6 +215,15 @@ const newUserName = ref('');
 const addManualModalRef = ref(null);
 let addManualModalInstance = null;
 const status = ref({ show: false, message: '', type: 'info' });
+
+// History modal state
+const historyModalRef = ref(null);
+let historyModalInstance = null;
+const historyUser = ref(null);
+const userAppointments = ref([]);
+const appointmentStats = ref({ total: 0, future: 0, past: 0 });
+const loadingHistory = ref(false);
+const historyError = ref(null);
 
 const filteredUsers = computed(() => {
   if (!searchTerm.value) {
@@ -245,6 +308,10 @@ onMounted(async () => {
       if (addManualModalRef.value) {
         addManualModalInstance = new window.bootstrap.Modal(addManualModalRef.value);
         console.log('✅ Add Manual Modal 初始化成功');
+      }
+      if (historyModalRef.value) {
+        historyModalInstance = new window.bootstrap.Modal(historyModalRef.value);
+        console.log('✅ History Modal 初始化成功');
       }
     } else {
       console.warn('⏳ 等待 Bootstrap 載入中...');
@@ -340,6 +407,43 @@ const updateReminderSchedule = async (user, event) => {
     // 如果更新失敗，將選擇還原
     event.target.value = user.reminder_schedule;
   }
+};
+
+const viewUserHistory = async (user) => {
+  historyUser.value = user;
+  userAppointments.value = [];
+  appointmentStats.value = { total: 0, future: 0, past: 0 };
+  loadingHistory.value = true;
+  historyError.value = null;
+
+  if (!historyModalInstance && window.bootstrap && historyModalRef.value) {
+    historyModalInstance = new window.bootstrap.Modal(historyModalRef.value);
+  }
+
+  if (historyModalInstance) {
+    historyModalInstance.show();
+  }
+
+  try {
+    const response = await getUserAppointments(user.id);
+    if (response.status === 'success') {
+      userAppointments.value = response.appointments;
+      appointmentStats.value = response.stats;
+    } else {
+      throw new Error(response.message || '獲取預約紀錄失敗');
+    }
+  } catch (error) {
+    historyError.value = `無法載入預約紀錄: ${error.message || '未知錯誤'}`;
+    console.error('Failed to load user appointments:', error);
+  } finally {
+    loadingHistory.value = false;
+  }
+};
+
+const isFutureAppointment = (apt) => {
+  const now = new Date();
+  const aptDate = new Date(`${apt.date} ${apt.time}`);
+  return aptDate > now && apt.status === 'confirmed';
 };
 
 </script>

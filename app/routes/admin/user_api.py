@@ -210,6 +210,51 @@ def api_get_merge_suggestions():
 
     return jsonify({"status": "success", "suggestions": suggestions})
 
+@api_admin_bp.route('/users/<string:user_id>/appointments', methods=['GET'])
+@admin_required
+@api_error_handler
+def api_get_user_appointments(user_id):
+    """獲取指定用戶的所有預約紀錄"""
+    from datetime import datetime
+    import pytz
+    
+    user = db.get_user_by_id(user_id)
+    if not user:
+        return jsonify({"status": "error", "message": "找不到該用戶。"}), 404
+    
+    appointments = db.get_appointments_by_user(user_id)
+    
+    # 計算統計資訊
+    TAIPEI_TZ = pytz.timezone('Asia/Taipei')
+    now = datetime.now(TAIPEI_TZ)
+    
+    future_count = 0
+    past_count = 0
+    
+    for apt in appointments:
+        try:
+            apt_datetime = datetime.strptime(f"{apt['date']} {apt['time']}", '%Y-%m-%d %H:%M').replace(tzinfo=TAIPEI_TZ)
+            if apt_datetime > now and apt['status'] == 'confirmed':
+                future_count += 1
+            else:
+                past_count += 1
+        except (ValueError, TypeError):
+            past_count += 1
+    
+    return jsonify({
+        "status": "success",
+        "user": {
+            "user_id": user['user_id'],
+            "name": user['name']
+        },
+        "appointments": appointments,
+        "stats": {
+            "total": len(appointments),
+            "future": future_count,
+            "past": past_count
+        }
+    })
+
 @api_admin_bp.route('/users/<string:user_id>', methods=['DELETE'])
 @admin_required
 @api_error_handler
