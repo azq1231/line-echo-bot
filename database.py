@@ -824,6 +824,13 @@ WHERE id = ?
         cursor.execute('''
             UPDATE appointments SET reply_status = ?, last_reply = NULL, reply_time = NULL, confirm_time = NULL WHERE id = ?
         ''', (status, appointment_id))
+    else:
+        # 其他狀態
+        cursor.execute('UPDATE appointments SET reply_status = ? WHERE id = ?', (status, appointment_id))
+
+    updated = cursor.rowcount > 0
+    conn.commit()
+    return updated
 
 def get_active_slots_by_weekday(weekday: int, type: Optional[str] = None) -> List[Dict]:
     """獲取指定星期和類型的可用時段"""
