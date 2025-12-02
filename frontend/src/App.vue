@@ -35,14 +35,7 @@
           :class="dayData.is_closed ? 'tw-bg-gray-400' : 'tw-bg-gradient-to-r tw-from-indigo-600 tw-to-purple-700'">
           <h3 class="tw-text-base tw-font-bold">{{ dayData.date_info.day_name }}</h3>
           <p class="tw-text-sm tw-opacity-90">{{ dayData.date_info.display }}</p>
-          <button 
-            v-if="!dayData.is_closed"
-            class="tw-mt-2 tw-px-2 tw-py-1 tw-text-xs tw-bg-white/20 hover:tw-bg-white/30 tw-text-white tw-rounded tw-transition"
-            @click="sendDayReminders(dayData.date_info.date, dayData.date_info.day_name)"
-            :disabled="isSendingDay[dayData.date_info.date]"
-          >
-            {{ dayReminderSent[dayData.date_info.date] ? '已發送' : '發送提醒' }}
-          </button>
+
         </div>
         <div class="tw-flex-grow tw-space-y-1">
           <div v-if="dayData.is_closed" class="tw-flex-grow tw-flex tw-items-center tw-justify-center tw-text-center tw-text-gray-500 tw-font-bold tw-p-5 tw-bg-gray-200 tw-rounded-md">
@@ -934,11 +927,27 @@ function confirmFromModal() {
 function openReplyModal(appointment, date, time, type = 'consultation') {
   if (!appointment.last_reply) return;
 
+  let replyType = '文字';
+  let content = '';
+  let isConfirmed = false;
+
+  if (typeof appointment.last_reply === 'string') {
+      // 舊格式：last_reply 就是訊息內容
+      content = appointment.last_reply;
+      // 嘗試判斷是否已確認（根據 reply_status）
+      isConfirmed = appointment.reply_status === '已確認';
+  } else {
+      // 新格式：物件
+      replyType = appointment.last_reply.type === 'image' ? '圖片' : '文字';
+      content = appointment.last_reply.content;
+      isConfirmed = appointment.last_reply.confirmed;
+  }
+
   replyModal.value = {
     show: true,
-    type: appointment.last_reply.type === 'image' ? '圖片' : '文字',
-    content: appointment.last_reply.content,
-    isConfirmed: appointment.last_reply.confirmed,
+    type: replyType,
+    content: content,
+    isConfirmed: isConfirmed,
     appointment: appointment,
     date: date,
     time: time,
@@ -947,10 +956,24 @@ function openReplyModal(appointment, date, time, type = 'consultation') {
 }
 
 function handleStatusClick(appointment, date, time, type = 'consultation') {
-  // If there is an UNCONFIRMED reply (yellow light), open the modal.
-  if (appointment.last_reply && !appointment.last_reply.confirmed) {
+  // Check if there is a reply
+  const hasReply = appointment.last_reply;
+  // Check if it is confirmed
+  let isConfirmed = false;
+  
+  if (hasReply) {
+      if (typeof appointment.last_reply === 'object') {
+          isConfirmed = appointment.last_reply.confirmed;
+      } else {
+          isConfirmed = appointment.reply_status === '已確認';
+      }
+  }
+
+  // If there is a reply and it is NOT confirmed (yellow light), open the modal.
+  if (hasReply && !isConfirmed) {
     openReplyModal(appointment, date, time, type);
-  } else { // Otherwise (no reply, or already confirmed), cycle the status.
+  } else { 
+    // Otherwise (no reply, or already confirmed), cycle the status.
     cycleReplyStatus(appointment, date, time, type);
   }
 }
