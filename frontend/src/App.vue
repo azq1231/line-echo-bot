@@ -645,9 +645,13 @@ function renderUserOptions(zhuyinInitial) {
 }
 
 async function selectUser(date, time, userId, userName, waitingListItemId = null, type = 'consultation') {
+  console.log('[DEBUG selectUser] 開始:', { date, time, userId, userName, type });
+  
   const appointmentsDict = type === 'massage' ? weekSchedule.value[date]?.appointments_massage : weekSchedule.value[date]?.appointments;
   const originalUserId = appointmentsDict?.[time]?.user_id;
   const originalUserName = appointmentsDict?.[time]?.user_name;
+
+  console.log('[DEBUG selectUser] 原始資料:', { originalUserId, originalUserName });
 
   closeAllSelects();
 
@@ -656,6 +660,8 @@ async function selectUser(date, time, userId, userName, waitingListItemId = null
     const targetSlot = appointmentsDict[time];
     targetSlot.user_id = userId;
     targetSlot.user_name = userName;
+    console.log('[DEBUG selectUser] 樂觀更新後:', { user_id: targetSlot.user_id, user_name: targetSlot.user_name });
+    
     // 修正：當新增預約時，如果原本沒有預約，則手動賦予預設狀態以供 UI 即時更新
     if (!originalUserId && userId) {
       targetSlot.id = Date.now(); // 臨時 ID，儲存後會被後端 ID 取代
@@ -670,21 +676,43 @@ async function selectUser(date, time, userId, userName, waitingListItemId = null
 
   showStatus('儲存中...', 'info');
   try {
-    const response = await axios.post('/api/admin/save_appointment', {
+    const payload = {
       date, time, user_id: userId, user_name: userName, 
-      // 修正：確保 waiting_list_item_id 是一個數字或 null
       waiting_list_item_id: waitingListItemId ? Number(waitingListItemId) : null,
-      type: type // Pass the type to the backend
-    });
+      type: type
+    };
+    console.log('[DEBUG selectUser] 發送 API 請求:', payload);
+    
+    const response = await axios.post('/api/admin/save_appointment', payload);
+    console.log('[DEBUG selectUser] API 回應:', response.data);
+    
     if (response.data.status === 'success') {
       showStatus('✅ 預約已儲存', 'success');
       
       const newAppointment = response.data.appointment;
+      console.log('[DEBUG selectUser] 新預約資料:', newAppointment);
+      
       if (newAppointment && weekSchedule.value[date] && appointmentsDict?.[time]) {
         const targetSlot = appointmentsDict[time];
         targetSlot.id = newAppointment.id;
         targetSlot.reply_status = newAppointment.reply_status;
         targetSlot.last_reply = newAppointment.last_reply;
+        // 同步後端返回的用戶資訊，確保一致性
+        if (newAppointment.user_name !== undefined) {
+          console.log('[DEBUG selectUser] 更新 user_name:', newAppointment.user_name);
+          targetSlot.user_name = newAppointment.user_name;
+        }
+        if (newAppointment.user_id !== undefined) {
+          console.log('[DEBUG selectUser] 更新 user_id:', newAppointment.user_id);
+          targetSlot.user_id = newAppointment.user_id;
+        }
+        
+        console.log('[DEBUG selectUser] 最終狀態:', { 
+          id: targetSlot.id, 
+          user_id: targetSlot.user_id, 
+          user_name: targetSlot.user_name,
+          reply_status: targetSlot.reply_status
+        });
         
         // If a waiting list item was used, it's now deleted from the backend.
         // We need to update the user list on the frontend to reflect this.
@@ -692,19 +720,27 @@ async function selectUser(date, time, userId, userName, waitingListItemId = null
           allUsers.value = allUsers.value.filter(u => u.id !== userId);
           groupedUsers.value = groupUsersByZhuyin(allUsers.value);
         }
+      } else {
+        console.warn('[DEBUG selectUser] 無法更新前端狀態:', { 
+          hasNewAppointment: !!newAppointment, 
+          hasDate: !!weekSchedule.value[date],
+          hasTime: !!appointmentsDict?.[time]
+        });
       }
-      return true; // Return true on success
+      return true;
     } else {
       throw new Error(response.data.message || '儲存失敗');
     }
   } catch (error) {
+    console.error('[DEBUG selectUser] 錯誤:', error);
     showStatus(`❌ 儲存失敗: ${error.message || '未知錯誤'}`, 'error');
     // Revert optimistic update on failure
     if (weekSchedule.value[date] && appointmentsDict?.[time]) {
       appointmentsDict[time].user_id = originalUserId;
       appointmentsDict[time].user_name = originalUserName;
+      console.log('[DEBUG selectUser] 已回滾:', { originalUserId, originalUserName });
     }
-    return false; // Return false on failure
+    return false;
   }
 }
 
