@@ -81,7 +81,7 @@
                       </div>
                       <span class="tw-ml-2 tw-text-gray-400 tw-text-xs">▼</span>
                     </div>
-                    <div v-if="openSelect === `${dayData.date_info.date}-${time}-consultation`" class="tw-absolute tw-top-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-64 tw-overflow-hidden tw-z-10 tw-shadow-lg tw-mt-1">
+                    <div v-if="openSelect === `${dayData.date_info.date}-${time}-consultation`" class="tw-absolute tw-bottom-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-96 tw-flex tw-flex-col tw-overflow-hidden tw-z-10 tw-shadow-lg tw-mb-1">
                       <!-- 搜尋框 -->
                       <div class="tw-sticky tw-top-0 tw-bg-white tw-border-b tw-border-gray-200 tw-p-2">
                         <input 
@@ -95,7 +95,7 @@
                       </div>
                       
                       <!-- 搜尋結果或原有選單 -->
-                      <div class="tw-max-h-48 tw-overflow-y-auto">
+                      <div class="tw-overflow-y-auto tw-flex-1">
                         <!-- 如果有搜尋關鍵字，顯示過濾結果 -->
                         <div v-if="searchQuery.trim()">
                           <div v-if="filteredUsers.length === 0" class="tw-px-2.5 tw-py-3 tw-text-sm tw-text-gray-500 tw-text-center">
@@ -116,12 +116,25 @@
                               ➡️ 同上 ({{ previousUser.name }})
                             </div>
                             <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --', null, 'consultation')">-- 未預約 --</div>
-                            <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
-                              {{ key }}
+                            <div class="tw-grid tw-grid-cols-5 tw-gap-1 tw-p-1">
+                              <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-1 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 tw-text-center tw-bg-gray-50 hover:tw-bg-gray-200 tw-rounded" @click.stop="renderUserOptions(key)">
+                                {{ key }}
+                              </div>
+                            </div>
+                          </div>
+                          <div v-if="selectStep === 3">
+                            <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                            <div class="tw-grid tw-grid-cols-4 tw-gap-1 tw-p-1">
+                              <div v-for="item in step3Options" :key="item.type === 'group' ? item.surname : item.user.id" 
+                                   class="tw-px-1 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-center tw-rounded"
+                                   :class="item.type === 'group' ? 'tw-bg-indigo-100 tw-text-indigo-800 hover:tw-bg-indigo-200' : 'tw-bg-gray-50 tw-text-gray-800 hover:tw-bg-gray-200'"
+                                   @click.stop="item.type === 'group' ? handleSurnameSelect(item.surname) : handleUserSelection(dayData.date_info.date, time, item.user, 'consultation')">
+                                {{ item.type === 'group' ? item.label : item.user.name }}
+                              </div>
                             </div>
                           </div>
                           <div v-if="selectStep === 2">
-                            <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                            <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = previousStep">← 返回{{ previousStep === 3 ? '姓氏' : '注音' }}</div>
                             <div v-for="user in usersInGroup" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user, 'consultation')">
                               {{ user.name }}
                             </div>
@@ -172,7 +185,7 @@
                       </div>
                       <span class="tw-ml-2 tw-text-gray-400 tw-text-xs">▼</span>
                     </div>
-                    <div v-if="openSelect === `${dayData.date_info.date}-${time}-massage`" class="tw-absolute tw-top-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-64 tw-overflow-hidden tw-z-10 tw-shadow-lg tw-mt-1">
+                    <div v-if="openSelect === `${dayData.date_info.date}-${time}-massage`" class="tw-absolute tw-bottom-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-96 tw-flex tw-flex-col tw-overflow-hidden tw-z-10 tw-shadow-lg tw-mb-1">
                       <!-- 搜尋框 -->
                       <div class="tw-sticky tw-top-0 tw-bg-white tw-border-b tw-border-gray-200 tw-p-2">
                         <input 
@@ -185,7 +198,7 @@
                       </div>
                       
                       <!-- 搜尋結果或原有選單 -->
-                      <div class="tw-max-h-48 tw-overflow-y-auto">
+                      <div class="tw-overflow-y-auto tw-flex-1">
                         <!-- 如果有搜尋關鍵字，顯示過濾結果 -->
                         <div v-if="searchQuery.trim()">
                           <div v-if="filteredUsers.length === 0" class="tw-px-2.5 tw-py-3 tw-text-sm tw-text-gray-500 tw-text-center">
@@ -206,12 +219,25 @@
                               ➡️ 同上 ({{ previousUser.name }})
                             </div>
                             <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="selectUser(dayData.date_info.date, time, '', '-- 未預約 --', null, 'massage')">-- 未預約 --</div>
-                            <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
-                              {{ key }}
+                            <div class="tw-grid tw-grid-cols-5 tw-gap-1 tw-p-1">
+                              <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-1 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 tw-text-center tw-bg-gray-50 hover:tw-bg-gray-200 tw-rounded" @click.stop="renderUserOptions(key)">
+                                {{ key }}
+                              </div>
+                            </div>
+                          </div>
+                          <div v-if="selectStep === 3">
+                            <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                            <div class="tw-grid tw-grid-cols-4 tw-gap-1 tw-p-1">
+                              <div v-for="item in step3Options" :key="item.type === 'group' ? item.surname : item.user.id" 
+                                   class="tw-px-1 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-center tw-rounded"
+                                   :class="item.type === 'group' ? 'tw-bg-indigo-100 tw-text-indigo-800 hover:tw-bg-indigo-200' : 'tw-bg-gray-50 tw-text-gray-800 hover:tw-bg-gray-200'"
+                                   @click.stop="item.type === 'group' ? handleSurnameSelect(item.surname) : handleUserSelection(dayData.date_info.date, time, item.user, 'massage')">
+                                {{ item.type === 'group' ? item.label : item.user.name }}
+                              </div>
                             </div>
                           </div>
                           <div v-if="selectStep === 2">
-                            <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                            <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = previousStep">← 返回{{ previousStep === 3 ? '姓氏' : '注音' }}</div>
                             <div v-for="user in usersInGroup" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, time, user, 'massage')">
                               {{ user.name }}
                             </div>
@@ -242,14 +268,27 @@
             <div class="tw-relative tw-mt-2">
               <button @click="toggleWaitingListDropdown(dayData.date_info.date)" class="tw-w-full tw-text-xs tw-text-center tw-py-1.5 tw-bg-gray-100 hover:tw-bg-gray-200 tw-rounded-md tw-text-gray-600">+ 新增備取</button>
               <!-- Waiting List User Selection Dropdown -->
-              <div v-if="openSelect === `waiting-${dayData.date_info.date}`" class="tw-absolute tw-bottom-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-48 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mb-1">
+              <div v-if="openSelect === `waiting-${dayData.date_info.date}`" class="tw-absolute tw-bottom-full tw-left-0 tw-w-full tw-bg-white tw-border tw-border-gray-300 tw-rounded-md tw-max-h-80 tw-overflow-y-auto tw-z-10 tw-shadow-lg tw-mb-1">
                 <div v-if="selectStep === 1">
-                  <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="renderUserOptions(key)">
-                    {{ key }}
+                  <div class="tw-grid tw-grid-cols-5 tw-gap-1 tw-p-1">
+                    <div v-for="key in sortedZhuyinKeys" :key="key" class="tw-px-1 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 tw-text-center tw-bg-gray-50 hover:tw-bg-gray-200 tw-rounded" @click.stop="renderUserOptions(key)">
+                      {{ key }}
+                    </div>
+                  </div>
+                </div>
+                <div v-if="selectStep === 3">
+                  <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                  <div class="tw-grid tw-grid-cols-4 tw-gap-1 tw-p-1">
+                    <div v-for="item in step3Options" :key="item.type === 'group' ? item.surname : item.user.id" 
+                         class="tw-px-1 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-center tw-rounded"
+                         :class="item.type === 'group' ? 'tw-bg-indigo-100 tw-text-indigo-800 hover:tw-bg-indigo-200' : 'tw-bg-gray-50 tw-text-gray-800 hover:tw-bg-gray-200'"
+                         @click.stop="item.type === 'group' ? handleSurnameSelect(item.surname) : handleUserSelection(dayData.date_info.date, null, item.user)">
+                      {{ item.type === 'group' ? item.label : item.user.name }}
+                    </div>
                   </div>
                 </div>
                 <div v-if="selectStep === 2">
-                  <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = 1">← 返回注音</div>
+                  <div class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-font-bold tw-border-b tw-text-purple-700 hover:tw-bg-gray-100" @click.stop="selectStep = previousStep">← 返回{{ previousStep === 3 ? '姓氏' : '注音' }}</div>
                   <div v-for="user in usersInGroup" :key="user.id" class="tw-px-2.5 tw-py-2 tw-cursor-pointer tw-text-sm tw-text-gray-800 hover:tw-bg-gray-100" @click.stop="handleUserSelection(dayData.date_info.date, null, user)">
                     {{ user.name }}
                   </div>
@@ -639,9 +678,62 @@ function toggleWaitingListDropdown(date) {
   }
 }
 
+const step3Options = ref([]);
+const surnameMap = ref({});
+const previousStep = ref(1);
+
 function renderUserOptions(zhuyinInitial) {
-  usersInGroup.value = groupedUsers.value[zhuyinInitial] || [];
+  const users = groupedUsers.value[zhuyinInitial] || [];
+  
+  // 智慧分群邏輯：如果人數超過 10 人
+  if (users.length > 10) {
+    const groups = {};
+    users.forEach(u => {
+      const surname = u.name ? u.name.charAt(0) : '其他';
+      if (!groups[surname]) groups[surname] = [];
+      groups[surname].push(u);
+    });
+    
+    const options = [];
+    Object.keys(groups).forEach(surname => {
+      const groupUsers = groups[surname];
+      if (groupUsers.length > 1) {
+        // 多人姓氏 -> 建立群組
+        options.push({ type: 'group', surname, count: groupUsers.length, label: `${surname} (${groupUsers.length})` });
+        surnameMap.value[surname] = groupUsers; 
+      } else {
+        // 單人姓氏 -> 直接顯示用戶
+        options.push({ type: 'user', user: groupUsers[0] });
+      }
+    });
+
+    // 排序：群組排前面（按人數），單人排後面
+    options.sort((a, b) => {
+        if (a.type === 'group' && b.type === 'group') return b.count - a.count;
+        if (a.type === 'group') return -1;
+        if (b.type === 'group') return 1;
+        return 0;
+    });
+
+    // 如果混合列表比原始列表短（有節省到空間），則使用此模式
+    if (options.length < users.length) {
+      step3Options.value = options;
+      selectStep.value = 3;
+      previousStep.value = 1;
+      return;
+    }
+  }
+
+  // 人數少或分群沒效益，直接顯示用戶列表
+  usersInGroup.value = users;
   selectStep.value = 2;
+  previousStep.value = 1;
+}
+
+function handleSurnameSelect(surname) {
+  usersInGroup.value = surnameMap.value[surname];
+  selectStep.value = 2;
+  previousStep.value = 3; // 返回時回到姓氏列表
 }
 
 async function selectUser(date, time, userId, userName, waitingListItemId = null, type = 'consultation') {
