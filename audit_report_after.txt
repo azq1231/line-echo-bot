@@ -1,0 +1,10 @@
+﻿Name  Version ID                  Fix Versions
+----- ------- ------------------- ------------
+ecdsa 0.19.1  CVE-2024-23342
+pip   25.2    CVE-2025-8869       25.3
+uv    0.9.3   GHSA-w476-p2h3-79g9 0.9.5
+uv    0.9.3   GHSA-pqhf-p39g-3x64 0.9.6
+Name        Skip Reason
+----------- ---------------------------------------------------------------------------------
+torch       Dependency not found on PyPI and could not be audited: torch (2.8.0+cu129)
+torchvision Dependency not found on PyPI and could not be audited: torchvision (0.23.0+cu129)
